@@ -1,0 +1,196 @@
+import type { Catalog } from '../types';
+
+/** The table itself: top bar, mat, hand, the action dialog and the pending panel. */
+const table: Catalog = {
+    // ── Top bar ──────────────────────────────────────────────────────────
+    'table.leave_hint': 'Leave this table and go back to the table list',
+    'table.tables': 'Tables',
+    'table.your_turn': 'Your turn',
+    'table.plays': 'Plays',
+    'table.plays_hint': 'Plays left this turn',
+    'table.end_turn': 'End turn',
+    'table.end_turn_hint': 'End your turn',
+    'table.discard_first': 'Discard down to 7 cards first',
+    'table.deck_hint': 'Cards left in the deck',
+    'table.discard_hint': 'Discard pile',
+    'table.bank_hint': 'Your bank',
+    'table.sets_hint': 'Complete sets',
+
+    // ── Table menu ───────────────────────────────────────────────────────
+    'table.menu': 'Table menu',
+    'table.menu_summary': '{mode} · {turn} · host {host}',
+    'table.menu_robots': 'Robots: {difficulty}',
+    'table.cancel_seat': 'Cancel seat request',
+    'table.ask_seat': 'Ask for a seat next game',
+    'table.end_game': 'End this game',
+    'table.end_game_confirm': 'Tap again to end it for everyone',
+    'table.tutorial_stop': 'Stop the tutorial',
+    'table.tutorial_start': '🎓 Show me how to play',
+    'table.leave': 'Leave table',
+
+    // ── Spectator bar ────────────────────────────────────────────────────
+    'table.watching': '👁 Watching',
+    'table.seat_waiting': 'Waiting for a seat — cancel',
+    'table.back_to_tables': 'Back to tables',
+    'table.queue': 'Queue: {names}',
+
+    // ── Deck, discard and the action space ───────────────────────────────
+    'table.deck': 'Deck',
+    'table.deck_count': 'Deck {count}',
+    'table.discard': 'Discard',
+    'table.discard_count': 'Discard {count}',
+    'table.discard_empty': 'empty',
+    'table.play_it': 'Play it',
+    'table.action_space': 'Action space',
+
+    // ── Bank ─────────────────────────────────────────────────────────────
+    'table.bank': 'Bank',
+    'table.bank_drop': 'Bank {amount}',
+    'table.your_bank': 'Your bank',
+    'table.bank_cards.one': '{count} card',
+    'table.bank_cards.other': '{count} cards',
+    'table.bank_view': 'View ›',
+    'table.bank_empty': 'Drag money and action cards here to pay rent',
+    'table.bank_sheet_total': '{amount} across {cards}',
+    'table.bank_sheet_empty': 'Nothing banked yet. Play money and action cards to the bank so you can pay rent.',
+
+    // ── Properties ───────────────────────────────────────────────────────
+    'table.your_properties': 'Your properties',
+    'table.sets_progress': '{done}/3 sets',
+    'table.empty_hand_to_win': ' · empty your hand to win',
+    'table.new_set': 'new',
+    'table.properties_tap': 'Tap a property card to play it into a set',
+    'table.properties_drag': 'Drag a property card here to start a set',
+    // The wildcard rule changed: a card already on the table is no longer free
+    // to shuffle around, so the mat says what a move now costs.
+    'table.wildcard_move_cost': 'Moving a wildcard already on the table costs one play.',
+
+    // ── Hand ─────────────────────────────────────────────────────────────
+    'table.hand': 'Hand · {count}',
+    'table.over_limit': 'Over 7 — discard {count}',
+    'table.hand_tap': 'Tap a card for options',
+    'table.hand_drag': 'Drag a card onto the mat, or tap it for options',
+    'table.hand_empty': 'No cards — you draw 5 at the start of your next turn.',
+
+    // ── Selected card bar ────────────────────────────────────────────────
+    'table.wait_your_turn': 'Wait for your turn.',
+    'table.resolve_first': 'Resolve the current action first.',
+    'table.place_property': 'Place property',
+    'table.charge_rent': 'Charge rent',
+    'table.play_action': 'Play action',
+    'table.bank_card': 'Bank {amount}',
+    'table.discard_card': 'Discard',
+    'table.discard_this': 'Discard this card',
+    'table.discard_locked': 'You may only discard while over the 7-card limit',
+    'table.just_say_no_hint': 'Keep this in hand to block actions against you.',
+    'table.double_rent_hint': 'Pick this from the rent dialog to double a charge.',
+
+    // ── Sheets ───────────────────────────────────────────────────────────
+    'table.their_board': 'Their properties and bank',
+    'table.talk': 'Table chat and log',
+
+    // ── Action dialog ────────────────────────────────────────────────────
+    'dialog.move_wildcard': 'Move Wildcard',
+    'dialog.place_property': 'Place Property',
+    'dialog.pick_set': '{card} — pick a colour set',
+    'dialog.move_here': 'Move here',
+    'dialog.play_here': 'Play here',
+    'dialog.color': 'Colour',
+    'dialog.sets_to_win': 'Complete 3 colour sets to win.',
+    // Both halves of the new wildcard rule, so a player learns the cost and the
+    // restriction in the very dialog that enforces them.
+    'dialog.move_costs_play': 'Moving a wildcard that is already on the table costs one play.',
+    'dialog.move_needs_property': 'An any-colour wildcard may only move onto a colour you already own a property in.',
+    'dialog.no_plays_left': 'No plays left this turn.',
+
+    'dialog.charge_rent': 'Charge Rent',
+    'dialog.rent_any': 'Any colour — charges one opponent',
+    'dialog.rent_all': 'Charges every opponent',
+    'dialog.plays_used': 'Uses {needed} of your {left} remaining plays',
+    'dialog.charge': 'Charge {amount}',
+    'dialog.color_you_own': 'Colour you own',
+    'dialog.target': 'Target',
+    'dialog.double_rent': 'Double The Rent (1 extra play each)',
+    'dialog.rent_due': 'Rent due:',
+    'dialog.not_enough_plays': 'Not enough plays left.',
+
+    'dialog.build_house': 'Build a House',
+    'dialog.build_hotel': 'Build a Hotel',
+    'dialog.choose_complete_set': 'Choose a complete set',
+    'dialog.no_buildable_set': 'No eligible set — you need a complete set (and a house before a hotel)',
+    'dialog.build': 'Build',
+    'dialog.bank_it_instead': 'Bank this card instead, or keep it for later.',
+
+    'dialog.debt_collector': 'Debt Collector',
+    'dialog.debt_collector_blurb': 'One opponent owes you {amount}',
+    'dialog.collect': 'Collect {amount}',
+    'dialog.in_play': ' · {amount} in play',
+
+    'dialog.deal_breaker': 'Deal Breaker',
+    'dialog.deal_breaker_blurb': 'Steal an entire complete set',
+    'dialog.take_the_set': 'Take the set',
+    'dialog.victim': 'Victim',
+    'dialog.set_to_steal': 'Complete set to steal',
+    'dialog.no_complete_set': '{name} has no complete set.',
+    'dialog.full_sets.one': ' · {count} full set',
+    'dialog.full_sets.other': ' · {count} full sets',
+
+    'dialog.forced_deal': 'Forced Deal',
+    'dialog.sly_deal': 'Sly Deal',
+    'dialog.forced_deal_blurb': 'Swap one of your properties for one of theirs',
+    'dialog.sly_deal_blurb': 'Steal one property (not from a complete set)',
+    'dialog.offer_swap': 'Offer swap',
+    'dialog.steal_it': 'Steal it',
+    'dialog.their_properties': "{name}'s properties — pick one to take",
+    'dialog.nothing_stealable': 'Nothing available — every property is in a complete set.',
+    'dialog.your_give': 'Your property to give away',
+    'dialog.nothing_to_give': 'You have no property outside a complete set.',
+
+    'dialog.no_choices': 'This card has no extra choices.',
+
+    // ── Pending panel ────────────────────────────────────────────────────
+    'pending.ui.deal_breaker': "{by} wants to take {victim}'s entire {color} set.",
+    'pending.ui.sly_deal': '{by} wants to steal a {color} property from {victim}.',
+    'pending.ui.forced_deal': "{by} wants to swap a property for {victim}'s {color} property.",
+    'pending.ui.played': '{by} played {card}.',
+    'pending.ui.someone': 'Someone',
+    'pending.ui.them': 'them',
+
+    'pending.ui.in_progress': 'Action in progress',
+    'pending.ui.waiting_on': 'Waiting on {names}',
+    'pending.ui.resolving': 'Resolving…',
+    'pending.ui.blocked_it': 'blocked it',
+    'pending.ui.settled': 'settled',
+    'pending.ui.said_no': 'said no',
+    'pending.ui.owes': 'owes {amount}',
+    'pending.ui.deciding': 'deciding',
+
+    'pending.ui.you_blocked': 'You were blocked!',
+    'pending.ui.you_blocked_blurb': 'Play your own Just Say No to force it through, or let it go.',
+    'pending.ui.let_it_go': 'Let it go',
+    'pending.ui.just_say_no': '🚫 Just Say No',
+
+    'pending.ui.you_target': 'You are the target',
+    'pending.ui.you_target_blurb': 'Block it with Just Say No, or allow it.',
+    'pending.ui.allow_it': 'Allow it',
+
+    'pending.ui.you_owe': 'You owe {amount}',
+    'pending.ui.give_everything': 'You only have {amount} in play — hand over everything.',
+    'pending.ui.pick_cards': 'Pick cards from your bank and properties. No change is given.',
+    'pending.ui.selected': 'Selected {selected} of {owed}',
+    'pending.ui.auto_pay': 'Choose within the countdown, or the cheapest cards are paid for you.',
+    'pending.ui.pay': 'Pay {amount}',
+    'pending.ui.nothing_in_play': 'You have nothing in play — you pay nothing.',
+    'pending.ui.from_bank': 'Bank',
+
+    // ── Pending labels the server names ──────────────────────────────────
+    'pending.birthday': "It's My Birthday — ${amount}M",
+    'pending.debt_collector': 'Debt Collector — ${amount}M',
+    'pending.rent': '{color} rent — ${amount}M',
+    'pending.rent_multiplied': '{color} rent (x{multiplier}) — ${amount}M',
+    'pending.sly_deal': 'Sly Deal',
+    'pending.forced_deal': 'Forced Deal',
+    'pending.deal_breaker': 'Deal Breaker',
+};
+
+export default table;

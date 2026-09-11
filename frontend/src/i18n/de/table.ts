@@ -1,0 +1,196 @@
+import type { Catalog } from '../types';
+
+/** The table itself: top bar, mat, hand, the action dialog and the pending panel. */
+const table: Catalog = {
+    // ── Top bar ──────────────────────────────────────────────────────────
+    'table.leave_hint': 'Diesen Tisch verlassen und zurück zur Tischliste',
+    'table.tables': 'Tische',
+    'table.your_turn': 'Du bist dran',
+    'table.plays': 'Züge',
+    'table.plays_hint': 'Verbleibende Züge in dieser Runde',
+    'table.end_turn': 'Runde beenden',
+    'table.end_turn_hint': 'Deine Runde beenden',
+    'table.discard_first': 'Leg zuerst auf 7 Karten ab',
+    'table.deck_hint': 'Karten im Nachziehstapel',
+    'table.discard_hint': 'Ablagestapel',
+    'table.bank_hint': 'Deine Bank',
+    'table.sets_hint': 'Vollständige Sätze',
+
+    // ── Table menu ───────────────────────────────────────────────────────
+    'table.menu': 'Tischmenü',
+    'table.menu_summary': '{mode} · {turn} · Gastgeber {host}',
+    'table.menu_robots': 'Roboter: {difficulty}',
+    'table.cancel_seat': 'Platzanfrage zurückziehen',
+    'table.ask_seat': 'Platz fürs nächste Spiel anfragen',
+    'table.end_game': 'Spiel beenden',
+    'table.end_game_confirm': 'Nochmal tippen, um es für alle zu beenden',
+    'table.tutorial_stop': 'Tutorial beenden',
+    'table.tutorial_start': '🎓 Zeig mir, wie es geht',
+    'table.leave': 'Tisch verlassen',
+
+    // ── Spectator bar ────────────────────────────────────────────────────
+    'table.watching': '👁 Zuschauen',
+    'table.seat_waiting': 'Warte auf einen Platz — abbrechen',
+    'table.back_to_tables': 'Zurück zu den Tischen',
+    'table.queue': 'Warteschlange: {names}',
+
+    // ── Deck, discard and the action space ───────────────────────────────
+    'table.deck': 'Stapel',
+    'table.deck_count': 'Stapel {count}',
+    'table.discard': 'Ablage',
+    'table.discard_count': 'Ablage {count}',
+    'table.discard_empty': 'leer',
+    'table.play_it': 'Ausspielen',
+    'table.action_space': 'Aktionsfeld',
+
+    // ── Bank ─────────────────────────────────────────────────────────────
+    'table.bank': 'Bank',
+    'table.bank_drop': 'Bank {amount}',
+    'table.your_bank': 'Deine Bank',
+    'table.bank_cards.one': '{count} Karte',
+    'table.bank_cards.other': '{count} Karten',
+    'table.bank_view': 'Ansehen ›',
+    'table.bank_empty': 'Zieh Geld- und Aktionskarten hierher, um Miete zu zahlen',
+    'table.bank_sheet_total': '{amount} auf {cards}',
+    'table.bank_sheet_empty': 'Noch nichts in der Bank. Spiel Geld- und Aktionskarten in die Bank, damit du Miete zahlen kannst.',
+
+    // ── Properties ───────────────────────────────────────────────────────
+    'table.your_properties': 'Deine Immobilien',
+    'table.sets_progress': '{done}/3 Sätze',
+    'table.empty_hand_to_win': ' · leere deine Hand zum Sieg',
+    'table.new_set': 'neu',
+    'table.properties_tap': 'Tipp eine Immobilienkarte an, um sie in einen Satz zu legen',
+    'table.properties_drag': 'Zieh eine Immobilienkarte hierher, um einen Satz zu beginnen',
+    // The wildcard rule changed: a card already on the table is no longer free
+    // to shuffle around, so the mat says what a move now costs.
+    'table.wildcard_move_cost': 'Einen Joker zu bewegen, der schon auf dem Tisch liegt, kostet einen Zug.',
+
+    // ── Hand ─────────────────────────────────────────────────────────────
+    'table.hand': 'Hand · {count}',
+    'table.over_limit': 'Über 7 — leg {count} ab',
+    'table.hand_tap': 'Tipp eine Karte für Optionen an',
+    'table.hand_drag': 'Zieh eine Karte auf den Tisch oder tipp sie für Optionen an',
+    'table.hand_empty': 'Keine Karten — zu Beginn deiner nächsten Runde ziehst du 5.',
+
+    // ── Selected card bar ────────────────────────────────────────────────
+    'table.wait_your_turn': 'Warte, bis du dran bist.',
+    'table.resolve_first': 'Klär zuerst die laufende Aktion.',
+    'table.place_property': 'Immobilie legen',
+    'table.charge_rent': 'Miete kassieren',
+    'table.play_action': 'Aktion spielen',
+    'table.bank_card': 'Bank {amount}',
+    'table.discard_card': 'Ablegen',
+    'table.discard_this': 'Diese Karte ablegen',
+    'table.discard_locked': 'Ablegen geht nur, solange du über dem Limit von 7 Karten liegst',
+    'table.just_say_no_hint': 'Behalt sie auf der Hand, um Aktionen gegen dich zu blocken.',
+    'table.double_rent_hint': 'Wähl sie im Mietdialog, um eine Forderung zu verdoppeln.',
+
+    // ── Sheets ───────────────────────────────────────────────────────────
+    'table.their_board': 'Immobilien und Bank',
+    'table.talk': 'Tischchat und Log',
+
+    // ── Action dialog ────────────────────────────────────────────────────
+    'dialog.move_wildcard': 'Joker bewegen',
+    'dialog.place_property': 'Immobilie legen',
+    'dialog.pick_set': '{card} — wähl einen Farbsatz',
+    'dialog.move_here': 'Hierher bewegen',
+    'dialog.play_here': 'Hier ausspielen',
+    'dialog.color': 'Farbe',
+    'dialog.sets_to_win': 'Vervollständige 3 Farbsätze, um zu gewinnen.',
+    // Both halves of the new wildcard rule, so a player learns the cost and the
+    // restriction in the very dialog that enforces them.
+    'dialog.move_costs_play': 'Einen Joker zu bewegen, der schon auf dem Tisch liegt, kostet einen Zug.',
+    'dialog.move_needs_property': 'Ein Joker für beliebige Farben darf nur auf eine Farbe ziehen, in der du schon eine Immobilie hast.',
+    'dialog.no_plays_left': 'Keine Züge mehr in dieser Runde.',
+
+    'dialog.charge_rent': 'Miete kassieren',
+    'dialog.rent_any': 'Beliebige Farbe — trifft einen Gegner',
+    'dialog.rent_all': 'Trifft jeden Gegner',
+    'dialog.plays_used': 'Kostet {needed} deiner {left} verbleibenden Züge',
+    'dialog.charge': 'Kassiere {amount}',
+    'dialog.color_you_own': 'Farbe, die du besitzt',
+    'dialog.target': 'Ziel',
+    'dialog.double_rent': 'Doppelte Miete (je 1 Zug extra)',
+    'dialog.rent_due': 'Fällige Miete:',
+    'dialog.not_enough_plays': 'Nicht genug Züge übrig.',
+
+    'dialog.build_house': 'Ein Haus bauen',
+    'dialog.build_hotel': 'Ein Hotel bauen',
+    'dialog.choose_complete_set': 'Wähl einen vollständigen Satz',
+    'dialog.no_buildable_set': 'Kein passender Satz — du brauchst einen vollständigen Satz (und ein Haus vor dem Hotel)',
+    'dialog.build': 'Bauen',
+    'dialog.bank_it_instead': 'Leg die Karte stattdessen in die Bank oder heb sie für später auf.',
+
+    'dialog.debt_collector': 'Schuldeneintreiber',
+    'dialog.debt_collector_blurb': 'Ein Gegner schuldet dir {amount}',
+    'dialog.collect': 'Kassiere {amount}',
+    'dialog.in_play': ' · {amount} im Spiel',
+
+    'dialog.deal_breaker': 'Geschäftsbruch',
+    'dialog.deal_breaker_blurb': 'Stiehl einen ganzen vollständigen Satz',
+    'dialog.take_the_set': 'Satz nehmen',
+    'dialog.victim': 'Opfer',
+    'dialog.set_to_steal': 'Vollständiger Satz zum Stehlen',
+    'dialog.no_complete_set': '{name} hat keinen vollständigen Satz.',
+    'dialog.full_sets.one': ' · {count} voller Satz',
+    'dialog.full_sets.other': ' · {count} volle Sätze',
+
+    'dialog.forced_deal': 'Zwangstausch',
+    'dialog.sly_deal': 'Trickbetrug',
+    'dialog.forced_deal_blurb': 'Tausch eine deiner Immobilien gegen eine ihrer',
+    'dialog.sly_deal_blurb': 'Stiehl eine Immobilie (nicht aus einem vollständigen Satz)',
+    'dialog.offer_swap': 'Tausch anbieten',
+    'dialog.steal_it': 'Stehlen',
+    'dialog.their_properties': 'Immobilien von {name} — wähl eine zum Nehmen',
+    'dialog.nothing_stealable': 'Nichts verfügbar — jede Immobilie steckt in einem vollständigen Satz.',
+    'dialog.your_give': 'Deine Immobilie zum Hergeben',
+    'dialog.nothing_to_give': 'Du hast keine Immobilie außerhalb eines vollständigen Satzes.',
+
+    'dialog.no_choices': 'Diese Karte hat keine weiteren Optionen.',
+
+    // ── Pending panel ────────────────────────────────────────────────────
+    'pending.ui.deal_breaker': '{by} will den ganzen {color}-Satz von {victim}.',
+    'pending.ui.sly_deal': '{by} will eine {color}-Immobilie von {victim} stehlen.',
+    'pending.ui.forced_deal': '{by} will eine Immobilie gegen die {color}-Immobilie von {victim} tauschen.',
+    'pending.ui.played': '{by} hat {card} gespielt.',
+    'pending.ui.someone': 'Jemand',
+    'pending.ui.them': 'ihnen',
+
+    'pending.ui.in_progress': 'Aktion läuft',
+    'pending.ui.waiting_on': 'Warte auf {names}',
+    'pending.ui.resolving': 'Wird aufgelöst…',
+    'pending.ui.blocked_it': 'hat geblockt',
+    'pending.ui.settled': 'hat bezahlt',
+    'pending.ui.said_no': 'sagte Nein',
+    'pending.ui.owes': 'schuldet {amount}',
+    'pending.ui.deciding': 'entscheidet',
+
+    'pending.ui.you_blocked': 'Du wurdest geblockt!',
+    'pending.ui.you_blocked_blurb': 'Spiel dein eigenes Sag einfach Nein, um es durchzusetzen, oder lass es gut sein.',
+    'pending.ui.let_it_go': 'Gut sein lassen',
+    'pending.ui.just_say_no': '🚫 Sag einfach Nein',
+
+    'pending.ui.you_target': 'Du bist das Ziel',
+    'pending.ui.you_target_blurb': 'Block es mit Sag einfach Nein oder lass es zu.',
+    'pending.ui.allow_it': 'Zulassen',
+
+    'pending.ui.you_owe': 'Du schuldest {amount}',
+    'pending.ui.give_everything': 'Du hast nur {amount} im Spiel — gib alles her.',
+    'pending.ui.pick_cards': 'Wähl Karten aus deiner Bank und deinen Immobilien. Es gibt kein Wechselgeld.',
+    'pending.ui.selected': '{selected} von {owed} gewählt',
+    'pending.ui.auto_pay': 'Wähl vor Ablauf der Zeit, sonst werden die günstigsten Karten für dich bezahlt.',
+    'pending.ui.pay': 'Zahle {amount}',
+    'pending.ui.nothing_in_play': 'Du hast nichts im Spiel — du zahlst nichts.',
+    'pending.ui.from_bank': 'Bank',
+
+    // ── Pending labels the server names ──────────────────────────────────
+    'pending.birthday': 'Ich hab Geburtstag — ${amount}M',
+    'pending.debt_collector': 'Schuldeneintreiber — ${amount}M',
+    'pending.rent': '{color}-Miete — ${amount}M',
+    'pending.rent_multiplied': '{color}-Miete (x{multiplier}) — ${amount}M',
+    'pending.sly_deal': 'Trickbetrug',
+    'pending.forced_deal': 'Zwangstausch',
+    'pending.deal_breaker': 'Geschäftsbruch',
+};
+
+export default table;

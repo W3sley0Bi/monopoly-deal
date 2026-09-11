@@ -1,0 +1,111 @@
+import type { Catalog } from '../types';
+
+/** Italian: the lobby side of the app — the name screen, the table list and the room lobby. */
+const home: Catalog = {
+    // The name-entry screen and the panel header above it.
+    'home.kicker': 'Gioco di carte',
+    'home.title': 'Monopoly Deal',
+    'home.tagline': 'Completa 3 serie di colore per vincere.',
+    'home.your_name': 'Il tuo nome',
+    'home.name_placeholder': 'es. Wes',
+    'home.avatar_note': 'Il tuo volto viene generato su questo dispositivo e resta tuo a ogni tavolo.',
+    'home.continue': 'Continua',
+    'home.waiting_server': 'In attesa del server…',
+    'home.connecting': 'Connessione al server…',
+    'home.change_name': 'Cambia',
+    'home.reconnecting': 'riconnessione…',
+
+    // Solo practice against robots.
+    'home.solo.title': 'Gioca da solo',
+    'home.solo.blurb': 'Un tavolo di allenamento contro robot, senza timer e senza nessuno che ti aspetta.',
+    'home.solo.tour': 'Il tutorial ti accompagna nel tuo primo turno.',
+    'home.solo.robots': 'Robot',
+    'home.solo.show_tutorial': 'Mostra il tutorial',
+    'home.solo.play': '🎓 Allenati contro i robot',
+    // Sent to the server as the table's name, so it reads in the language of
+    // whoever opened it rather than of whoever is looking at the list.
+    'home.solo.table_name': 'Allenamento di {name}',
+
+    // The table list.
+    'home.tables': 'Tavoli',
+    'home.open.one': '{count} aperto',
+    'home.open.other': '{count} aperti',
+    'home.code_label': 'Codice del tavolo',
+    'home.code_placeholder': 'CODICE',
+    'home.join_by_code': 'Entra con il codice',
+    'home.new_table': '+ Nuovo tavolo',
+    'home.no_tables': 'Ancora nessun tavolo — aprine uno e condividi il codice.',
+    'home.youre_in': 'sei dentro',
+    'home.state.waiting': 'In sala d’attesa',
+    'home.state.playing': 'Partita in corso',
+    'home.state.finished': 'Finita',
+    'home.robots_at_table.one': '{count} robot',
+    'home.robots_at_table.other': '{count} robot',
+    'home.watching': '{count} guardano',
+    'home.abandoned': 'nessuno connesso',
+    'home.close': '✕ Chiudi',
+    'home.close_it': 'Chiudilo',
+    'home.keep': 'Tienilo',
+    'home.close_abandoned_title': 'Non c’è nessuno a questo tavolo — chiudilo',
+    'home.close_title': 'Chiudi il tuo tavolo e rimanda tutti qui',
+    'home.return': 'Torna',
+    'home.take_seat': 'Siediti',
+    'home.no_seat_title': 'Nessun posto libero — puoi guardare',
+    'home.watch': '👁 Guarda',
+    'home.footer': 'Tutti su questa rete possono entrare dallo stesso indirizzo. I tavoli si chiudono un minuto o due dopo che '
+        + 'l’ultimo giocatore se ne va — oppure chiudine uno tu: il tuo quando vuoi, quello di un altro quando non c’è più nessuno connesso.',
+
+    // The "+ New table" creation form.
+    'home.table_name': 'Nome del tavolo',
+    'home.table_name_placeholder': 'Tavolo di {name}',
+    'home.game_mode': 'Modalità di gioco',
+    'home.mode_soon': '🔒 presto',
+    'home.turn_timer': 'Timer del turno',
+    'home.turn_hint': 'Allo scadere del tempo il turno finisce da solo, e i debiti vengono pagati prima con la banca.',
+    'home.bots': 'Robot',
+    'home.bots_none': 'Nessuno',
+    'home.difficulty': 'Abilità dei robot',
+    'home.open_table': 'Apri il tavolo',
+
+    // The room lobby.
+    'lobby.table': 'Tavolo {code}',
+    'lobby.host': 'Organizzatore:',
+    'lobby.leave': 'Lascia il tavolo',
+    'lobby.players': 'Giocatori ({seated}/{total})',
+    'lobby.robot_tag': 'robot',
+    'lobby.host_title': 'Organizzatore',
+    'lobby.away': 'assente',
+    'lobby.remove': 'Rimuovi',
+    'lobby.confirm_remove': 'Conferma la rimozione',
+    'lobby.robots': 'Robot',
+    'lobby.add_bot': '+ Aggiungi robot',
+    'lobby.remove_bot': '− Togli robot',
+    'lobby.table_full_title': 'Il tavolo è pieno',
+    'lobby.add_bot_title': 'Fai sedere un robot gestito dal server',
+    'lobby.no_bots_hint': 'Riempi i posti liberi con dei robot per giocare da solo.',
+    'lobby.bots_at_table.one': '{count} robot al tavolo.',
+    'lobby.bots_at_table.other': '{count} robot al tavolo.',
+    'lobby.difficulty': 'Abilità dei robot',
+    'lobby.table_full': 'Il tavolo è pieno',
+    'lobby.take_seat': 'Siediti',
+    'lobby.game_mode': 'Modalità di gioco',
+    'lobby.host_only': 'solo l’organizzatore può cambiarlo',
+    'lobby.mode_soon': '🔒 presto',
+    'lobby.turn_timer': 'Timer del turno',
+    'lobby.turn_hint': 'Allo scadere del tempo il turno finisce da solo; un debito in sospeso viene pagato con la banca prima che con le proprietà.',
+    'lobby.watching': 'Spettatori ({n})',
+    'lobby.remove_from_table': 'Rimuovi dal tavolo',
+    'lobby.waiting_seat': 'In attesa di un posto',
+    'lobby.deal': 'Distribuisci le carte — {mode}',
+    'lobby.need_player': 'Manca ancora un giocatore…',
+    // The host's name and the table code are rendered as their own styled
+    // elements, so these two sentences are split around them rather than
+    // carrying a placeholder we would have to re-style after interpolation.
+    'lobby.waiting_host.before': 'In attesa che',
+    'lobby.waiting_host.after': 'distribuisca le carte.',
+    'lobby.share_code.before': 'Condividi il codice',
+    'lobby.share_code.after': 'così gli altri possono entrare.',
+    'lobby.chat': 'Chat del tavolo',
+};
+
+export default home;

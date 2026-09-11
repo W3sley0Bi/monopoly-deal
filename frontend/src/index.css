@@ -1,0 +1,232 @@
+@import "tailwindcss";
+
+@theme {
+    --font-display: "Bebas Neue", "Haettenschweiler", "Arial Narrow Bold", ui-sans-serif, system-ui, sans-serif;
+    --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+
+    --color-felt-900: #06281c;
+    --color-felt-800: #0a3826;
+    --color-felt-700: #0f4a32;
+    --color-felt-600: #14603f;
+    --color-brass: #f2c14e;
+    --color-brass-dark: #b4862a;
+    --color-ink: #0b1220;
+
+    --shadow-card: 0 1px 1px rgb(0 0 0 / 0.28), 0 6px 14px -6px rgb(0 0 0 / 0.55);
+    --shadow-lift: 0 18px 40px -12px rgb(0 0 0 / 0.7), 0 0 0 1px rgb(255 255 255 / 0.08);
+    --shadow-glow: 0 0 0 2px var(--color-brass), 0 0 28px -4px rgb(242 193 78 / 0.65);
+
+    --animate-pop: pop 0.28s cubic-bezier(0.2, 1.4, 0.4, 1);
+    --animate-slide-up: slide-up 0.3s ease-out both;
+    --animate-shake: shake 0.4s ease-in-out;
+    --animate-pulse-ring: pulse-ring 1.8s ease-out infinite;
+    --animate-float: float 6s ease-in-out infinite;
+}
+
+@keyframes pop {
+    from { transform: scale(0.82); opacity: 0; }
+    to   { transform: scale(1); opacity: 1; }
+}
+@keyframes slide-up {
+    from { transform: translateY(14px); opacity: 0; }
+    to   { transform: translateY(0); opacity: 1; }
+}
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-5px); }
+    75% { transform: translateX(5px); }
+}
+@keyframes pulse-ring {
+    0%   { box-shadow: 0 0 0 0 rgb(242 193 78 / 0.55); }
+    70%  { box-shadow: 0 0 0 14px rgb(242 193 78 / 0); }
+    100% { box-shadow: 0 0 0 0 rgb(242 193 78 / 0); }
+}
+@keyframes float {
+    0%, 100% { transform: translateY(0) rotate(-1deg); }
+    50%      { transform: translateY(-8px) rotate(1deg); }
+}
+@keyframes confetti-fall {
+    0%   { transform: translateY(-12vh) rotate(0deg); opacity: 1; }
+    100% { transform: translateY(105vh) rotate(720deg); opacity: 0.9; }
+}
+
+html, body, #root {
+    height: 100%;
+}
+
+/* Nothing may push the page sideways: every wide row scrolls inside itself. */
+html, body {
+    overflow-x: clip;
+    overscroll-behavior-x: none;
+}
+
+body {
+    margin: 0;
+    color: #f4f7f5;
+    font-family: var(--font-sans);
+    background-color: var(--color-felt-900);
+    /* Card-table felt: soft spotlight over a woven weave. */
+    background-image:
+        radial-gradient(ellipse 90% 65% at 50% 0%, rgb(255 255 255 / 0.09), transparent 70%),
+        radial-gradient(ellipse 70% 60% at 50% 110%, rgb(0 0 0 / 0.55), transparent 70%),
+        repeating-linear-gradient(45deg, rgb(255 255 255 / 0.022) 0 2px, transparent 2px 4px),
+        repeating-linear-gradient(-45deg, rgb(0 0 0 / 0.03) 0 2px, transparent 2px 4px),
+        linear-gradient(170deg, var(--color-felt-700), var(--color-felt-900) 70%);
+    background-attachment: fixed;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* Thin, dark scrollbars so overflow rails do not break the table illusion. */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(255 255 255 / 0.18) transparent;
+}
+*::-webkit-scrollbar { height: 8px; width: 8px; }
+*::-webkit-scrollbar-thumb {
+    background: rgb(255 255 255 / 0.16);
+    border-radius: 99px;
+}
+
+/* The playmat: printed felt inside a wooden rail. */
+@utility mat {
+    position: relative;
+    border-radius: 1.5rem;
+    background-image:
+        radial-gradient(ellipse 75% 55% at 50% 20%, rgb(255 255 255 / 0.07), transparent 72%),
+        repeating-linear-gradient(45deg, rgb(255 255 255 / 0.018) 0 3px, transparent 3px 6px),
+        repeating-linear-gradient(-45deg, rgb(0 0 0 / 0.03) 0 3px, transparent 3px 6px),
+        linear-gradient(165deg, #12583b, #0a3524 62%, #072a1c);
+    box-shadow:
+        inset 0 0 0 2px rgb(242 193 78 / 0.14),
+        inset 0 0 44px rgb(0 0 0 / 0.4),
+        0 0 0 5px #3a2414,
+        0 0 0 7px #5b3820,
+        0 0 0 8px rgb(0 0 0 / 0.5),
+        0 22px 45px -20px rgb(0 0 0 / 0.85);
+}
+
+@utility panel {
+    background: linear-gradient(180deg, rgb(255 255 255 / 0.075), rgb(255 255 255 / 0.03));
+    border: 1px solid rgb(255 255 255 / 0.1);
+    border-radius: 1rem;
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.09), 0 10px 30px -18px rgb(0 0 0 / 0.9);
+    backdrop-filter: blur(6px);
+}
+
+@utility label-caps {
+    font-family: var(--font-display);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    font-size: 0.7rem;
+    color: rgb(255 255 255 / 0.55);
+}
+
+@utility btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    font-weight: 700;
+    border-radius: 0.7rem;
+    padding: 0.5rem 1rem;
+    border: 1px solid rgb(0 0 0 / 0.35);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.28), 0 3px 0 rgb(0 0 0 / 0.35);
+    transition: transform 0.09s ease, filter 0.15s ease, box-shadow 0.15s ease;
+    cursor: pointer;
+    user-select: none;
+    &:hover:not(:disabled) { filter: brightness(1.1); }
+    &:active:not(:disabled) {
+        transform: translateY(2px);
+        box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.2), 0 1px 0 rgb(0 0 0 / 0.35);
+    }
+    &:disabled { opacity: 0.42; cursor: not-allowed; }
+    &:focus-visible { outline: 2px solid var(--color-brass); outline-offset: 2px; }
+}
+
+@utility btn-gold {
+    background: linear-gradient(180deg, #ffd970, var(--color-brass-dark));
+    color: #2a1c00;
+}
+@utility btn-green {
+    background: linear-gradient(180deg, #4ade80, #15803d);
+    color: #04240f;
+}
+@utility btn-blue {
+    background: linear-gradient(180deg, #60a5fa, #1d4ed8);
+    color: #f8fbff;
+}
+@utility btn-red {
+    background: linear-gradient(180deg, #fb7185, #b91c1c);
+    color: #fff5f5;
+}
+@utility btn-ghost {
+    background: rgb(255 255 255 / 0.08);
+    color: #e8efeb;
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.14);
+}
+
+/* Card face: paper stock with a gloss sweep. */
+@utility card-face {
+    position: relative;
+    border-radius: 0.6rem;
+    background: linear-gradient(168deg, #fffdf7, #ebe6d8);
+    color: var(--color-ink);
+    box-shadow: var(--shadow-card);
+    overflow: hidden;
+    user-select: none;
+    &::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(120deg, rgb(255 255 255 / 0.5) 0%, transparent 42%, transparent 60%, rgb(0 0 0 / 0.09) 100%);
+        pointer-events: none;
+    }
+}
+
+/* Card back: the deck pattern. */
+@utility card-back {
+    border-radius: 0.6rem;
+    background-color: #7f1d1d;
+    background-image:
+        radial-gradient(circle at 50% 42%, rgb(255 255 255 / 0.22) 0 22%, transparent 23%),
+        repeating-linear-gradient(45deg, rgb(0 0 0 / 0.18) 0 6px, transparent 6px 12px);
+    border: 2px solid rgb(255 255 255 / 0.22);
+    box-shadow: var(--shadow-card);
+}
+
+@keyframes sheet-up {
+    from { transform: translateY(100%); }
+    to   { transform: translateY(0); }
+}
+
+@utility animate-sheet-up {
+    animation: sheet-up 0.26s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* A horizontal rail that scrolls inside itself and snaps to its children. */
+@utility rail {
+    display: flex;
+    min-width: 0;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+    &::-webkit-scrollbar { display: none; }
+    > * { scroll-snap-align: start; }
+}
+
+@keyframes deal-in {
+    from { transform: translate(-40vw, -30vh) rotate(-25deg) scale(0.7); opacity: 0; }
+    to   { transform: none; opacity: 1; }
+}
+
+@utility animate-deal {
+    animation: deal-in 0.42s cubic-bezier(0.2, 0.9, 0.3, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}

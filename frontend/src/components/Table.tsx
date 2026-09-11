@@ -1,0 +1,790 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+import type { Card, ClientMessage, Color, PlayerView, RoomView } from '../types';
+import type { Call } from '../game/useWebRTC';
+import { NARROW, useMediaQuery } from '../game/useMediaQuery';
+import {
+    colorMeta, dropTargets, isPlayableAction, needsTargeting, playableColors,
+} from '../game/meta';
+import { useI18n } from '../i18n';
+import { formatTurn, money } from '../i18n/format';
+import LanguagePicker from './LanguagePicker';
+import ActionDialog from './ActionDialog';
+import Avatar from './Avatar';
+import CallControls from './CallControls';
+import DropZone from './DropZone';
+import OpponentPanel from './OpponentPanel';
+import PendingPanel from './PendingPanel';
+import PlayerBoard from './PlayerBoard';
+import PlayerChip from './PlayerChip';
+import PlayingCard, { CardBack } from './PlayingCard';
+import PropertySets from './PropertySets';
+import Sheet from './Sheet';
+import SidePanel from './SidePanel';
+import TalkSheet from './TalkSheet';
+import Tutorial from './Tutorial';
+import TurnTimer from './TurnTimer';
+import WinOverlay from './WinOverlay';
+
+interface Props {
+    room: RoomView;
+    error?: string;
+    /** Server clock minus browser clock, in ms. */
+    skewMs: number;
+    call: Call;
+    /** The guided tour is running. */
+    tutorial: boolean;
+    onTutorial: (on: boolean) => void;
+    send: (msg: ClientMessage) => void;
+    onLeave: () => void;
+}
+
+type Dialog = { card: Card; intent: 'property' | 'action' | 'move' };
+type Drag = { card: Card; from: 'hand' | 'board' };
+type SheetState =
+    | { kind: 'player'; player: PlayerView }
+    | { kind: 'bank' }
+    | { kind: 'talk' }
+    | null;
+
+export default function Table({ room, error, skewMs, call, tutorial, onTutorial, send, onLeave }: Props) {
+    const { t, tCard } = useI18n();
+    const g = room.game;
+    const me = g.players.find(p => p.id === g.you);
+    const spectating = !room.you_seated || !me;
+    const narrow = useMediaQuery(NARROW);
+
+    const [selected, setSelected] = useState<Card | null>(null);
+    const [dialog, setDialog] = useState<Dialog | null>(null);
+    const [drag, setDrag] = useState<Drag | null>(null);
+    const [sheet, setSheet] = useState<SheetState>(null);
+    const [panelOpen, setPanelOpen] = useState(() => window.innerWidth >= 1024);
+    const [menuOpen, setMenuOpen] = useState(false);
+    const [confirmEnd, setConfirmEnd] = useState(false);
+    const [chatSeen, setChatSeen] = useState(room.chat.length);
+    const menuRef = useRef<HTMLDivElement>(null);
+    const menuButtonRef = useRef<HTMLButtonElement>(null);
+
+    // Closing the menu also drops the end-game confirmation: a player who walks
+    // away mid-confirm should never come back to a menu that is already armed.
+    const closeMenu = useCallback(() => {
+        setMenuOpen(false);
+        setConfirmEnd(false);
+    }, []);
+
+    // A dropdown that only closes by pressing its own button is a trap on a
+    // touch screen, so any press outside it and the Escape key close it too.
+    useEffect(() => {
+        if (!menuOpen) return;
+        const onPointerDown = (e: PointerEvent) => {
+            const target = e.target as Node;
+            if (menuRef.current?.contains(target) || menuButtonRef.current?.contains(target)) return;
+            closeMenu();
+        };
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') closeMenu();
+        };
+        window.addEventListener('pointerdown', onPointerDown);
+        window.addEventListener('keydown', onKey);
+        return () => {
+            window.removeEventListener('pointerdown', onPointerDown);
+            window.removeEventListener('keydown', onKey);
+        };
+    }, [menuOpen, closeMenu]);
+
+    const act = (msg: ClientMessage) => {
+        send(msg);
+        setSelected(null);
+        setDialog(null);
+        setDrag(null);
+    };
+
+    const turnPlayer = g.players[g.current_turn];
+    const myTurn = turnPlayer?.id === g.you && !spectating;
+    const pending = g.pending;
+    const foes = g.players.filter(p => p.id !== g.you);
+    const handSize = me?.hand?.length ?? 0;
+    const overLimit = handSize > 7;
+    const canPlay = myTurn && !pending && g.plays_left > 0;
+
+    /** An "any colour" joker, which may only join a colour you already own. */
+    const isAnyColorWild = (card: Card) =>
+        card.type === 'property_wildcard' && card.colors?.length === 1 && card.colors[0] === 'all';
+
+    // Colours a card already on the table may move to: never the set it is in,
+    // and an any-colour joker may only join a colour this player already owns.
+    const moveColors = (card: Card): Color[] => {
+        const current = me?.sets.find(s => s.cards.some(c => c.id === card.id))?.color;
+        return playableColors(card, g.colors).filter(c =>
+            c !== current
+            && (!isAnyColorWild(card) || Boolean(me?.sets.some(s => s.color === c && s.cards.length > 0))));
+    };
+
+    // What the currently dragged card can accept.
+    const dragTargets = drag?.from === 'hand'
+        ? dropTargets(drag.card, g.colors)
+        : { colors: drag ? moveColors(drag.card) : [], bankable: false };
+    const dragColors = drag && canPlay ? dragTargets.colors : [];
+    const dragBankable = Boolean(drag && canPlay && dragTargets.bankable);
+    const dragDiscardable = Boolean(drag && drag.from === 'hand' && myTurn && !pending && overLimit);
+
+    const playCard = (card: Card, color: Color, from: 'hand' | 'board') => {
+        if (from === 'board') act({ type: 'move_wildcard', card_id: card.id, color });
+        else act({ type: 'play_property', card_id: card.id, color });
+    };
+
+    const playActionCard = (card: Card) => {
+        if (needsTargeting(card)) setDialog({ card, intent: 'action' });
+        else act({ type: 'play_action', card_id: card.id });
+    };
+
+    const wildcardIds = (cards: Card[]) =>
+        new Set(cards.filter(c => c.type === 'property_wildcard').map(c => c.id));
+
+    const backButton = (
+        <button
+            type="button"
+            className="btn btn-ghost !px-2.5 !py-1.5 !text-sm"
+            onClick={onLeave}
+            title={t('table.leave_hint')}
+        >
+            ‹ <span className="hidden sm:inline">{t('table.tables')}</span>
+        </button>
+    );
+
+    const turnChip = turnPlayer ? (
+        <span className={`flex shrink-0 items-center gap-1.5 rounded-full px-2 py-1 ${
+            myTurn ? 'animate-pulse-ring bg-brass text-ink' : 'bg-black/35'
+        }`}>
+            <Avatar id={turnPlayer.id} name={turnPlayer.name} size={20} />
+            <span className="text-[0.7rem] font-bold uppercase tracking-wide">
+                {myTurn ? t('table.your_turn') : turnPlayer.name}
+            </span>
+        </span>
+    ) : null;
+
+    const playChips = (
+        <span data-tour="plays" className="flex items-center gap-1.5" title={t('table.plays_hint')}>
+            <span className="label-caps">{t('table.plays')}</span>
+            {[0, 1, 2].map(i => (
+                <span
+                    key={i}
+                    className={`h-3.5 w-3.5 rounded-full border transition ${
+                        i < g.plays_left
+                            ? 'border-amber-200 bg-brass shadow-[0_0_8px_rgba(242,193,78,0.8)]'
+                            : 'border-white/20 bg-black/40'
+                    }`}
+                />
+            ))}
+        </span>
+    );
+
+    const endTurnButton = (
+        <button
+            type="button"
+            data-tour="end-turn"
+            className="btn btn-red !py-1.5"
+            onClick={() => act({ type: 'end_turn' })}
+            disabled={overLimit}
+            title={t(overLimit ? 'table.discard_first' : 'table.end_turn_hint')}
+        >
+            {t('table.end_turn')}
+        </button>
+    );
+
+    const deckChip = (
+        <div className="panel flex shrink-0 items-center gap-2.5 px-2.5 py-2">
+            <div className="relative">
+                <CardBack size="xs" className="absolute left-0.5 top-0.5 !h-11 !w-8 opacity-60" />
+                <CardBack size="xs" className="relative !h-11 !w-8" />
+            </div>
+            <div className="text-[0.7rem] leading-tight text-white/65">
+                <p>{t('table.deck')} <span className="font-bold text-white">{g.deck_count}</span></p>
+                <p>{t('table.discard')} <span className="font-bold text-white">{g.discard_count}</span></p>
+            </div>
+            {g.discard_top && <PlayingCard card={g.discard_top} size="xs" className="!h-11 !w-8" />}
+        </div>
+    );
+
+    const bankZone = (
+        <DropZone
+            active={dragBankable}
+            hint={drag ? t('table.bank_drop', { amount: money(t, drag.card.value) }) : ''}
+            onDrop={() => drag && act({ type: 'play_bank', card_id: drag.card.id })}
+            tour="bank"
+            className={narrow ? 'min-w-0 rounded-2xl' : 'w-full min-w-0 rounded-2xl lg:w-72'}
+        >
+            {narrow ? (
+                <button
+                    type="button"
+                    className="panel flex w-full items-center gap-2 px-3 py-2 text-left"
+                    onClick={() => setSheet({ kind: 'bank' })}
+                >
+                    <span className="label-caps">{t('table.bank')}</span>
+                    <span className="font-display text-xl leading-none text-emerald-300">{money(t, me?.bank_total ?? 0)}</span>
+                    <span className="text-xs text-white/45">{t('table.bank_cards', { count: me?.bank.length ?? 0 })}</span>
+                    <span className="ml-auto text-xs text-white/45">{t('table.bank_view')}</span>
+                </button>
+            ) : (
+                <div className="panel h-full p-3">
+                    <div className="mb-2 flex items-center justify-between">
+                        <p className="label-caps">{t('table.your_bank')}</p>
+                        <p className="font-display text-xl text-emerald-300">{money(t, me?.bank_total ?? 0)}</p>
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                        {me?.bank.length === 0
+                            ? <p className="py-3 text-xs italic text-white/35">{t('table.bank_empty')}</p>
+                            : me?.bank.map(c => <PlayingCard key={c.id} card={c} size="xs" />)}
+                    </div>
+                </div>
+            )}
+        </DropZone>
+    );
+
+    const propertyZone = (
+        <div data-tour="properties" className="panel flex min-h-0 min-w-0 flex-1 flex-col p-2 sm:p-3">
+            <div className="mb-2 flex items-center justify-between gap-2">
+                <p className="label-caps">{t('table.your_properties')}</p>
+                <p data-tour="sets-progress" className="truncate text-xs text-white/50">
+                    {t('table.sets_progress', { done: me?.complete_sets ?? 0 })}
+                    {g.mode === 'deathmatch' && t('table.empty_hand_to_win')}
+                </p>
+            </div>
+
+            <div className={`rail min-w-0 flex-1 gap-3 pb-1 ${me?.sets.length ? 'items-start' : 'items-center justify-center'}`}>
+                {me?.sets.map(set => {
+                    const accepts = dragColors.includes(set.color);
+                    return (
+                        <DropZone
+                            key={set.color}
+                            active={accepts}
+                            hint={t(`color.short.${set.color}`)}
+                            onDrop={() => drag && playCard(drag.card, set.color, drag.from)}
+                            className="shrink-0 rounded-xl"
+                        >
+                            <PropertySets
+                                sets={[set]}
+                                size="sm"
+                                draggableIds={myTurn && !pending ? wildcardIds(set.cards) : undefined}
+                                onDragCard={card => setDrag({ card, from: 'board' })}
+                                onDragEndCard={() => setDrag(null)}
+                                draggingId={drag?.card.id}
+                                onCardClick={myTurn && !pending
+                                    ? card => {
+                                        if (card.type === 'property_wildcard') setDialog({ card, intent: 'move' });
+                                    }
+                                    : undefined}
+                                enabledIds={wildcardIds(set.cards)}
+                                dimDisabled={false}
+                            />
+                        </DropZone>
+                    );
+                })}
+
+                {/* Empty slots for colours this card could start. */}
+                {dragColors
+                    .filter(c => !me?.sets.some(s => s.color === c))
+                    .map(c => {
+                        const m = colorMeta(c);
+                        return (
+                            <DropZone
+                                key={`new-${c}`}
+                                active
+                                onDrop={() => drag && playCard(drag.card, c, drag.from)}
+                                className="shrink-0 rounded-xl"
+                            >
+                                <div
+                                    className="grid h-[7.5rem] w-[5.5rem] place-items-center rounded-xl border-2 border-dashed p-1 text-center"
+                                    style={{ borderColor: m.hex, background: `${m.hex}22` }}
+                                >
+                                    <span className="font-display text-sm leading-tight tracking-wide">
+                                        {t('table.new_set')}<br />{t(`color.short.${c}`)}
+                                    </span>
+                                </div>
+                            </DropZone>
+                        );
+                    })}
+
+                {me?.sets.length === 0 && dragColors.length === 0 && (
+                    <p className="px-3 text-center text-xs italic text-white/35">
+                        {t(narrow ? 'table.properties_tap' : 'table.properties_drag')}
+                    </p>
+                )}
+            </div>
+
+            {/* Shuffling a wildcard between colours used to be free; it is not
+                any more, so the board says so where the move is made. */}
+            {myTurn && !pending && me?.sets.some(s => s.cards.some(c => c.type === 'property_wildcard')) && (
+                <p className="mt-1 shrink-0 text-[0.65rem] text-white/35">{t('table.wildcard_move_cost')}</p>
+            )}
+        </div>
+    );
+
+    return (
+        <div className="flex h-full min-w-0 flex-col gap-2 p-2 sm:p-3">
+            {/* ── Top bar ─────────────────────────────────────────────── */}
+            <header className="panel relative flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5 px-2 py-2 sm:px-3">
+                {backButton}
+
+                <div className="flex min-w-0 items-center gap-2">
+                    <h1 className="min-w-0 truncate font-display text-xl leading-none tracking-wider text-brass sm:text-2xl">
+                        {room.name}
+                    </h1>
+                    <span className="shrink-0 rounded bg-black/30 px-1.5 py-0.5 font-display text-xs tracking-[0.2em] text-brass/80">
+                        {room.id}
+                    </span>
+                </div>
+
+                {!narrow && (
+                    <span className="rounded-full bg-black/30 px-2 py-0.5 text-[0.65rem] font-bold uppercase tracking-widest text-white/60">
+                        {t(`mode.${g.mode}`)}
+                    </span>
+                )}
+
+                {!narrow && turnChip}
+
+                {!narrow && (
+                    <TurnTimer
+                        deadlineMs={g.deadline_ms}
+                        totalSeconds={g.deadline_seconds}
+                        skewMs={skewMs}
+                        kind={g.deadline_kind}
+                    />
+                )}
+
+                {!narrow && !spectating && playChips}
+
+                {!narrow && (
+                    <span className="flex items-center gap-3 text-xs text-white/70">
+                        <span title={t('table.deck_hint')}>🂠 {g.deck_count}</span>
+                        <span title={t('table.discard_hint')}>🗑 {g.discard_count}</span>
+                        {me && <span className="text-emerald-300" title={t('table.bank_hint')}>💵 {money(t, me.bank_total)}</span>}
+                        {me && <span className="text-brass" title={t('table.sets_hint')}>🏠 {me.complete_sets}/3</span>}
+                    </span>
+                )}
+
+                <div className="ml-auto flex shrink-0 items-center gap-2">
+                    <CallControls call={call} memberCount={room.call_members.length} />
+                    {!narrow && myTurn && !pending && endTurnButton}
+                    <button
+                        ref={menuButtonRef}
+                        type="button"
+                        className="btn btn-ghost !px-2.5 !py-1.5"
+                        title={t('table.menu')}
+                        aria-haspopup="menu"
+                        aria-expanded={menuOpen}
+                        onClick={() => (menuOpen ? closeMenu() : setMenuOpen(true))}
+                    >
+                        ⚙
+                    </button>
+                </div>
+
+                {menuOpen && (
+                    <div
+                        ref={menuRef}
+                        role="menu"
+                        aria-label={t('table.menu')}
+                        className="animate-pop absolute right-2 top-full z-50 mt-1 max-h-[min(70vh,calc(100vh-5rem))] w-64 max-w-[min(16rem,calc(100vw-1rem))] overflow-y-auto rounded-xl border border-white/15 bg-[#08281d] shadow-2xl"
+                    >
+                        <p className="border-b border-white/10 px-3 py-2 text-xs text-white/55">
+                            {t('table.menu_summary', {
+                                mode: t(`mode.${g.mode}`),
+                                turn: formatTurn(t, g.turn_seconds),
+                                host: room.owner_name,
+                            })}
+                        </p>
+                        {/* Robot seats have a difficulty everyone at the table
+                            should be able to see, not only the host who set it. */}
+                        {g.players.some(p => p.bot) && (
+                            <p className="border-b border-white/10 px-3 py-2 text-xs text-white/55">
+                                {t('table.menu_robots', { difficulty: t(`difficulty.${g.bot_difficulty}`) })}
+                            </p>
+                        )}
+                        {spectating ? (
+                            <button
+                                type="button"
+                                role="menuitem"
+                                className="block w-full px-3 py-2.5 text-left text-sm hover:bg-white/10"
+                                onClick={() => {
+                                    send(room.you_requested ? { type: 'cancel_seat' } : { type: 'request_seat' });
+                                    closeMenu();
+                                }}
+                            >
+                                {t(room.you_requested ? 'table.cancel_seat' : 'table.ask_seat')}
+                            </button>
+                        ) : (
+                            <button
+                                type="button"
+                                role="menuitem"
+                                className={`block w-full px-3 py-2.5 text-left text-sm ${confirmEnd ? 'bg-rose-600/40' : 'hover:bg-white/10'}`}
+                                onClick={() => {
+                                    if (confirmEnd) {
+                                        act({ type: 'terminate_game' });
+                                        closeMenu();
+                                    } else {
+                                        setConfirmEnd(true);
+                                    }
+                                }}
+                            >
+                                {t(confirmEnd ? 'table.end_game_confirm' : 'table.end_game')}
+                            </button>
+                        )}
+                        <button
+                            type="button"
+                            role="menuitem"
+                            className="block w-full px-3 py-2.5 text-left text-sm hover:bg-white/10"
+                            onClick={() => {
+                                closeMenu();
+                                onTutorial(!tutorial);
+                            }}
+                        >
+                            {t(tutorial ? 'table.tutorial_stop' : 'table.tutorial_start')}
+                        </button>
+                        <button
+                            type="button"
+                            role="menuitem"
+                            className="block w-full px-3 py-2.5 text-left text-sm hover:bg-white/10"
+                            onClick={() => {
+                                closeMenu();
+                                onLeave();
+                            }}
+                        >
+                            {t('table.leave')}
+                        </button>
+                        <LanguagePicker variant="menu" />
+                    </div>
+                )}
+
+            </header>
+
+            {spectating && (
+                <div className="panel flex min-w-0 flex-wrap items-center gap-2 px-3 py-2">
+                    <span className="text-sm">{t('table.watching')}</span>
+                    <button
+                        type="button"
+                        className={`btn !py-1 !text-xs ${room.you_requested ? 'btn-ghost' : 'btn-gold'}`}
+                        onClick={() => send(room.you_requested ? { type: 'cancel_seat' } : { type: 'request_seat' })}
+                    >
+                        {t(room.you_requested ? 'table.seat_waiting' : 'table.ask_seat')}
+                    </button>
+                    <button type="button" className="btn btn-ghost !py-1 !text-xs" onClick={onLeave}>
+                        ‹ {t('table.back_to_tables')}
+                    </button>
+                    {room.requests.length > 0 && (
+                        <span className="truncate text-xs text-white/50">
+                            {t('table.queue', { names: room.requests.map(r => r.name).join(', ') })}
+                        </span>
+                    )}
+                </div>
+            )}
+
+            <div className="flex min-h-0 min-w-0 flex-1 gap-2">
+                <main className="mat flex min-h-0 min-w-0 flex-1 flex-col gap-2 p-2">
+                    <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-y-auto">
+                        <div className="flex min-w-0 shrink-0 flex-col gap-2 xl:flex-row">
+                            {/* ── Opponents ───────────────────────────── */}
+                            <section data-tour="opponents" className={`min-w-0 flex-1 ${narrow ? 'rail gap-2 pb-1' : 'flex gap-2 overflow-x-auto pb-1'}`}>
+                                {narrow && deckChip}
+                                {foes.map(p => {
+                                    const shared = {
+                                        player: p,
+                                        isTurn: turnPlayer?.id === p.id,
+                                        isTargeted: pending?.targets.some(t => t.player_id === p.id && !t.settled),
+                                        stream: call.remote[p.id] ?? null,
+                                        inCall: room.call_members.includes(p.id),
+                                    };
+                                    return narrow
+                                        ? <PlayerChip
+                                            key={p.id}
+                                            {...shared}
+                                            grow={foes.length <= 3}
+                                            onOpen={() => setSheet({ kind: 'player', player: p })}
+                                        />
+                                        : <OpponentPanel key={p.id} {...shared} />;
+                                })}
+                            </section>
+
+                            {/* ── Table centre: wide screens have room for it ── */}
+                            {!narrow && (
+                            <section className="relative flex min-w-0 shrink-0 items-center justify-center gap-3 rounded-2xl border border-white/10 bg-black/20 py-2 xl:w-[27rem]">
+                                <div
+                                    aria-hidden
+                                    className="pointer-events-none absolute inset-0 rounded-2xl"
+                                    style={{ background: 'radial-gradient(ellipse 42% 120% at 50% 50%, rgb(242 193 78 / 0.1), transparent 70%)' }}
+                                />
+                                <div className="relative flex flex-col items-center gap-1">
+                                    <div className="relative">
+                                        <CardBack size="sm" className="absolute left-1 top-1 opacity-60" />
+                                        <CardBack size="sm" label="MD" className="relative" />
+                                    </div>
+                                    <span className="label-caps">{t('table.deck_count', { count: g.deck_count })}</span>
+                                </div>
+
+                                <DropZone
+                                    active={dragDiscardable}
+                                    hint={t('table.discard')}
+                                    onDrop={() => drag && act({ type: 'discard', card_id: drag.card.id })}
+                                    className="rounded-xl"
+                                >
+                                    <div className="flex flex-col items-center gap-1 p-1">
+                                        {g.discard_top
+                                            ? <PlayingCard card={g.discard_top} size="sm" />
+                                            : <div className="grid h-[6.5rem] w-[4.5rem] place-items-center rounded-lg border-2 border-dashed border-white/20 text-xs text-white/35">
+                                                {t('table.discard_empty')}
+                                            </div>}
+                                        <span className="label-caps">{t('table.discard_count', { count: g.discard_count })}</span>
+                                    </div>
+                                </DropZone>
+
+                                <DropZone
+                                    active={Boolean(drag && drag.from === 'hand' && canPlay && isPlayableAction(drag.card))}
+                                    hint={t('table.play_it')}
+                                    onDrop={() => drag && playActionCard(drag.card)}
+                                    className="rounded-xl"
+                                >
+                                    <div className="grid h-[6.5rem] w-[7rem] place-items-center rounded-xl border-2 border-dashed border-white/15 px-2 text-center text-[0.65rem] uppercase tracking-widest text-white/35">
+                                        {t('table.action_space')}
+                                    </div>
+                                </DropZone>
+                            </section>
+                            )}
+                        </div>
+
+                        {/* ── My board ────────────────────────────────── */}
+                        {me && (
+                            <section className="flex min-h-[7rem] min-w-0 flex-1 flex-col gap-2 lg:flex-row">
+                                {propertyZone}
+                                {bankZone}
+                            </section>
+                        )}
+                    </div>
+
+                    {/* ── Hand: pinned below the scrolling table ──────── */}
+                    {me && (
+                        <section data-tour="hand" className="panel relative min-w-0 shrink-0 px-2 pb-2 pt-1.5 sm:px-3 sm:pb-3">
+                            <div className="mb-1 flex min-w-0 items-center justify-between gap-2">
+                                <p className="label-caps shrink-0">{t('table.hand', { count: handSize })}</p>
+                                {overLimit ? (
+                                    <p className="animate-shake truncate rounded-md bg-rose-600/25 px-2 py-1 text-xs font-bold text-rose-200">
+                                        {t('table.over_limit', { count: handSize - 7 })}
+                                    </p>
+                                ) : (
+                                    <p className="truncate text-xs text-white/40">
+                                        {t(narrow ? 'table.hand_tap' : 'table.hand_drag')}
+                                    </p>
+                                )}
+                            </div>
+                            <div className="rail relative min-h-[8rem] items-end gap-1.5 pb-1 pt-3 sm:min-h-[9.5rem]">
+                                {handSize === 0 && (
+                                    <p className="py-8 text-sm italic text-white/35">
+                                        {t('table.hand_empty')}
+                                    </p>
+                                )}
+                                {me.hand?.map((c, i) => (
+                                    <PlayingCard
+                                        key={c.id}
+                                        card={c}
+                                        size={narrow ? 'sm' : 'md'}
+                                        selected={selected?.id === c.id}
+                                        draggable={!narrow && myTurn && !pending}
+                                        dragging={drag?.card.id === c.id}
+                                        onDragStart={() => setDrag({ card: c, from: 'hand' })}
+                                        onDragEnd={() => setDrag(null)}
+                                        onClick={() => setSelected(prev => (prev?.id === c.id ? null : c))}
+                                        className="animate-slide-up"
+                                        style={{ animationDelay: `${Math.min(i, 8) * 35}ms` }}
+                                    />
+                                ))}
+                            </div>
+                            {handSize > 4 && (
+                                <span
+                                    aria-hidden
+                                    className="pointer-events-none absolute bottom-2 right-0 top-8 w-8 rounded-r-2xl"
+                                    style={{ background: 'linear-gradient(to right, transparent, rgb(6 40 29 / 0.85))' }}
+                                />
+                            )}
+                        </section>
+                    )}
+                </main>
+
+                {!narrow && (
+                    <SidePanel
+                        log={g.log}
+                        chat={room.chat}
+                        you={room.you}
+                        open={panelOpen}
+                        onToggle={() => setPanelOpen(o => !o)}
+                        onSend={text => send({ type: 'chat', text })}
+                    />
+                )}
+            </div>
+
+            {/* ── Card actions ────────────────────────────────────────── */}
+            {selected && me && (
+                <div className="panel animate-slide-up flex min-w-0 flex-wrap items-center gap-2 px-3 py-2">
+                    <span className="font-display text-lg tracking-wide text-brass">{tCard(selected)}</span>
+                    <span className="text-xs text-white/50">{money(t, selected.value)}</span>
+
+                    {!myTurn && <span className="text-sm text-amber-300">{t('table.wait_your_turn')}</span>}
+                    {myTurn && Boolean(pending) && <span className="text-sm text-amber-300">{t('table.resolve_first')}</span>}
+
+                    {myTurn && !pending && (
+                        <>
+                            {(selected.type === 'property' || selected.type === 'property_wildcard') && (
+                                <button type="button" className="btn btn-blue" disabled={g.plays_left === 0}
+                                    onClick={() => setDialog({ card: selected, intent: 'property' })}>
+                                    {t('table.place_property')}
+                                </button>
+                            )}
+                            {isPlayableAction(selected) && (
+                                <button type="button" className="btn btn-gold" disabled={g.plays_left === 0}
+                                    onClick={() => playActionCard(selected)}>
+                                    {t(selected.type === 'rent' ? 'table.charge_rent' : 'table.play_action')}
+                                </button>
+                            )}
+                            {selected.type !== 'property' && selected.type !== 'property_wildcard' && (
+                                <button type="button" className="btn btn-green" disabled={g.plays_left === 0}
+                                    onClick={() => act({ type: 'play_bank', card_id: selected.id })}>
+                                    {t('table.bank_card', { amount: money(t, selected.value) })}
+                                </button>
+                            )}
+                            <button
+                                type="button"
+                                className="btn btn-red"
+                                disabled={!overLimit}
+                                title={t(overLimit ? 'table.discard_this' : 'table.discard_locked')}
+                                onClick={() => act({ type: 'discard', card_id: selected.id })}
+                            >
+                                {t('table.discard_card')}
+                            </button>
+                            {selected.action === 'just_say_no' && (
+                                <span className="text-xs text-white/55">{t('table.just_say_no_hint')}</span>
+                            )}
+                            {selected.action === 'double_rent' && (
+                                <span className="text-xs text-white/55">{t('table.double_rent_hint')}</span>
+                            )}
+                        </>
+                    )}
+
+                    <button type="button" className="btn btn-ghost ml-auto" onClick={() => setSelected(null)}>{t('common.close')}</button>
+                </div>
+            )}
+
+            {/* ── Bottom bar: status and the primary action, in thumb reach ── */}
+            {narrow && (
+                <div className="panel flex min-w-0 shrink-0 items-center gap-2 px-2 py-1.5">
+                    <TurnTimer
+                        deadlineMs={g.deadline_ms}
+                        totalSeconds={g.deadline_seconds}
+                        skewMs={skewMs}
+                        kind={g.deadline_kind}
+                        size={34}
+                    />
+                    {turnChip}
+                    {!spectating && playChips}
+
+                    <button
+                        type="button"
+                        data-tour="log-narrow"
+                        className="btn btn-ghost relative ml-auto !px-2.5 !py-1.5"
+                        onClick={() => {
+                            setSheet({ kind: 'talk' });
+                            setChatSeen(room.chat.length);
+                        }}
+                        title={t('table.talk')}
+                    >
+                        💬
+                        {room.chat.length > chatSeen && (
+                            <span className="absolute -right-1 -top-1 rounded-full bg-rose-500 px-1 text-[0.55rem] font-bold">
+                                {room.chat.length - chatSeen}
+                            </span>
+                        )}
+                    </button>
+
+                    {!spectating && myTurn && !pending && endTurnButton}
+                </div>
+            )}
+
+            {/* ── Overlays ────────────────────────────────────────────── */}
+            {sheet?.kind === 'player' && (
+                <Sheet
+                    title={sheet.player.name}
+                    subtitle={t('table.their_board')}
+                    onClose={() => setSheet(null)}
+                >
+                    <PlayerBoard player={sheet.player} isTurn={turnPlayer?.id === sheet.player.id} />
+                </Sheet>
+            )}
+
+            {sheet?.kind === 'talk' && (
+                <TalkSheet
+                    log={g.log}
+                    chat={room.chat}
+                    you={room.you}
+                    onClose={() => {
+                        setSheet(null);
+                        setChatSeen(room.chat.length);
+                    }}
+                    onSend={text => send({ type: 'chat', text })}
+                />
+            )}
+
+            {sheet?.kind === 'bank' && me && (
+                <Sheet
+                    title={t('table.your_bank')}
+                    subtitle={t('table.bank_sheet_total', {
+                        amount: money(t, me.bank_total),
+                        cards: t('table.bank_cards', { count: me.bank.length }),
+                    })}
+                    onClose={() => setSheet(null)}
+                >
+                    {me.bank.length === 0 ? (
+                        <p className="text-sm italic text-white/40">
+                            {t('table.bank_sheet_empty')}
+                        </p>
+                    ) : (
+                        <div className="flex flex-wrap gap-2">
+                            {me.bank.map(c => <PlayingCard key={c.id} card={c} size="sm" />)}
+                        </div>
+                    )}
+                </Sheet>
+            )}
+
+            {dialog && me && (
+                <ActionDialog
+                    view={g}
+                    card={dialog.card}
+                    intent={dialog.intent}
+                    onCancel={() => setDialog(null)}
+                    onConfirm={act}
+                />
+            )}
+
+            {pending && !dialog && <PendingPanel view={g} skewMs={skewMs} send={act} />}
+
+            {g.state === 'finished' && (
+                <WinOverlay
+                    view={g}
+                    isOwner={room.is_owner}
+                    ownerName={room.owner_name}
+                    onNewGame={() => act({ type: 'new_game' })}
+                    onLeave={onLeave}
+                />
+            )}
+
+            {tutorial && !spectating && (
+                <Tutorial
+                    room={room}
+                    narrow={narrow}
+                    compact={Boolean(dialog || sheet || pending || g.state === 'finished')}
+                    onClose={() => onTutorial(false)}
+                />
+            )}
+
+            {error && (
+                <div className="animate-shake fixed left-1/2 top-3 z-[70] max-w-[92vw] -translate-x-1/2 rounded-xl border border-rose-300/40 bg-rose-600/95 px-4 py-2 text-center font-semibold shadow-lg">
+                    {error}
+                </div>
+            )}
+        </div>
+    );
+}
