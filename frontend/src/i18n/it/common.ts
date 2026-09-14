@@ -49,6 +49,7 @@ const common: Catalog = {
     'common.back': 'Indietro',
     'common.next': 'Avanti',
     'common.confirm': 'Conferma',
+    'common.save': 'Salva',
     'common.you': 'tu',
     'common.money': '${amount}M',
     'common.language': 'Lingua',

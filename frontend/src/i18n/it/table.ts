@@ -232,6 +232,9 @@ const table: Catalog = {
     'pending.sly_deal': 'Furto Furbo',
     'pending.forced_deal': 'Scambio Forzato',
     'pending.deal_breaker': 'Affare Rotto',
+    'table.tap_tray': 'Tocca per le opzioni carta',
+    'table.hand_drag_only': 'Trascina una carta in alto per giocarla',
+    'inspect.hand_hint_drag': 'Passa sopra per vedere / trascina per giocare',
 };
 
 export default table;

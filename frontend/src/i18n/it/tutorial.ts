@@ -13,6 +13,8 @@ const tutorial: Catalog = {
     'tutorial.welcome_body': 'Questa era ogni carta e ogni situazione del gioco. I tavoli ti aspettano: gioca una partita vera, o sfida i robot da solo.',
     'tutorial.welcome_action': 'Vai ai tavoli',
     'tutorial.welcome_soon': 'Ti portiamo lì tra {seconds}s',
+    'tutorial.pressNext': 'Premi Avanti per continuare.',
+    'tutorial.pressFinish': 'Premi Fine per chiudere il tutorial.',
     'tutorial.taskDone': '✓ Fatto',
     'tutorial.waiting': 'In attesa…',
 
@@ -71,7 +73,7 @@ const tutorial: Catalog = {
     'lesson.wildcard.body': 'Una jolly vale come uno dei suoi due colori, e scegli tu quando la giochi. Metti questa con il blu che hai già.',
     'lesson.wildcard.task': 'Gioca la jolly come blu.',
     'lesson.tapping.title': 'Tocca invece di trascinare',
-    'lesson.tapping.body': 'Trascinare non è mai obbligatorio. Clicca o tocca una carta e si apre un menu con tutto quello che la carta può fare: giocarla, metterla in banca, scartarla. Sul telefono spesso è la via più comoda.',
+    'lesson.tapping.body': 'Trascinare non è mai obbligatorio: un tocco può aprire tutto quello che fa la carta — giocarla, metterla in banca, scartarla. Di base è spento, così un tocco involontario non copre mai il tavolo, e nel menu si chiama Tocca per le opzioni carta. Per questa lezione è attivo.',
     'lesson.tapping.task': 'Tocca una carta e giocala dal menu.',
     'lesson.bank.title': 'Metti in banca',
     'lesson.bank.body': 'I soldi in banca non sono punti: sono con cosa paghi quando qualcuno ti chiede. Ogni carta può andare in banca per il suo valore.',

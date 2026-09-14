@@ -49,6 +49,7 @@ const common: Catalog = {
     'common.back': 'Zurück',
     'common.next': 'Weiter',
     'common.confirm': 'Bestätigen',
+    'common.save': 'Speichern',
     'common.you': 'du',
     'common.money': '${amount}M',
     'common.language': 'Sprache',

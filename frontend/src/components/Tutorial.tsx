@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ClientMessage, RoomView } from '../types';
 import { useI18n } from '../i18n';
+import { useOptionalDragLayer } from '../game/dragLayer';
 
 /**
  * The coach for a scripted tutorial table.
@@ -19,6 +20,9 @@ interface Hint {
     anchorNarrow?: string;
     /** The cards or controls the task is actually about. */
     targets?: string;
+    /** How many matching cards the lesson lets the player use. One, unless the
+     *  move genuinely takes two cards. */
+    targetCount?: number;
     gesture?: 'drag' | 'tap';
 }
 
@@ -44,7 +48,7 @@ const HINTS: Record<string, Hint> = {
     },
     // Dragging is not the only way in: every card opens a menu when it is
     // clicked or tapped, so the lesson points at the card and mimes a tap.
-    tapping: { anchor: 'hand', targets: PROPERTY_IN_HAND, gesture: 'tap' },
+    tapping: { anchor: 'properties', targets: PROPERTY_IN_HAND, gesture: 'tap' },
     bank: { anchor: 'bank', targets: '.hand-card[data-card-type="money"]', gesture: 'drag' },
     // An action card is played by putting it in the action space, so that is
     // where the lesson points — lighting the card alone says what to pick up
@@ -56,6 +60,7 @@ const HINTS: Record<string, Hint> = {
         // Both halves of the move: the rent and the card that doubles it.
         anchor: 'action-space',
         targets: `.hand-card[data-card-type="rent"], ${action('double_rent')}`,
+        targetCount: 2,
         gesture: 'drag',
     },
     // A pending action owns the screen, so the coach is a strip and has
@@ -82,9 +87,6 @@ export function markTutorialSeen(seen: boolean) {
 }
 
 interface Rect { top: number; left: number; width: number; height: number }
-
-/** Ringing every card in a full hand highlights nothing. */
-const MAX_TARGETS = 4;
 
 const centre = (r: Rect) => ({ x: r.left + r.width / 2, y: r.top + r.height / 2 });
 
@@ -161,13 +163,34 @@ function useRects(selector: string | undefined, limit: number): Rect[] {
         measure();
         // The table reflows constantly — a hand re-fans itself whenever a card
         // leaves it — so this re-measures rather than trusting one read.
-        const timer = window.setInterval(measure, 250);
-        window.addEventListener('resize', measure);
-        window.addEventListener('scroll', measure, true);
+        //
+        // Not while a card is in the air, though. Four overlays each running a
+        // querySelectorAll and a run of getBoundingClientRect four times a
+        // second forces a layout on the one thread that is also meant to be
+        // keeping a card under a finger, and nothing it would learn can be
+        // acted on until the card lands anyway.
+        const timer = window.setInterval(() => {
+            if (document.body.classList.contains('is-dragging')) return;
+            measure();
+        }, 250);
+        // Scroll fires far faster than the screen refreshes, and every one of
+        // these was a synchronous layout. One measurement per frame is all a
+        // highlight can show.
+        let queued = 0;
+        const soon = () => {
+            if (queued) return;
+            queued = requestAnimationFrame(() => {
+                queued = 0;
+                measure();
+            });
+        };
+        window.addEventListener('resize', soon);
+        window.addEventListener('scroll', soon, true);
         return () => {
             window.clearInterval(timer);
-            window.removeEventListener('resize', measure);
-            window.removeEventListener('scroll', measure, true);
+            if (queued) cancelAnimationFrame(queued);
+            window.removeEventListener('resize', soon);
+            window.removeEventListener('scroll', soon, true);
         };
     }, [selector, limit]);
     return rects;
@@ -191,13 +214,30 @@ export default function Tutorial({ room, narrow, compact, send, onClose }: Props
     const lesson = room.game.tutorial;
     const hint = lesson ? (HINTS[lesson.id] ?? {}) : {};
 
+    // A card in the air has already been chosen. Ringing it, and miming the
+    // gesture the player is in the middle of making, is the tour talking over
+    // the player — and the ring tracked the card as it moved, which read as the
+    // highlight being dragged along with it.
+    const carrying = Boolean(useOptionalDragLayer()?.dragging);
+
     const anchorName = compact ? undefined : (narrow && hint.anchorNarrow) || hint.anchor;
     const anchorRects = useRects(anchorName ? `[data-tour="${anchorName}"]` : undefined, 1);
     // A read-through lesson has nothing to point at; a finished one has
     // nothing left to ask for.
-    const wantTargets = Boolean(lesson && lesson.task && !lesson.done && !compact);
-    const targets = useRects(wantTargets ? hint.targets : undefined, MAX_TARGETS);
+    const wantTargets = Boolean(lesson && lesson.task && !lesson.done && !compact && !carrying);
+    // A lesson that lights every property in the hand is a lesson with three
+    // right answers, and the player has to guess which one it meant. One card,
+    // unless the move takes two.
+    const targets = useRects(wantTargets ? hint.targets : undefined, hint.targetCount ?? 1);
     const handRects = useRects('[data-tour="hand"]', 1);
+    // Everything above the header belongs to the phone: the clock, the island,
+    // the signal bars. The coach starts below it rather than at the top of the
+    // window, which is where it was sitting.
+    const headerRects = useRects('.game-header', 1);
+    // The Next button, once it is the thing being waited on. The class only
+    // exists while that is true, so an empty result means there is nothing to
+    // point at yet.
+    const nextRects = useRects('.tour-next-ready', 1);
 
     useEffect(() => {
         const h = cardRef.current?.offsetHeight;
@@ -227,6 +267,43 @@ export default function Tutorial({ room, narrow, compact, send, onClose }: Props
         // belongs.
         setSlot(r.top < cardHeight + 40 ? 'bottom' : 'top');
     }, [lessonId, anchorRects, cardHeight]);
+
+    // Everything the lesson is not about is switched off while it is running.
+    // A tutorial where the settings menu, the discard pile and two other cards
+    // all still answer is a tutorial the player can walk out of by accident.
+    const locked = Boolean(lesson?.task && !lesson.done && !compact);
+    const liveSel = locked ? [hint.targets, anchorName && `[data-tour="${anchorName}"]`] : [];
+    const liveKey = liveSel.filter(Boolean).join('|');
+    const liveLimit = hint.targetCount ?? 1;
+
+    useEffect(() => {
+        document.body.classList.toggle('tour-locked', locked);
+        return () => document.body.classList.remove('tour-locked');
+    }, [locked]);
+
+    useEffect(() => {
+        if (!liveKey) return;
+        const [targetSel, anchorSel] = liveKey.split('|');
+        let marked: Element[] = [];
+        const apply = () => {
+            const next: Element[] = [];
+            if (targetSel) {
+                next.push(...Array.from(document.querySelectorAll(targetSel)).slice(0, liveLimit));
+            }
+            if (anchorSel) next.push(...Array.from(document.querySelectorAll(anchorSel)));
+            for (const el of marked) if (!next.includes(el)) el.classList.remove('tour-live');
+            for (const el of next) el.classList.add('tour-live');
+            marked = next;
+        };
+        apply();
+        // The hand re-fans and the mat re-lays out, so which nodes these are
+        // does not hold still for the length of a lesson.
+        const timer = window.setInterval(apply, 250);
+        return () => {
+            window.clearInterval(timer);
+            for (const el of marked) el.classList.remove('tour-live');
+        };
+    }, [liveKey, liveLimit]);
 
     if (!lesson) return null;
 
@@ -263,10 +340,11 @@ export default function Tutorial({ room, narrow, compact, send, onClose }: Props
     // for the whole tour.
     const hand = handRects[0] ?? null;
     const sideHand = Boolean(hand && hand.height > vh * 0.6);
+    const header = headerRects[0] ?? null;
     const free = {
         left: hand && sideHand && hand.left < vw / 2 ? hand.left + hand.width : 0,
         right: hand && sideHand && hand.left >= vw / 2 ? hand.left : vw,
-        top: 0,
+        top: header ? header.top + header.height : 0,
         bottom: hand && !sideHand ? hand.top : vh,
     };
 
@@ -335,6 +413,10 @@ export default function Tutorial({ room, narrow, compact, send, onClose }: Props
     // one, so the dimmer is a masked rectangle instead.
     const holes = [...(box ? [box] : []), ...targets];
 
+    // Nothing here advances on its own: either the lesson was a read, or the
+    // move has been made and the table is waiting on the player.
+    const ready = !lesson.task || lesson.done;
+
     return (
         <div className="pointer-events-none fixed inset-0 z-[80]">
             {holes.length > 0 ? (
@@ -387,6 +469,17 @@ export default function Tutorial({ room, narrow, compact, send, onClose }: Props
                 <TourHand from={from} to={to} gesture={hint.gesture ?? 'tap'} />
             )}
 
+            {/* Nothing left to do but go on, so the hand moves to the button
+                that does it. Words saying "press Next" are easy to read past;
+                a finger tapping the button is not. */}
+            {ready && !carrying && nextRects[0] && (
+                <TourHand
+                    from={centre(nextRects[0])}
+                    to={centre(nextRects[0])}
+                    gesture="tap"
+                />
+            )}
+
             <div
                 ref={cardRef}
                 className="panel animate-pop pointer-events-auto absolute border-brass/40 p-4 shadow-2xl"
@@ -416,6 +509,16 @@ export default function Tutorial({ room, narrow, compact, send, onClose }: Props
                     </p>
                 )}
 
+                {/* The lesson never moves on by itself, and a card that gives
+                    no sign of that is a tour people sit and wait in. */}
+                {ready && (
+                    <p className="mt-1.5 text-xs font-semibold text-brass">
+                        {lesson.step >= lesson.total
+                            ? t('tutorial.pressFinish')
+                            : t('tutorial.pressNext')}
+                    </p>
+                )}
+
                 {/* How to do it with what you are holding. */}
                 {lesson.task && !lesson.done && gestureKey && (
                     <p className="mt-1.5 text-xs text-white/50">{t(gestureKey)}</p>
@@ -432,14 +535,16 @@ export default function Tutorial({ room, narrow, compact, send, onClose }: Props
                     </span>
                     <button
                         type="button"
-                        className={`btn ml-auto !py-1.5 !text-sm ${lesson.done ? 'btn-gold' : 'btn-ghost'}`}
+                        className={`btn ml-auto !py-1.5 !text-sm ${
+                            ready ? 'btn-gold tour-next-ready' : 'btn-ghost'
+                        }`}
                         onClick={advance}
                     >
                         {lesson.step >= lesson.total
                             ? t('tutorial.finish')
                             : lesson.task && !lesson.done
                               ? t('tutorial.skipStep')
-                              : t('common.next')}
+                              : `${t('common.next')} →`}
                     </button>
                 </div>
             </div>

@@ -13,6 +13,8 @@ const tutorial: Catalog = {
     'tutorial.welcome_body': 'That is every card and every situation the game has. The tables are waiting — play a real one, or set up a solo game against the robots.',
     'tutorial.welcome_action': 'Go to the tables',
     'tutorial.welcome_soon': 'Taking you there in {seconds}s',
+    'tutorial.pressNext': 'Press Next to carry on.',
+    'tutorial.pressFinish': 'Press Finish to end the tutorial.',
     'tutorial.taskDone': '✓ Done',
     'tutorial.waiting': 'Waiting…',
 
@@ -71,7 +73,7 @@ const tutorial: Catalog = {
     'lesson.wildcard.body': 'A wildcard counts as either of its two colours, and you choose which when you play it. Put this one with the blue you already own.',
     'lesson.wildcard.task': 'Play the wildcard as blue.',
     'lesson.tapping.title': 'Tap instead of drag',
-    'lesson.tapping.body': 'You never have to drag. Click or tap any card and a menu opens with everything that card can do — play it, bank it, discard it. On a phone that is often the easier route.',
+    'lesson.tapping.body': 'You never have to drag: a tap can open everything the card does — play it, bank it, discard it. It is off by default so a stray touch never covers the board, and lives in the menu as Tap for card options. It is switched on for this lesson.',
     'lesson.tapping.task': 'Tap a card and play it from the menu.',
     'lesson.bank.title': 'Bank a card',
     'lesson.bank.body': 'Money in your bank is not points — it is what you pay with when somebody charges you. Any card can be banked for its value.',

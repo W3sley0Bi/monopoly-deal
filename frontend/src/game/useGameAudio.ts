@@ -3,6 +3,10 @@ import type { GameView, LogEntry, RadioState } from '../types';
 
 /** A deliberately small, original sound palette for the table. */
 export type GameAudioCue =
+    /** The table heard you. Played the instant a control is used, before the
+     *  server has said anything, because every other cue here waits on the
+     *  round trip and silence is what makes a tap feel slow. */
+    | 'tap'
     | 'card_draw'
     | 'card_play'
     | 'bank'
@@ -122,6 +126,12 @@ class AudioEngine {
         if (this.context.state === 'closed') return;
         const now = this.context.currentTime + 0.005;
         switch (cue) {
+            case 'tap':
+                // Short and quiet: an acknowledgement, not an event. The cue
+                // for what actually happened still follows from the log.
+                this.noise(0.022, 0.012, now, 2600);
+                this.tone(84, 0.035, 0.016, now, 'triangle');
+                break;
             case 'card_draw':
                 this.tone(72, 0.07, 0.045, now, 'triangle');
                 this.tone(79, 0.08, 0.035, now + 0.045, 'triangle');

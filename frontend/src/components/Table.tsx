@@ -102,6 +102,20 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
         localStorage.setItem('md.hand', pos);
         setHandPos(pos);
     };
+    // Tapping a card opens a row of buttons. It is a panel that lands over the
+    // board every time a thumb brushes a card, for a move the same thumb can
+    // make by pulling the card upward, so it is off unless it is asked for.
+    //
+    // The one exception is the lesson that teaches it: a tutorial step about
+    // tapping a card has to let the card be tapped.
+    const [tapTray, setTapTray] = useState(() => localStorage.getItem('md.taptray') === 'on');
+    const tapOpens = tapTray || g.tutorial?.id === 'tapping';
+    // Turning the tray off with a card already chosen would leave the panel on
+    // screen with no way to dismiss it.
+    useEffect(() => {
+        if (!tapOpens) setSelected(null);
+    }, [tapOpens]);
+
     const [menuOpen, setMenuOpen] = useState(false);
     const [confirmEnd, setConfirmEnd] = useState(false);
     const [chatSeen, setChatSeen] = useState(room.chat.length);
@@ -113,6 +127,14 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
     const closeMenu = useCallback(() => {
         setMenuOpen(false);
         setConfirmEnd(false);
+    }, []);
+
+    // While the table is on screen the document itself is pinned: a game that
+    // rubber-bands at the top, or keeps a scroll position left behind by a drag
+    // that ran off the edge, reads as a web page rather than a table.
+    useEffect(() => {
+        document.body.classList.add('playing');
+        return () => document.body.classList.remove('playing');
     }, []);
 
     // A dropdown that only closes by pressing its own button is a trap on a
@@ -143,12 +165,32 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
         };
     }, [menuOpen, closeMenu]);
 
+    // Every cue this table plays is triggered by the log, which arrives with
+    // the server's answer — so between a tap and the round trip completing,
+    // nothing happened at all. This is the table saying it heard you, now,
+    // before the network gets a word in.
+    const [sent, setSent] = useState<string | null>(null);
+    useEffect(() => {
+        if (!sent) return;
+        // A refused play leaves the card where it was; the mark must not
+        // outlive the answer either way.
+        const timer = window.setTimeout(() => setSent(null), 1400);
+        return () => window.clearTimeout(timer);
+    }, [sent]);
+
     const act = (msg: ClientMessage) => {
+        audio.play('tap');
+        const carried = (msg as { card_id?: string }).card_id;
+        setSent(carried ?? null);
         send(msg);
         setSelected(null);
         setDialog(null);
         setDrag(null);
     };
+
+    // The card is on its way to the server. Showing it as gone from the hand
+    // is the difference between a table that answers and one that thinks.
+    const inFlight = sent && me?.hand?.some(c => c.id === sent) ? sent : null;
 
     const recentReaction = (id: string) => room.chat.findLast(m => m.player_id === id && m.text && REACTIONS.some(r => r === m.text) && g.now_ms - m.at_ms < 5000);
 
@@ -630,6 +672,18 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
                                 </div>
                             </div>
                         )}
+                        <button
+                            type="button"
+                            role="menuitemcheckbox"
+                            aria-checked={tapTray}
+                            className="block w-full px-3 py-2.5 text-left text-sm hover:bg-white/10"
+                            onClick={() => setTapTray(value => {
+                                localStorage.setItem('md.taptray', value ? 'off' : 'on');
+                                return !value;
+                            })}
+                        >
+                            {t('table.tap_tray')}: {t(tapTray ? 'table.on' : 'table.off')}
+                        </button>
                         <button type="button" role="menuitemcheckbox" aria-checked={motion} className="block w-full px-3 py-2.5 text-left text-sm hover:bg-white/10" onClick={() => setMotion(value => { localStorage.setItem('md.motion', value ? 'off' : 'on'); return !value; })}>
                             {t('table.motion')}: {t(motion ? 'table.on' : 'table.off')}
                         </button>
@@ -783,7 +837,11 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
                                     </p>
                                 ) : (
                                     <p className="truncate text-xs text-white/40">
-                                        {t(narrow ? 'table.hand_tap' : 'inspect.hand_hint')}
+                                        {t(
+                                            narrow
+                                                ? tapOpens ? 'table.hand_tap' : 'table.hand_drag_only'
+                                                : tapOpens ? 'inspect.hand_hint' : 'inspect.hand_hint_drag',
+                                        )}
                                     </p>
                                 )}
                             </div>
@@ -807,10 +865,10 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
                                         selected={selected?.id === c.id}
                                         draggable={myTurn && !pending}
                                         dragAxis={narrow ? 'vertical' : 'free'}
-                                        dragging={drag?.card.id === c.id}
+                                        dragging={drag?.card.id === c.id || inFlight === c.id}
                                         onDragStart={() => setDrag({ card: c, from: 'hand' })}
                                         onDragEnd={() => setDrag(null)}
-                                        onClick={() => setSelected(prev => (prev?.id === c.id ? null : c))}
+                                        onClick={tapOpens ? () => setSelected(prev => (prev?.id === c.id ? null : c)) : undefined}
                                         className="hand-card"
                                         style={{ '--fan-angle': `${(i - (handSize - 1) / 2) * Math.min(3, 22 / Math.max(handSize, 1))}deg`, '--fan-y': `${Math.pow(i - (handSize - 1) / 2, 2) * Math.min(1.2, 12 / Math.max(handSize, 1))}px`, '--deal-delay': `${Math.min(i, 8) * 35}ms` } as CSSProperties}
                                     />

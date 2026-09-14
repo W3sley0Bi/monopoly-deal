@@ -44,20 +44,19 @@ export default function DropZone({ active, onDrop, children, className = '', hin
             data-tour={tour}
             data-drop-id={id}
             data-active={active || undefined}
+            // The states are named here and dressed in the stylesheet, because
+            // how a zone opens up for a card is a movement — two easings and a
+            // pulse — and that does not fit in a list of utility classes.
             className={[
-                'relative transition-all duration-150',
-                active ? 'outline-2 outline-offset-2 outline-dashed outline-brass/60' : '',
-                over ? 'drop-zone-over scale-[1.02] outline-solid outline-brass shadow-[0_0_30px_-6px_rgba(242,193,78,0.8)]' : '',
+                'drop-zone',
+                active ? 'drop-zone-live' : '',
+                over ? 'drop-zone-over' : '',
                 className,
             ].join(' ')}
         >
             {children}
             {active && hint && (
-                <span
-                    className={`pointer-events-none absolute inset-0 grid place-items-center rounded-[inherit] text-center font-display text-sm tracking-widest uppercase transition ${
-                        over ? 'bg-brass/25 text-white' : 'bg-black/40 text-brass/80'
-                    }`}
-                >
+                <span className="drop-zone-hint pointer-events-none absolute inset-0 grid place-items-center rounded-[inherit] text-center font-display text-sm tracking-widest uppercase">
                     {hint}
                 </span>
             )}

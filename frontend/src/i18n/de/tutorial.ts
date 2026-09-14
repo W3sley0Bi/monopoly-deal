@@ -13,6 +13,8 @@ const tutorial: Catalog = {
     'tutorial.welcome_body': 'Das war jede Karte und jede Situation im Spiel. Die Tische warten — spiel eine echte Runde oder tritt allein gegen die Roboter an.',
     'tutorial.welcome_action': 'Zu den Tischen',
     'tutorial.welcome_soon': 'In {seconds}s geht es weiter',
+    'tutorial.pressNext': 'Drück auf Weiter, um fortzufahren.',
+    'tutorial.pressFinish': 'Drück auf Fertig, um das Tutorial zu beenden.',
     'tutorial.taskDone': '✓ Erledigt',
     'tutorial.waiting': 'Warte…',
 
@@ -71,7 +73,7 @@ const tutorial: Catalog = {
     'lesson.wildcard.body': 'Ein Joker zählt als eine seiner beiden Farben, und du entscheidest beim Ausspielen. Leg diesen zu deinem Blau.',
     'lesson.wildcard.task': 'Spiel den Joker als Blau.',
     'lesson.tapping.title': 'Tippen statt ziehen',
-    'lesson.tapping.body': 'Du musst nie ziehen. Klick oder tipp eine Karte an, und ein Menü zeigt alles, was diese Karte kann — ausspielen, in die Bank legen, ablegen. Am Handy ist das oft der bequemere Weg.',
+    'lesson.tapping.body': 'Du musst nie ziehen: ein Tippen kann alles zeigen, was die Karte kann — ausspielen, in die Bank, ablegen. Standardmäßig aus, damit eine versehentliche Berührung nie das Spielfeld verdeckt; im Menü heißt es Tippen zeigt Kartenoptionen. Für diese Lektion ist es an.',
     'lesson.tapping.task': 'Tipp eine Karte an und spiel sie aus dem Menü.',
     'lesson.bank.title': 'Karte in die Bank',
     'lesson.bank.body': 'Geld in der Bank sind keine Punkte — damit zahlst du, wenn jemand kassiert. Jede Karte kann für ihren Wert in die Bank.',

@@ -2235,13 +2235,84 @@ body.is-dragging {
 }
 /* The zone under the card answers, so a finger that hides the target still
    gets an unambiguous yes. */
+/* ── Zones that want the card ─────────────────────────────────────────────
+   A drop target that only changes colour makes the player aim; one that opens
+   up as the card approaches does the aiming for them. Every eligible zone
+   lifts slightly and breathes while a card is in the air, and the one under
+   the finger swells past its resting size and settles back — the overshoot is
+   what makes it read as something reaching for the card rather than a
+   rectangle changing state.
+
+   It is all transform and shadow, so nothing around a growing zone moves. */
+.drop-zone {
+    position: relative;
+    transition:
+        transform 280ms cubic-bezier(0.22, 1, 0.36, 1),
+        box-shadow 240ms ease,
+        outline-color 160ms ease,
+        outline-offset 240ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.drop-zone-live {
+    outline: 2px dashed oklch(85% 0.09 90 / 0.5);
+    outline-offset: 2px;
+    transform: scale(1.015);
+    animation: drop-zone-invite 2s ease-in-out infinite;
+}
 .drop-zone-over {
-    animation: drop-zone-breathe 1s ease-in-out infinite;
+    z-index: 5;
+    outline-style: solid;
+    outline-color: oklch(88% 0.14 92);
+    outline-offset: 5px;
+    transform: scale(1.06);
+    box-shadow:
+        0 0 0 6px oklch(88% 0.14 92 / 0.1),
+        0 20px 38px -16px oklch(8% 0.03 220 / 0.85),
+        0 0 34px -6px oklch(88% 0.14 92 / 0.55);
+    /* Overshoot on the way in only: a zone that springs as the card leaves
+       looks like it threw it back. */
+    transition-timing-function: cubic-bezier(0.34, 1.5, 0.64, 1);
+    animation: drop-zone-breathe 1.6s ease-in-out infinite;
+}
+/* A phone's zones are a third of the size, so the same proportion of growth
+   is a third of the signal. */
+@media (max-width: 899px) {
+    .drop-zone-over {
+        transform: scale(1.11);
+    }
+}
+@keyframes drop-zone-invite {
+    50% {
+        outline-color: oklch(90% 0.13 92 / 0.9);
+    }
 }
 @keyframes drop-zone-breathe {
     50% {
-        filter: brightness(1.14);
+        filter: brightness(1.08);
     }
+}
+/* The inner slot opens with the zone rather than staying a dashed outline
+   inside a lit one. */
+.drop-zone-over .board-target-slot {
+    border-style: solid;
+    border-color: oklch(90% 0.13 92);
+    background: oklch(24% 0.06 150 / 0.92);
+    color: oklch(96% 0.05 95);
+}
+.drop-zone-hint {
+    background: oklch(8% 0.02 220 / 0.42);
+    color: oklch(88% 0.11 92 / 0.85);
+    opacity: 0.85;
+    transform: scale(0.96);
+    transition:
+        opacity 200ms ease,
+        transform 260ms cubic-bezier(0.34, 1.5, 0.64, 1),
+        background-color 200ms ease;
+}
+.drop-zone-over .drop-zone-hint {
+    background: oklch(88% 0.14 92 / 0.22);
+    color: oklch(99% 0.01 95);
+    opacity: 1;
+    transform: scale(1);
 }
 
 /* ── Phone drop targets ───────────────────────────────────────────────────
@@ -2449,8 +2520,15 @@ body.is-dragging {
     }
 }
 @media (prefers-reduced-motion: reduce) {
+    /* The loops go; the size change stays, because it is what says where the
+       card may land rather than decoration around it. */
+    .drop-zone-live,
     .drop-zone-over {
         animation: none;
+    }
+    .drop-zone,
+    .drop-zone-hint {
+        transition-duration: 1ms;
     }
 }
 
@@ -3610,4 +3688,97 @@ body.is-dragging {
     .tutorial-done-overlay {
         animation: none;
     }
+}
+
+/* ── Installed on a phone ─────────────────────────────────────────────────
+   The insets are the right answer and are used first; this only sets a floor
+   under them, because an iPhone that reports nothing still has a clock, a
+   signal bar and often an island sitting over the top of the page. */
+@media (max-width: 899px) {
+    html.standalone .game-room {
+        padding-top: max(env(safe-area-inset-top), 44px);
+    }
+    html.standalone .safe-screen,
+    html.standalone .home-screen,
+    html.standalone .welcome-screen {
+        padding-top: max(env(safe-area-inset-top), 48px);
+    }
+    html.standalone .call-corner {
+        top: calc(70px + max(env(safe-area-inset-top), 44px));
+    }
+    html.standalone .tour-strip-top {
+        top: calc(0.5rem + max(env(safe-area-inset-top), 44px));
+    }
+    html.standalone .error-toast {
+        top: calc(0.75rem + max(env(safe-area-inset-top), 44px));
+    }
+}
+
+/* ── A table is not a page ────────────────────────────────────────────────
+   While a game is on, the document itself must not move: no rubber-band at
+   the top, no scroll left behind by a drag that ran off the edge, no address
+   bar sliding in and out under the cards. Pinning the body is the only thing
+   iOS honours reliably; the rails inside the table still scroll, because they
+   are their own scroll containers.
+
+   It is a body class rather than a rule on .game-room because the bounce
+   belongs to the document, and only the document can refuse it. */
+body.playing {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+    overscroll-behavior: none;
+    /* Kills the double-tap-to-zoom delay as well as the zoom itself, so a
+       quick tap on a card answers at once. */
+    touch-action: manipulation;
+}
+
+/* The tour never advances on its own. When it is waiting on the player the
+   button says so twice: in words above it, and by refusing to sit still. */
+.tour-next-ready {
+    animation: tour-next-pulse 1.7s ease-in-out infinite;
+}
+@keyframes tour-next-pulse {
+    0%,
+    100% {
+        box-shadow: 0 0 0 0 oklch(84% 0.14 88 / 0.55);
+    }
+    55% {
+        box-shadow: 0 0 0 7px oklch(84% 0.14 88 / 0);
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .tour-next-ready {
+        animation: none;
+    }
+}
+
+/* A long press on a card used to raise the iOS text-selection loupe and the
+   copy/share callout in the middle of a drag, and every tap flashed the grey
+   link highlight. Neither belongs on a table. */
+body.playing .game-room {
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+}
+body.playing .hand-card,
+body.playing .card-face,
+body.playing .drop-zone {
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+/* ── A lesson is not a free table ─────────────────────────────────────────
+   While the tour is waiting for one particular move, that move is the only
+   one the table answers. Otherwise a player halfway through "play a property"
+   can bank it, discard it, open the settings or end the turn, and the lesson
+   sits there asking for something that is no longer possible.
+
+   The tutorial card itself, the dialogs it opens and the card tray all live
+   outside this, so the move it is asking for can still be completed. */
+body.tour-locked .game-room {
+    pointer-events: none;
+}
+body.tour-locked .tour-live,
+body.tour-locked .card-action-tray {
+    pointer-events: auto;
 }

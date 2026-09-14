@@ -87,18 +87,27 @@ const EDGE_SPEED = 13;
  * its top or bottom edge. Property groups and a rival's sets scroll inside
  * their own panel, so without this the target under them is unreachable.
  */
-function scrollTowardsEdge(x: number, y: number) {
+function findScroller(x: number, y: number): Element | null {
     let el: Element | null = document.elementFromPoint(x, y);
     while (el) {
         const overflow = getComputedStyle(el).overflowY;
         if ((overflow === 'auto' || overflow === 'scroll') && el.scrollHeight > el.clientHeight + 1) {
-            const box = el.getBoundingClientRect();
-            if (y - box.top < EDGE_PX) el.scrollTop -= EDGE_SPEED;
-            else if (box.bottom - y < EDGE_PX) el.scrollTop += EDGE_SPEED;
-            return;
+            return el;
         }
         el = el.parentElement;
     }
+    return null;
+}
+
+/**
+ * Whether the card is resting against the edge of `el`, and which way that
+ * should move it. Zero means it is not near an edge.
+ */
+function edgeStep(el: Element, y: number): number {
+    const box = el.getBoundingClientRect();
+    if (y - box.top < EDGE_PX) return -EDGE_SPEED;
+    if (box.bottom - y < EDGE_PX) return EDGE_SPEED;
+    return 0;
 }
 
 export function DragProvider({ children }: { children: ReactNode }) {
@@ -136,11 +145,35 @@ export function DragProvider({ children }: { children: ReactNode }) {
         // One frame loop runs for the life of the drag: the card has to keep
         // pulling a panel along even when the finger is holding perfectly
         // still against its edge.
+        // Everything in here runs sixty times a second on a phone, so each
+        // step asks whether it has anything to do first. Re-probing the DOM
+        // under a finger that has not moved was costing a forced style recalc
+        // and a layout every frame, for an answer that could not have changed.
+        let drawnX = Number.NaN;
+        let drawnY = Number.NaN;
+        let probedX = Number.NaN;
+        let probedY = Number.NaN;
+        let scroller: Element | null = null;
+
         const tick = () => {
             frame = requestAnimationFrame(tick);
-            if (ghost) ghost.style.transform = `translate3d(${x - grabX}px, ${y - grabY}px, 0) ${GHOST_POSE}`;
-            scrollTowardsEdge(x, y);
-            hitTest();
+            const moved = x !== drawnX || y !== drawnY;
+            if (ghost && moved) {
+                ghost.style.transform = `translate3d(${x - grabX}px, ${y - grabY}px, 0) ${GHOST_POSE}`;
+                drawnX = x;
+                drawnY = y;
+            }
+            // The panel under the pointer only changes when the pointer does.
+            if (x !== probedX || y !== probedY) {
+                scroller = findScroller(x, y);
+                probedX = x;
+                probedY = y;
+            }
+            const step = scroller ? edgeStep(scroller, y) : 0;
+            if (step !== 0 && scroller) scroller.scrollTop += step;
+            // A still finger over a still panel is looking at the same zone it
+            // was looking at last frame.
+            if (moved || step !== 0) hitTest();
         };
 
         const hitTest = () => {
@@ -158,6 +191,11 @@ export function DragProvider({ children }: { children: ReactNode }) {
             ghost = source.cloneNode(true) as HTMLElement;
             ghost.className = `${ghost.className} drag-ghost`;
             ghost.removeAttribute('id');
+            // The carried copy is scenery. Anything that made the original
+            // answer to a pointer has to come off it, or the ghost sits
+            // between the finger and the drop zone it is being carried to.
+            ghost.classList.remove('tour-live');
+            ghost.removeAttribute('data-drop-id');
             ghost.style.width = `${rect.width}px`;
             ghost.style.height = `${rect.height}px`;
             document.body.appendChild(ghost);
@@ -171,10 +209,17 @@ export function DragProvider({ children }: { children: ReactNode }) {
         // would leave the action tray open over the board it just changed.
         const swallowNextClick = () => {
             const swallow = (e: Event) => {
+                // Only the card that was dragged. This used to swallow the
+                // first click anywhere, so a button tapped straight after a
+                // drag did nothing and had to be pressed twice — which is what
+                // a delay feels like from the other side of the screen.
+                const target = e.target as Node | null;
+                if (!target || !source.contains(target)) return;
                 e.stopPropagation();
                 e.preventDefault();
+                window.removeEventListener('click', swallow, true);
             };
-            window.addEventListener('click', swallow, { capture: true, once: true });
+            window.addEventListener('click', swallow, { capture: true });
             window.setTimeout(() => window.removeEventListener('click', swallow, true), 350);
         };
 

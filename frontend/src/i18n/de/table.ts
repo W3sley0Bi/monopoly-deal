@@ -232,6 +232,9 @@ const table: Catalog = {
     'pending.sly_deal': 'Trickbetrug',
     'pending.forced_deal': 'Zwangstausch',
     'pending.deal_breaker': 'Geschäftsbruch',
+    'table.tap_tray': 'Tippen zeigt Kartenoptionen',
+    'table.hand_drag_only': 'Zieh eine Karte nach oben, um sie zu spielen',
+    'inspect.hand_hint_drag': 'Zum Ansehen schweben / zum Spielen ziehen',
 };
 
 export default table;
