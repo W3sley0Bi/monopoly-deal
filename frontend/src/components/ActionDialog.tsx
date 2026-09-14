@@ -135,7 +135,7 @@ export default function ActionDialog({ view, card, intent, onCancel, onConfirm }
                 }
             >
                 <div className="flex flex-col gap-4 sm:flex-row">
-                    <PlayingCard card={card} />
+                    <PlayingCard card={card} activeColor={color} />
                     <div className="flex-1">
                         <p className="label-caps mb-2">{t('dialog.color')}</p>
                         <ColorPicker

@@ -2,6 +2,36 @@ import type { Catalog } from '../types';
 
 /** Italian: the table itself — top bar, mat, hand, the action dialog and the pending panel. */
 const table: Catalog = {
+    'inspect.rent_rule': "Riscuoti l’affitto per un gruppo del colore indicato. L’importo dipende dalle carte e dagli edifici del gruppo.",
+    'inspect.money_rule': "Metti questa carta in banca per pagare i debiti. I soldi in mano non possono pagare l’affitto.",
+    'inspect.property_rule': "Gioca la carta in un gruppo dello stesso colore. Completa tre gruppi per vincere.",
+    'inspect.banked_rule': "Questa carta è denaro in banca. Non puoi più usarne l’azione.",
+    'inspect.played_as': "Colore attivo",
+    'inspect.set_progress': "Progresso del gruppo",
+    'inspect.protected': "Gruppo completo: protetto da Furto Furbo e Scambio Forzato. Un Affare Rotto può ancora prendere l’intero gruppo.",
+    'inspect.exposed': "Gruppo incompleto: queste proprietà possono essere rubate o scambiate.",
+    'inspect.wild_choose': "Scegli il colore quando giochi. Il lato scelto sarà in alto sul tavolo.",
+    'inspect.buildings': "Edifici",
+    'inspect.assets': "Patrimonio totale",
+    'inspect.open_board': "Clicca per vedere tutte le carte sul tavolo.",
+    'inspect.hand_hint': "Passa il mouse per i dettagli · Clicca per scegliere · Trascina per giocare",
+
+    'table.reactions': "Reazioni",
+    'table.reaction_0': "Ben giocato",
+    'table.reaction_1': "Che furberia",
+    'table.reaction_2': "Che ridere",
+    'table.reaction_3': "Incredibile",
+
+    'table.motion': "Animazione carte",
+    'table.on': "Attiva",
+    'table.off': "Disattiva",
+    'table.turn_of': "Turno di {name}",
+    'table.shared_space': "Un tavolo. Tutta l’azione.",
+    'table.hero_title': "Piccole carte.",
+    'table.hero_punch': "Grandi tradimenti.",
+    'table.robot': "Robot",
+    'table.player': "Giocatore",
+
     // ── Top bar ──────────────────────────────────────────────────────────
     'table.leave_hint': 'Lascia questo tavolo e torna alla lista dei tavoli',
     'table.tables': 'Tavoli',

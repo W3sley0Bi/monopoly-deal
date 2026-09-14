@@ -1,9 +1,9 @@
-import type { PlayerView } from '../types';
+import type { ChatMessage, PlayerView } from '../types';
 import { colorMeta } from '../game/meta';
 import { useI18n } from '../i18n';
 import { money } from '../i18n/format';
+import { ReactionBubble } from './Reactions';
 import Avatar from './Avatar';
-import VideoTile from './VideoTile';
 
 interface Props {
     player: PlayerView;
@@ -14,6 +14,7 @@ interface Props {
     /** Fill the available width when only a couple of opponents are seated. */
     grow?: boolean;
     onOpen: () => void;
+    reaction?: ChatMessage;
 }
 
 /**
@@ -21,32 +22,28 @@ interface Props {
  * colour bar summarising their sets. Tapping opens their full board in a sheet,
  * so the table stays inside one vertical screen.
  */
-export default function PlayerChip({ player, isTurn, isTargeted, stream, inCall, grow, onOpen }: Props) {
+export default function PlayerChip({ player, isTurn, isTargeted, stream, inCall, grow, onOpen, reaction }: Props) {
     const { t } = useI18n();
 
     return (
         <button
             type="button"
+            data-player-id={player.id}
             onClick={onOpen}
             className={[
-                'panel flex shrink-0 flex-col gap-1.5 p-2 text-left transition',
+                'panel relative flex shrink-0 flex-col gap-1.5 p-2 text-left transition',
                 grow ? 'min-w-[9.5rem] flex-1' : 'w-[10.5rem]',
                 isTurn ? '!border-brass/70' : '',
                 isTargeted ? '!border-rose-400/80' : '',
             ].join(' ')}
         >
+            {reaction && <ReactionBubble key={reaction.id} message={reaction} />}
             <div className="flex min-w-0 items-center gap-1.5">
                 <Avatar id={player.id} name={player.name} size={28} active={isTurn} away={!player.connected} />
                 <span className="min-w-0 flex-1 truncate font-display text-base leading-none tracking-wide">
                     {player.name}
                 </span>
-                {(stream || inCall) && (
-                    <VideoTile
-                        stream={stream ?? null}
-                        camOff={!stream}
-                        className="h-8 w-11 shrink-0"
-                    />
-                )}
+                {(stream || inCall) && <span title={t('call.people')} aria-label={t('call.people')}>◉</span>}
             </div>
 
             <div className="flex items-center gap-2 text-[0.7rem] text-white/70">

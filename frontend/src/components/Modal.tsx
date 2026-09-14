@@ -1,3 +1,6 @@
+import { createPortal } from 'react-dom';
+import { useId } from 'react';
+import { useDialogFocus } from '../game/useDialogFocus';
 import type { ReactNode } from 'react';
 import { useI18n } from '../i18n';
 import { useEffect } from 'react';
@@ -15,6 +18,8 @@ interface Props {
 
 export default function Modal({ title, subtitle, onClose, children, footer, wide, corner }: Props) {
     const { t } = useI18n();
+    const focusRef = useDialogFocus();
+    const titleId = useId();
 
     useEffect(() => {
         if (!onClose) return;
@@ -25,12 +30,12 @@ export default function Modal({ title, subtitle, onClose, children, footer, wide
         return () => window.removeEventListener('keydown', onKey);
     }, [onClose]);
 
-    return (
+    return createPortal(
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-3 backdrop-blur-sm">
-            <div className={`panel animate-pop flex max-h-[92vh] w-full flex-col overflow-hidden ${wide ? 'max-w-4xl' : 'max-w-2xl'}`}>
+            <div ref={focusRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} className={`game-modal panel animate-pop flex max-h-[92vh] w-full flex-col overflow-hidden ${wide ? 'max-w-4xl' : 'max-w-2xl'}`}>
                 <div className="flex items-start justify-between gap-4 border-b border-white/10 bg-black/25 px-5 py-3">
                     <div>
-                        <h2 className="font-display text-2xl tracking-wide text-brass">{title}</h2>
+                        <h2 id={titleId} className="font-display text-2xl tracking-wide text-brass">{title}</h2>
                         {subtitle && <p className="mt-0.5 text-sm text-white/65">{subtitle}</p>}
                     </div>
                     <div className="flex items-center gap-3">
@@ -49,6 +54,7 @@ export default function Modal({ title, subtitle, onClose, children, footer, wide
                     </div>
                 )}
             </div>
-        </div>
+        </div>,
+        document.body,
     );
 }

@@ -11,6 +11,7 @@ import (
 type Room struct {
 	ID      string
 	Name    string
+	Private bool
 	OwnerID string
 	Game    *game.Game
 
@@ -208,6 +209,8 @@ func (r *Room) view(playerID string) RoomView {
 	return RoomView{
 		ID:           r.ID,
 		Name:         r.Name,
+		Private:      r.Private,
+		InviteCode:   r.ID,
 		OwnerID:      r.OwnerID,
 		OwnerName:    r.ownerName(),
 		IsOwner:      playerID != "" && playerID == r.OwnerID,

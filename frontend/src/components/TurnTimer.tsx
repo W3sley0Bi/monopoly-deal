@@ -8,7 +8,7 @@ interface Props {
     totalSeconds: number;
     /** Server clock minus browser clock, in ms. */
     skewMs: number;
-    kind?: 'turn' | 'respond';
+    kind?: 'turn' | 'respond' | 'starting';
     size?: number;
 }
 
@@ -44,7 +44,7 @@ export default function TurnTimer({ deadlineMs, totalSeconds, skewMs, kind = 'tu
         <div
             className={`relative grid shrink-0 place-items-center ${seconds <= 5 ? 'animate-pulse' : ''}`}
             style={{ width: size, height: size }}
-            title={t(kind === 'respond' ? 'timer.respond' : 'timer.turn')}
+            title={t(kind === 'starting' ? 'timer.starting' : kind === 'respond' ? 'timer.respond' : 'timer.turn')}
         >
             <svg width={size} height={size} className="-rotate-90">
                 <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgb(255 255 255 / 0.12)" strokeWidth="3" />

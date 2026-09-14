@@ -32,7 +32,7 @@ export default function SidePanel({ log, chat, you, open, onToggle, onSend }: Pr
         <aside
             data-tour="log"
             className={[
-                'panel flex shrink-0 flex-col overflow-hidden transition-all',
+                `social-panel panel flex shrink-0 flex-col overflow-hidden ${open ? 'social-open' : ''}`,
                 // On narrow screens the open rail floats over the table instead
                 // of stealing half the width.
                 open ? 'w-72 max-lg:fixed max-lg:inset-y-2 max-lg:right-2 max-lg:z-40' : 'w-11',

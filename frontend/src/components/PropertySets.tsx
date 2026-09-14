@@ -69,6 +69,8 @@ export default function PropertySets({
                                             key={c.id}
                                             card={c}
                                             size={size}
+                                            activeColor={set.color}
+                                            setInfo={set}
                                             selected={selectedIds?.has(c.id)}
                                             flagged={flaggedIds?.has(c.id)}
                                             dimmed={Boolean(dimDisabled && onCardClick && enabledIds && !enabledIds.has(c.id))}

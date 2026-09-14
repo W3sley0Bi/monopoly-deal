@@ -1,4 +1,10 @@
+import type { GameAudio } from '../game/useGameAudio';
+import GameAudioControls from './GameAudioControls';
+import RoomInvite from './RoomInvite';
+import { useSeatCameras } from '../game/useSeatCameras';
+import CallStage, { ParticipantVideo } from './CallStage';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { CSSProperties } from 'react';
 import type { Card, ClientMessage, Color, PlayerView, RoomView } from '../types';
 import type { Call } from '../game/useWebRTC';
 import { NARROW, useMediaQuery } from '../game/useMediaQuery';
@@ -7,6 +13,11 @@ import {
 } from '../game/meta';
 import { useI18n } from '../i18n';
 import { formatTurn, money } from '../i18n/format';
+import HoverDetails from './HoverDetails';
+import GameBrand, { Cityscape } from './GameBrand';
+import Reactions, { ReactionBubble } from './Reactions';
+import { REACTIONS } from '../game/reactions';
+import TableMotion from './TableMotion';
 import LanguagePicker from './LanguagePicker';
 import ActionDialog from './ActionDialog';
 import Avatar from './Avatar';
@@ -26,6 +37,7 @@ import TurnTimer from './TurnTimer';
 import WinOverlay from './WinOverlay';
 
 interface Props {
+    audio: GameAudio;
     room: RoomView;
     error?: string;
     /** Server clock minus browser clock, in ms. */
@@ -46,18 +58,21 @@ type SheetState =
     | { kind: 'talk' }
     | null;
 
-export default function Table({ room, error, skewMs, call, tutorial, onTutorial, send, onLeave }: Props) {
-    const { t, tCard } = useI18n();
+export default function Table({ audio, room, error, skewMs, call, tutorial, onTutorial, send, onLeave }: Props) {
+    const { t, tCard, tLog } = useI18n();
     const g = room.game;
     const me = g.players.find(p => p.id === g.you);
     const spectating = !room.you_seated || !me;
     const narrow = useMediaQuery(NARROW);
+    const seatCameras = useSeatCameras(call);
 
-    const [selected, setSelected] = useState<Card | null>(null);
+    const [selectedCard, setSelected] = useState<Card | null>(null);
+    const selected = me?.hand?.find(card => card.id === selectedCard?.id) ?? null;
     const [dialog, setDialog] = useState<Dialog | null>(null);
     const [drag, setDrag] = useState<Drag | null>(null);
     const [sheet, setSheet] = useState<SheetState>(null);
-    const [panelOpen, setPanelOpen] = useState(() => window.innerWidth >= 1024);
+    const [panelOpen, setPanelOpen] = useState(false);
+    const [motion, setMotion] = useState(() => localStorage.getItem('md.motion') !== 'off');
     const [menuOpen, setMenuOpen] = useState(false);
     const [confirmEnd, setConfirmEnd] = useState(false);
     const [chatSeen, setChatSeen] = useState(room.chat.length);
@@ -97,6 +112,8 @@ export default function Table({ room, error, skewMs, call, tutorial, onTutorial,
         setDialog(null);
         setDrag(null);
     };
+
+    const recentReaction = (id: string) => room.chat.findLast(m => m.player_id === id && m.text && REACTIONS.some(r => r === m.text) && g.now_ms - m.at_ms < 5000);
 
     const turnPlayer = g.players[g.current_turn];
     const myTurn = turnPlayer?.id === g.you && !spectating;
@@ -163,7 +180,7 @@ export default function Table({ room, error, skewMs, call, tutorial, onTutorial,
     ) : null;
 
     const playChips = (
-        <span data-tour="plays" className="flex items-center gap-1.5" title={t('table.plays_hint')}>
+        <HoverDetails content={<div><h3>{t('table.plays')}</h3><p>{t('table.plays_hint')}</p><p className="inspection-note">{t('table.wildcard_move_cost')}</p></div>}><span tabIndex={0} data-tour="plays" className="flex items-center gap-1.5" title={t('table.plays_hint')}>
             <span className="label-caps">{t('table.plays')}</span>
             {[0, 1, 2].map(i => (
                 <span
@@ -175,7 +192,7 @@ export default function Table({ room, error, skewMs, call, tutorial, onTutorial,
                     }`}
                 />
             ))}
-        </span>
+        </span></HoverDetails>
     );
 
     const endTurnButton = (
@@ -211,7 +228,7 @@ export default function Table({ room, error, skewMs, call, tutorial, onTutorial,
             hint={drag ? t('table.bank_drop', { amount: money(t, drag.card.value) }) : ''}
             onDrop={() => drag && act({ type: 'play_bank', card_id: drag.card.id })}
             tour="bank"
-            className={narrow ? 'min-w-0 rounded-2xl' : 'w-full min-w-0 rounded-2xl lg:w-72'}
+            className="bank-zone min-w-0 rounded-2xl"
         >
             {narrow ? (
                 <button
@@ -233,7 +250,7 @@ export default function Table({ room, error, skewMs, call, tutorial, onTutorial,
                     <div className="flex flex-wrap gap-1">
                         {me?.bank.length === 0
                             ? <p className="py-3 text-xs italic text-white/35">{t('table.bank_empty')}</p>
-                            : me?.bank.map(c => <PlayingCard key={c.id} card={c} size="xs" />)}
+                            : me?.bank.map(c => <PlayingCard key={c.id} card={c} size="xs" banked />)}
                     </div>
                 </div>
             )}
@@ -241,7 +258,7 @@ export default function Table({ room, error, skewMs, call, tutorial, onTutorial,
     );
 
     const propertyZone = (
-        <div data-tour="properties" className="panel flex min-h-0 min-w-0 flex-1 flex-col p-2 sm:p-3">
+        <div data-tour="properties" className="property-zone panel flex min-h-0 min-w-0 flex-1 flex-col p-2 sm:p-3">
             <div className="mb-2 flex items-center justify-between gap-2">
                 <p className="label-caps">{t('table.your_properties')}</p>
                 <p data-tour="sets-progress" className="truncate text-xs text-white/50">
@@ -250,7 +267,7 @@ export default function Table({ room, error, skewMs, call, tutorial, onTutorial,
                 </p>
             </div>
 
-            <div className={`rail min-w-0 flex-1 gap-3 pb-1 ${me?.sets.length ? 'items-start' : 'items-center justify-center'}`}>
+            <div className={`property-groups min-w-0 flex-1 gap-3 pb-1 ${me?.sets.length ? 'items-start' : 'items-center justify-center'}`}>
                 {me?.sets.map(set => {
                     const accepts = dragColors.includes(set.color);
                     return (
@@ -305,7 +322,8 @@ export default function Table({ room, error, skewMs, call, tutorial, onTutorial,
                     })}
 
                 {me?.sets.length === 0 && dragColors.length === 0 && (
-                    <p className="px-3 text-center text-xs italic text-white/35">
+                    <p className="property-empty px-3 text-center text-xs text-white/60">
+                        <span aria-hidden="true" className="property-ghosts"><i>⌂</i><i>⌂</i><i>⌂</i></span>
                         {t(narrow ? 'table.properties_tap' : 'table.properties_drag')}
                     </p>
                 )}
@@ -320,18 +338,18 @@ export default function Table({ room, error, skewMs, call, tutorial, onTutorial,
     );
 
     return (
-        <div className="flex h-full min-w-0 flex-col gap-2 p-2 sm:p-3">
+        <div className={`game-room ${narrow ? 'compact-room' : 'desktop-room'} ${motion ? '' : 'motion-off'}`}>
+            <Cityscape />
             {/* ── Top bar ─────────────────────────────────────────────── */}
-            <header className="panel relative flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5 px-2 py-2 sm:px-3">
+            <header className="game-header relative flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5 px-2 py-2 sm:px-3">
                 {backButton}
+                <GameBrand compact />
 
                 <div className="flex min-w-0 items-center gap-2">
                     <h1 className="min-w-0 truncate font-display text-xl leading-none tracking-wider text-brass sm:text-2xl">
                         {room.name}
                     </h1>
-                    <span className="shrink-0 rounded bg-black/30 px-1.5 py-0.5 font-display text-xs tracking-[0.2em] text-brass/80">
-                        {room.id}
-                    </span>
+                    <RoomInvite room={room} />
                 </div>
 
                 {!narrow && (
@@ -353,16 +371,8 @@ export default function Table({ room, error, skewMs, call, tutorial, onTutorial,
 
                 {!narrow && !spectating && playChips}
 
-                {!narrow && (
-                    <span className="flex items-center gap-3 text-xs text-white/70">
-                        <span title={t('table.deck_hint')}>🂠 {g.deck_count}</span>
-                        <span title={t('table.discard_hint')}>🗑 {g.discard_count}</span>
-                        {me && <span className="text-emerald-300" title={t('table.bank_hint')}>💵 {money(t, me.bank_total)}</span>}
-                        {me && <span className="text-brass" title={t('table.sets_hint')}>🏠 {me.complete_sets}/3</span>}
-                    </span>
-                )}
-
                 <div className="ml-auto flex shrink-0 items-center gap-2">
+                    <Reactions onSend={text => send({ type: 'chat', text })} />
                     <CallControls call={call} memberCount={room.call_members.length} />
                     {!narrow && myTurn && !pending && endTurnButton}
                     <button
@@ -370,6 +380,7 @@ export default function Table({ room, error, skewMs, call, tutorial, onTutorial,
                         type="button"
                         className="btn btn-ghost !px-2.5 !py-1.5"
                         title={t('table.menu')}
+                        aria-label={t('table.menu')}
                         aria-haspopup="menu"
                         aria-expanded={menuOpen}
                         onClick={() => (menuOpen ? closeMenu() : setMenuOpen(true))}
@@ -450,11 +461,16 @@ export default function Table({ room, error, skewMs, call, tutorial, onTutorial,
                         >
                             {t('table.leave')}
                         </button>
+                        <button type="button" role="menuitemcheckbox" aria-checked={motion} className="block w-full px-3 py-2.5 text-left text-sm hover:bg-white/10" onClick={() => setMotion(value => { localStorage.setItem('md.motion', value ? 'off' : 'on'); return !value; })}>
+                            {t('table.motion')}: {t(motion ? 'table.on' : 'table.off')}
+                        </button>
+                        <div className="border-t border-white/10 p-3"><GameAudioControls audio={audio} /></div>
                         <LanguagePicker variant="menu" />
                     </div>
                 )}
 
             </header>
+            <CallStage call={call} room={room} seated={seatCameras} />
 
             {spectating && (
                 <div className="panel flex min-w-0 flex-wrap items-center gap-2 px-3 py-2">
@@ -477,16 +493,18 @@ export default function Table({ room, error, skewMs, call, tutorial, onTutorial,
                 </div>
             )}
 
-            <div className="flex min-h-0 min-w-0 flex-1 gap-2">
-                <main className="mat flex min-h-0 min-w-0 flex-1 flex-col gap-2 p-2">
-                    <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-y-auto">
-                        <div className="flex min-w-0 shrink-0 flex-col gap-2 xl:flex-row">
+            <div className="table-layout flex min-h-0 min-w-0 flex-1 gap-2">
+                <main className="table-stage flex min-h-0 min-w-0 flex-1 flex-col">
+                    <div className="table-field flex min-h-0 min-w-0 flex-1 flex-col">
+                        <div className={`arena-top seats-${foes.length}`}>
+                            <div className="arena-surface" aria-hidden="true"><div className="arena-orbit" /><span className="table-wordmark">MONOPOLY <b>DEAL</b></span></div>
                             {/* ── Opponents ───────────────────────────── */}
-                            <section data-tour="opponents" className={`min-w-0 flex-1 ${narrow ? 'rail gap-2 pb-1' : 'flex gap-2 overflow-x-auto pb-1'}`}>
+                            <section data-tour="opponents" className={`opponent-seats ${narrow ? 'rail gap-2 pb-1' : ''}`}>
                                 {narrow && deckChip}
                                 {foes.map(p => {
                                     const shared = {
                                         player: p,
+                                        reaction: recentReaction(p.id),
                                         isTurn: turnPlayer?.id === p.id,
                                         isTargeted: pending?.targets.some(t => t.player_id === p.id && !t.settled),
                                         stream: call.remote[p.id] ?? null,
@@ -499,13 +517,13 @@ export default function Table({ room, error, skewMs, call, tutorial, onTutorial,
                                             grow={foes.length <= 3}
                                             onOpen={() => setSheet({ kind: 'player', player: p })}
                                         />
-                                        : <OpponentPanel key={p.id} {...shared} />;
+                                        : <OpponentPanel key={p.id} {...shared} video={seatCameras && room.call_members.includes(p.id) ? <ParticipantVideo call={call} id={p.id} name={p.name} className="seat-camera" /> : undefined} onOpen={() => setSheet({ kind: 'player', player: p })} />;
                                 })}
                             </section>
 
                             {/* ── Table centre: wide screens have room for it ── */}
                             {!narrow && (
-                            <section className="relative flex min-w-0 shrink-0 items-center justify-center gap-3 rounded-2xl border border-white/10 bg-black/20 py-2 xl:w-[27rem]">
+                            <section className="table-center">
                                 <div
                                     aria-hidden
                                     className="pointer-events-none absolute inset-0 rounded-2xl"
@@ -514,7 +532,7 @@ export default function Table({ room, error, skewMs, call, tutorial, onTutorial,
                                 <div className="relative flex flex-col items-center gap-1">
                                     <div className="relative">
                                         <CardBack size="sm" className="absolute left-1 top-1 opacity-60" />
-                                        <CardBack size="sm" label="MD" className="relative" />
+                                        <CardBack size="sm" className="relative" />
                                     </div>
                                     <span className="label-caps">{t('table.deck_count', { count: g.deck_count })}</span>
                                 </div>
@@ -527,7 +545,7 @@ export default function Table({ room, error, skewMs, call, tutorial, onTutorial,
                                 >
                                     <div className="flex flex-col items-center gap-1 p-1">
                                         {g.discard_top
-                                            ? <PlayingCard card={g.discard_top} size="sm" />
+                                            ? <PlayingCard key={g.discard_top.id} card={g.discard_top} size="sm" className="discard-arrival" />
                                             : <div className="grid h-[6.5rem] w-[4.5rem] place-items-center rounded-lg border-2 border-dashed border-white/20 text-xs text-white/35">
                                                 {t('table.discard_empty')}
                                             </div>}
@@ -541,17 +559,19 @@ export default function Table({ room, error, skewMs, call, tutorial, onTutorial,
                                     onDrop={() => drag && playActionCard(drag.card)}
                                     className="rounded-xl"
                                 >
-                                    <div className="grid h-[6.5rem] w-[7rem] place-items-center rounded-xl border-2 border-dashed border-white/15 px-2 text-center text-[0.65rem] uppercase tracking-widest text-white/35">
+                                    <div className="action-landing">
                                         {t('table.action_space')}
                                     </div>
                                 </DropZone>
                             </section>
                             )}
+                            {!narrow && <div className="table-status" aria-live="polite"><span className={myTurn ? 'status-light active' : 'status-light'} />{myTurn ? t('table.your_turn') : t('table.turn_of', { name: turnPlayer?.name ?? '' })}</div>}
+                            {!narrow && <div className="table-event" aria-live="polite">{g.log.length > 0 ? tLog(g.log[g.log.length - 1]) : t('table.shared_space')}</div>}
                         </div>
 
                         {/* ── My board ────────────────────────────────── */}
                         {me && (
-                            <section className="flex min-h-[7rem] min-w-0 flex-1 flex-col gap-2 lg:flex-row">
+                            <section className="my-board flex min-w-0 gap-3">
                                 {propertyZone}
                                 {bankZone}
                             </section>
@@ -560,20 +580,26 @@ export default function Table({ room, error, skewMs, call, tutorial, onTutorial,
 
                     {/* ── Hand: pinned below the scrolling table ──────── */}
                     {me && (
-                        <section data-tour="hand" className="panel relative min-w-0 shrink-0 px-2 pb-2 pt-1.5 sm:px-3 sm:pb-3">
+                        <section data-tour="hand" className="hand-zone relative min-w-0 shrink-0">
                             <div className="mb-1 flex min-w-0 items-center justify-between gap-2">
-                                <p className="label-caps shrink-0">{t('table.hand', { count: handSize })}</p>
+                                <div className="hand-player"><Avatar id={me.id} name={me.name} size={32} active={myTurn} /><strong>{me.name}</strong>{recentReaction(me.id) && <ReactionBubble key={recentReaction(me.id)!.id} message={recentReaction(me.id)!} />}<span className="label-caps">{t('table.hand', { count: handSize })}</span></div>
                                 {overLimit ? (
                                     <p className="animate-shake truncate rounded-md bg-rose-600/25 px-2 py-1 text-xs font-bold text-rose-200">
                                         {t('table.over_limit', { count: handSize - 7 })}
                                     </p>
                                 ) : (
                                     <p className="truncate text-xs text-white/40">
-                                        {t(narrow ? 'table.hand_tap' : 'table.hand_drag')}
+                                        {t(narrow ? 'table.hand_tap' : 'inspect.hand_hint')}
                                     </p>
                                 )}
                             </div>
-                            <div className="rail relative min-h-[8rem] items-end gap-1.5 pb-1 pt-3 sm:min-h-[9.5rem]">
+                            <div onKeyDown={e => {
+                                if (e.key === 'Escape') { setSelected(null); return; }
+                                const cards = Array.from(e.currentTarget.querySelectorAll<HTMLButtonElement>('.hand-card'));
+                                const index = cards.indexOf(document.activeElement as HTMLButtonElement);
+                                const next = e.key === 'ArrowRight' ? Math.min(cards.length - 1, index + 1) : e.key === 'ArrowLeft' ? Math.max(0, index - 1) : e.key === 'Home' ? 0 : e.key === 'End' ? cards.length - 1 : -1;
+                                if (next >= 0) { e.preventDefault(); cards[next]?.focus(); }
+                            }} className={`hand-fan ${handSize > 10 ? 'hand-many' : ''}`} style={{ '--hand-count': handSize } as CSSProperties}>
                                 {handSize === 0 && (
                                     <p className="py-8 text-sm italic text-white/35">
                                         {t('table.hand_empty')}
@@ -590,18 +616,11 @@ export default function Table({ room, error, skewMs, call, tutorial, onTutorial,
                                         onDragStart={() => setDrag({ card: c, from: 'hand' })}
                                         onDragEnd={() => setDrag(null)}
                                         onClick={() => setSelected(prev => (prev?.id === c.id ? null : c))}
-                                        className="animate-slide-up"
-                                        style={{ animationDelay: `${Math.min(i, 8) * 35}ms` }}
+                                        className="hand-card"
+                                        style={{ '--fan-angle': `${(i - (handSize - 1) / 2) * Math.min(3, 22 / Math.max(handSize, 1))}deg`, '--fan-y': `${Math.pow(i - (handSize - 1) / 2, 2) * Math.min(1.2, 12 / Math.max(handSize, 1))}px`, '--deal-delay': `${Math.min(i, 8) * 35}ms` } as CSSProperties}
                                     />
                                 ))}
                             </div>
-                            {handSize > 4 && (
-                                <span
-                                    aria-hidden
-                                    className="pointer-events-none absolute bottom-2 right-0 top-8 w-8 rounded-r-2xl"
-                                    style={{ background: 'linear-gradient(to right, transparent, rgb(6 40 29 / 0.85))' }}
-                                />
-                            )}
                         </section>
                     )}
                 </main>
@@ -620,7 +639,7 @@ export default function Table({ room, error, skewMs, call, tutorial, onTutorial,
 
             {/* ── Card actions ────────────────────────────────────────── */}
             {selected && me && (
-                <div className="panel animate-slide-up flex min-w-0 flex-wrap items-center gap-2 px-3 py-2">
+                <div className="card-action-tray panel animate-slide-up flex min-w-0 flex-wrap items-center gap-2 px-3 py-2">
                     <span className="font-display text-lg tracking-wide text-brass">{tCard(selected)}</span>
                     <span className="text-xs text-white/50">{money(t, selected.value)}</span>
 
@@ -671,7 +690,7 @@ export default function Table({ room, error, skewMs, call, tutorial, onTutorial,
 
             {/* ── Bottom bar: status and the primary action, in thumb reach ── */}
             {narrow && (
-                <div className="panel flex min-w-0 shrink-0 items-center gap-2 px-2 py-1.5">
+                <div className="mobile-controls panel flex min-w-0 shrink-0 items-center gap-2 px-2 py-1.5">
                     <TurnTimer
                         deadlineMs={g.deadline_ms}
                         totalSeconds={g.deadline_seconds}
@@ -704,6 +723,8 @@ export default function Table({ room, error, skewMs, call, tutorial, onTutorial,
                 </div>
             )}
 
+            <TableMotion game={g} enabled={motion} />
+
             {/* ── Overlays ────────────────────────────────────────────── */}
             {sheet?.kind === 'player' && (
                 <Sheet
@@ -711,7 +732,7 @@ export default function Table({ room, error, skewMs, call, tutorial, onTutorial,
                     subtitle={t('table.their_board')}
                     onClose={() => setSheet(null)}
                 >
-                    <PlayerBoard player={sheet.player} isTurn={turnPlayer?.id === sheet.player.id} />
+                    <PlayerBoard player={g.players.find(p => p.id === sheet.player.id) ?? sheet.player} isTurn={turnPlayer?.id === sheet.player.id} />
                 </Sheet>
             )}
 
@@ -743,7 +764,7 @@ export default function Table({ room, error, skewMs, call, tutorial, onTutorial,
                         </p>
                     ) : (
                         <div className="flex flex-wrap gap-2">
-                            {me.bank.map(c => <PlayingCard key={c.id} card={c} size="sm" />)}
+                            {me.bank.map(c => <PlayingCard key={c.id} card={c} size="sm" banked />)}
                         </div>
                     )}
                 </Sheet>

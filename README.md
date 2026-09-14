@@ -194,22 +194,38 @@ settled at once.
 All deadlines come from the server, so every client agrees on them, and the
 countdown corrects for clock skew.
 
+## The shared table
+
+The desktop client places players around a dimensional teal table, with a
+central draw deck, discard pile and action space. Your properties and bank sit
+between the shared table and a fanned hand. Hover, focus or select a card to
+lift it and read it. Arrow keys move through the hand; Enter opens the card's
+actions, and Escape closes the tray. Drag and drop remains available.
+
+Draws, plays and public asset transfers animate from authoritative server
+updates. Opponent draws stay face-down. Click a player's avatar or property
+progress to inspect their complete public board. Log and chat open in a drawer;
+the latest game event stays visible at the center of the table.
+
+The smile button sends one of four reactions through the table chat. Reactions
+appear briefly by the player and remain in chat history. **Settings → Card
+animation** turns motion off on this device. The client also respects the
+system's reduced-motion preference. All artwork is local CSS/SVG, with no new
+runtime dependencies or external asset requests.
+
 ## On a phone
 
-The table is a different layout below 900px wide, not a scaled-down desktop:
+Below 900px the table adapts to touch:
 
-- Everything stays in one vertical screen. No row is allowed to push the page
-  sideways; wide content (the hand, your property sets, the opponent rail)
-  scrolls inside its own strip.
-- Opponents become compact cards showing their hand count, bank, set progress
-  and video. Tap one to see their full board in a bottom sheet.
-- The deck and discard counts ride in the same rail rather than taking a band of
-  their own.
-- Your bank collapses to a summary strip; tap it to see the cards.
-- Turn status, the countdown, plays left, chat and **End turn** sit in a bottom
-  bar, in thumb reach.
-- Log and chat open as a bottom sheet instead of a side rail, so nothing covers
-  the board.
+- Opponents become a horizontal strip with bank, hand and set progress. Tap a
+  player to inspect their full board.
+- The hand scrolls horizontally and opens the same card actions on tap.
+- Portrait keeps the property board above the hand and collapses the bank.
+- Landscape phones use a board on the left and hand on the right, with turn
+  status and End turn along the bottom. Rotate the device normally; there is no
+  forced orientation lock.
+- Log, chat and public board details open in sheets. Dialogs support keyboard
+  focus trapping and Escape, including when using a hardware keyboard.
 
 ## Getting back
 

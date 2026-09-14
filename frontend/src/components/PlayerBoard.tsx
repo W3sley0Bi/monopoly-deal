@@ -26,7 +26,7 @@ export default function PlayerBoard({ player, isTurn }: Props) {
 
             <div>
                 <p className="label-caps mb-1.5">{t('board.properties')}</p>
-                <div className="rail gap-3 pb-1">
+                <div className="flex flex-wrap gap-3 pb-1">
                     <PropertySets sets={player.sets} size="sm" />
                 </div>
             </div>
@@ -36,8 +36,8 @@ export default function PlayerBoard({ player, isTurn }: Props) {
                 {player.bank.length === 0 ? (
                     <p className="text-xs italic text-white/35">{t('board.bank_empty')}</p>
                 ) : (
-                    <div className="rail gap-1 pb-1">
-                        {player.bank.map(c => <PlayingCard key={c.id} card={c} size="xs" />)}
+                    <div className="flex flex-wrap gap-1 pb-1">
+                        {player.bank.map(c => <PlayingCard key={c.id} card={c} size="xs" banked />)}
                     </div>
                 )}
             </div>

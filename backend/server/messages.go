@@ -51,8 +51,11 @@ type ClientMessage struct {
 	PlayerName string `json:"player_name,omitempty"`
 
 	// Room scope.
-	RoomID      string    `json:"room_id,omitempty"`
-	RoomName    string    `json:"room_name,omitempty"`
+	RoomID   string `json:"room_id,omitempty"`
+	RoomName string `json:"room_name,omitempty"`
+	// Private tables are omitted from the public browser, but remain joinable
+	// by their exact room code.
+	Private     bool      `json:"private,omitempty"`
 	Mode        game.Mode `json:"mode,omitempty"`
 	TurnSeconds int       `json:"turn_seconds,omitempty"`
 	AsSpectator bool      `json:"as_spectator,omitempty"`
@@ -203,12 +206,19 @@ type GameView struct {
 	DeadlineSeconds int `json:"deadline_seconds"`
 	// NowMS lets the client correct for clock skew when drawing the countdown.
 	NowMS int64 `json:"now_ms"`
+	// StartSequence, StartID and StartsAtMS let clients animate the authoritative
+	// random seat order before the first turn starts.
+	StartSequence []string `json:"start_sequence,omitempty"`
+	StartID       string   `json:"start_id,omitempty"`
+	StartsAtMS    int64    `json:"starts_at_ms,omitempty"`
 }
 
 // RoomView is everything a client in a room needs.
 type RoomView struct {
 	ID           string            `json:"id"`
 	Name         string            `json:"name"`
+	Private      bool              `json:"private"`
+	InviteCode   string            `json:"invite_code"`
 	OwnerID      string            `json:"owner_id"`
 	OwnerName    string            `json:"owner_name"`
 	IsOwner      bool              `json:"is_owner"`
@@ -287,6 +297,9 @@ func gameView(g *game.Game, you string) GameView {
 		DeadlineMS:      g.DeadlineMS,
 		DeadlineKind:    g.DeadlineKind,
 		DeadlineSeconds: g.DeadlineSeconds,
+		StartSequence:   append([]string{}, g.StartSequence...),
+		StartID:         g.StartID,
+		StartsAtMS:      g.StartAtMS,
 		NowMS:           time.Now().UnixMilli(),
 	}
 	if g.Log != nil {

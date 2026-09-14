@@ -1,85 +1,167 @@
-import type { PlayerView } from '../types';
+import type { ChatMessage, PlayerView } from '../types';
 import { useI18n } from '../i18n';
 import { money } from '../i18n/format';
+import HoverDetails from './HoverDetails';
+import OpponentProperties from './OpponentProperties';
+import { ReactionBubble } from './Reactions';
 import Avatar from './Avatar';
 import { CardBack } from './PlayingCard';
-import PropertySets from './PropertySets';
-import VideoTile from './VideoTile';
+import type { ReactNode } from 'react';
 
 interface Props {
     player: PlayerView;
     isTurn: boolean;
-    /** Highlights a player currently being acted upon. */
     isTargeted?: boolean;
-    /** This player's camera, once their stream arrives. */
-    stream?: MediaStream | null;
-    /** They are in the call, even if their video has not connected yet. */
-    inCall?: boolean;
+    video?: ReactNode;
+    onOpen: () => void;
+    reaction?: ChatMessage;
 }
 
-export default function OpponentPanel({ player, isTurn, isTargeted, stream, inCall }: Props) {
-    const { t } = useI18n();
-    const fan = Math.min(player.hand_count, 6);
-
+export default function OpponentPanel({
+    player,
+    isTurn,
+    isTargeted,
+    video,
+    onOpen,
+    reaction,
+}: Props) {
+    const { t, tCard } = useI18n();
+    const fan = Math.min(player.hand_count, 7);
     return (
         <div
-            className={[
-                'panel w-[19rem] shrink-0 p-3 transition-shadow',
-                isTurn ? 'animate-pulse-ring !border-brass/70' : '',
-                isTargeted ? '!border-rose-400/70' : '',
-            ].join(' ')}
+            data-player-id={player.id}
+            className={`opponent-seat ${video ? 'seat-with-camera' : ''} ${isTurn ? 'seat-active' : ''} ${isTargeted ? 'seat-targeted' : ''}`}
         >
-            {(stream || inCall) && (
-                <VideoTile
-                    stream={stream ?? null}
-                    label={player.name}
-                    camOff={!stream}
-                    className="float-right ml-2 h-[3.25rem] w-[4.5rem]"
-                />
+            {reaction && (
+                <ReactionBubble key={reaction.id} message={reaction} />
             )}
-
-            <div className="mb-2 flex items-center gap-2">
-                <Avatar id={player.id} name={player.name} size={34} active={isTurn} away={!player.connected} />
-                <h3 className="truncate font-display text-xl tracking-wide">{player.name}</h3>
-                {!player.connected && <span className="text-[0.6rem] uppercase tracking-wide text-white/40">{t('opponent.away')}</span>}
-                {isTurn && <span className="ml-auto rounded-full bg-brass px-2 py-0.5 text-[0.6rem] font-black uppercase text-ink">{t('opponent.turn')}</span>}
-            </div>
-
-            <div className="mb-2 flex items-center gap-3 text-xs">
-                <span className="flex items-center gap-1 rounded-md bg-black/30 px-2 py-1" title={t('opponent.hand_title')}>
-                    🂠 <span className="font-bold">{player.hand_count}</span>
+            {video}
+            <HoverDetails
+                content={
+                    <div className="player-inspection">
+                        <p className="label-caps">{t('table.their_board')}</p>
+                        <h3>{player.name}</h3>
+                        <dl>
+                            <div>
+                                <dt>{t('opponent.hand_title')}</dt>
+                                <dd>{player.hand_count}</dd>
+                            </div>
+                            <div>
+                                <dt>{t('board.bank')}</dt>
+                                <dd>{money(t, player.bank_total)}</dd>
+                            </div>
+                            <div>
+                                <dt>{t('opponent.sets_title')}</dt>
+                                <dd>{player.complete_sets}/3</dd>
+                            </div>
+                            <div>
+                                <dt>{t('inspect.assets')}</dt>
+                                <dd>{money(t, player.asset_total)}</dd>
+                            </div>
+                        </dl>
+                        <p className="inspection-note">
+                            {t('inspect.open_board')}
+                        </p>
+                    </div>
+                }
+            >
+                <button
+                    type="button"
+                    className="seat-profile"
+                    onClick={onOpen}
+                    aria-label={`${player.name}: ${t('table.their_board')}`}
+                >
+                    <span className="seat-avatar">
+                        <Avatar
+                            id={player.id}
+                            name={player.name}
+                            size={52}
+                            active={isTurn}
+                            away={!player.connected}
+                        />
+                        {isTurn && (
+                            <span className="seat-turn">
+                                {t('opponent.turn')}
+                            </span>
+                        )}
+                    </span>
+                    <span className="seat-info">
+                        <strong>{player.name}</strong>
+                        <span>
+                            {player.bot
+                                ? t('table.robot')
+                                : !player.connected
+                                  ? t('opponent.away')
+                                  : t('table.player')}{' '}
+                            <span aria-hidden="true">↗</span>
+                        </span>
+                    </span>
+                </button>
+            </HoverDetails>
+            <div className="seat-assets">
+                <span title={t('opponent.hand_title')}>
+                    ▱ <b>{player.hand_count}</b>
                 </span>
-                <span className="flex items-center gap-1 rounded-md bg-black/30 px-2 py-1 text-emerald-300" title={t('opponent.bank_title')}>
-                    💵 <span className="font-bold">{money(t, player.bank_total)}</span>
-                </span>
-                <span className="flex items-center gap-1 rounded-md bg-black/30 px-2 py-1">
-                    {[0, 1, 2].map(i => (
-                        <span
+                <HoverDetails
+                    content={
+                        <div className="bank-inspection">
+                            <p className="label-caps">{player.name}</p>
+                            <h3>
+                                {t('board.bank')} ·{' '}
+                                {money(t, player.bank_total)}
+                            </h3>
+                            <p>{t('inspect.banked_rule')}</p>
+                            <ul>
+                                {player.bank.map((card) => (
+                                    <li key={card.id}>
+                                        <span>{tCard(card)}</span>
+                                        <b>{money(t, card.value)}</b>
+                                    </li>
+                                ))}
+                            </ul>
+                            {!player.bank.length && (
+                                <p>{t('board.bank_empty')}</p>
+                            )}
+                        </div>
+                    }
+                >
+                    <button
+                        type="button"
+                        className="seat-bank"
+                        onClick={onOpen}
+                        aria-label={`${player.name}: ${t('board.bank')}, ${money(t, player.bank_total)}`}
+                    >
+                        {money(t, player.bank_total)}
+                    </button>
+                </HoverDetails>
+                <span
+                    title={t('opponent.sets_title')}
+                    className="seat-progress"
+                >
+                    {[0, 1, 2].map((i) => (
+                        <i
                             key={i}
-                            className={`h-2 w-2 rounded-sm ${i < player.complete_sets ? 'bg-brass' : 'bg-white/15'}`}
+                            className={
+                                i < player.complete_sets ? 'complete' : ''
+                            }
                         />
                     ))}
-                    <span className="ml-1 font-bold">{player.complete_sets}/3</span>
+                    <b>{player.complete_sets}/3</b>
                 </span>
             </div>
-
-            <div className="mb-2 flex h-10 items-start">
+            <div className="seat-cards" aria-hidden="true">
                 {Array.from({ length: fan }).map((_, i) => (
                     <CardBack
                         key={i}
                         size="xs"
-                        className={`!h-10 !w-7 origin-bottom ${i > 0 ? '-ml-3' : ''}`}
-                        style={{ transform: `rotate(${(i - (fan - 1) / 2) * 5}deg)` }}
+                        style={{
+                            transform: `translateY(${Math.abs(i - (fan - 1) / 2) * 2}px) rotate(${(i - (fan - 1) / 2) * 7}deg)`,
+                        }}
                     />
                 ))}
-                {player.hand_count > fan && (
-                    <span className="ml-2 self-center text-xs text-white/45">+{player.hand_count - fan}</span>
-                )}
             </div>
+            <OpponentProperties player={player} onOpen={onOpen} />
 
-            <div className="max-h-36 overflow-y-auto">
-                <PropertySets sets={player.sets} size="xs" emptyLabel={t('sets.empty_short')} />
-            </div>
         </div>
     );
 }

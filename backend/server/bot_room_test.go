@@ -32,8 +32,8 @@ func TestSoloTableDealsWithBots(t *testing.T) {
 	if v.OwnerID != "a" {
 		t.Fatalf("the human should host the table, got %q", v.OwnerID)
 	}
-	if len(v.Game.Players[0].Hand) != game.StartingHand+game.TurnDraw {
-		t.Fatalf("the human was not dealt a hand: %d cards", len(v.Game.Players[0].Hand))
+	if v.Game.Players[v.Game.CurrentTurn].HandCount != game.StartingHand+game.TurnDraw {
+		t.Fatalf("the starting player was not dealt a full opening hand: %d cards", v.Game.Players[v.Game.CurrentTurn].HandCount)
 	}
 }
 
@@ -47,12 +47,20 @@ func TestBotsPlayTheirTurns(t *testing.T) {
 	a := dial(t, srv, "a", "Alice")
 
 	a.send(ClientMessage{Type: MsgCreateRoom, RoomName: "Practice", Bots: 1, AutoStart: true})
-	a.room("dealt", func(v RoomView) bool { return v.Game.State == game.StatePlaying })
+	a.room("dealt", func(v RoomView) bool { return v.Game.State == game.StatePlaying && v.Game.StartsAtMS != 0 })
+	// Wait for the authoritative reveal to finish, then end the human's turn
+	// regardless of which seat the random order selected.
+	a.room("reveal finished", func(v RoomView) bool {
+		if v.Game.StartsAtMS != 0 {
+			return false
+		}
+		return v.Game.Players[v.Game.CurrentTurn].ID == "a"
+	})
 
 	a.send(ClientMessage{Type: MsgEndTurn})
 	// The robot should take its turn and hand play straight back.
 	v := a.room("robot played and passed back", func(v RoomView) bool {
-		return v.Game.CurrentTurn == 0 && len(v.Game.Log) > 3
+		return v.Game.Players[v.Game.CurrentTurn].ID == "a" && len(v.Game.Log) > 3
 	})
 	if v.Game.Players[1].HandCount == 0 && v.Game.Players[1].AssetTotal == 0 {
 		t.Fatal("the robot ended its turn having done nothing at all")

@@ -1,3 +1,6 @@
+import { useGameAudio } from './game/useGameAudio';
+import StartWheel from './components/StartWheel';
+import CallAudio from './components/CallAudio';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ClientMessage, HomeView, RoomView, RTCEnvelope, RTCSignal, ServerMessage } from './types';
 import { useI18n } from './i18n';
@@ -44,6 +47,7 @@ export default function App() {
     const { t } = useI18n();
     const [myId] = useState(persistentId);
     const [name, setName] = useState(() => localStorage.getItem(NAME_KEY) ?? '');
+    const [inviteCode, setInviteCode] = useState(() => new URL(window.location.href).searchParams.get('join')?.trim().toUpperCase() ?? '');
     const [home, setHome] = useState<HomeView | null>(null);
     const [room, setRoom] = useState<RoomView | null>(null);
     const [error, setError] = useState<Notice | null>(null);
@@ -51,7 +55,7 @@ export default function App() {
     const [skewMs, setSkewMs] = useState(0);
 
     // Room to re-enter after a reconnect or a page refresh.
-    const rejoin = useRef<string | null>(localStorage.getItem(ROOM_KEY));
+    const rejoin = useRef<string | null>(inviteCode || localStorage.getItem(ROOM_KEY));
     // Relayed WebRTC payloads are handed to whoever is listening.
     const signalListeners = useRef(new Set<(env: RTCEnvelope) => void>());
 
@@ -71,6 +75,12 @@ export default function App() {
                 });
                 break;
             case 'room':
+                setInviteCode('');
+                if (new URL(window.location.href).searchParams.has('join')) {
+                    const url = new URL(window.location.href);
+                    url.searchParams.delete('join');
+                    window.history.replaceState(null, '', url);
+                }
                 setRoom(msg.payload);
                 rejoin.current = msg.payload.id;
                 localStorage.setItem(ROOM_KEY, msg.payload.id);
@@ -122,9 +132,19 @@ export default function App() {
         announce: announceCall,
     });
 
+    const audio = useGameAudio(room?.game ?? null);
+    const { unlocked: audioUnlocked, unlock: unlockAudio } = audio;
+    useEffect(() => {
+        if (audioUnlocked) return;
+        const unlock = () => { void unlockAudio().catch(() => {}); };
+        window.addEventListener('pointerdown', unlock);
+        window.addEventListener('keydown', unlock);
+        return () => { window.removeEventListener('pointerdown', unlock); window.removeEventListener('keydown', unlock); };
+    }, [audioUnlocked, unlockAudio]);
+
     // Drop out of the call when we leave the table behind.
     useEffect(() => {
-        if (!room && call.status === 'on') call.leave();
+        if (!room && (call.status === 'on' || call.status === 'starting')) call.leave();
     }, [room, call]);
 
     // Announce ourselves on every (re)connect, and walk back into our room.
@@ -165,6 +185,7 @@ export default function App() {
     };
 
     const leaveRoom = () => {
+        call.leave();
         rejoin.current = null;
         localStorage.removeItem(ROOM_KEY);
         send({ type: 'leave_room' });
@@ -182,25 +203,14 @@ export default function App() {
     const errorText = error ? (error.key ? t(error.key, error.args) : error.text) : '';
 
     if (room) {
-        if (room.game.state === 'waiting') {
-            return <RoomLobby room={room} error={errorText} call={call} send={send} onLeave={leaveRoom} />;
-        }
-        return (
-            <Table
-                room={room}
-                error={errorText}
-                skewMs={skewMs}
-                call={call}
-                tutorial={tutorial}
-                onTutorial={startTutorial}
-                send={send}
-                onLeave={leaveRoom}
-            />
-        );
+        return <><CallAudio call={call} /><StartWheel game={room.game} skewMs={skewMs} />{room.game.state === 'waiting'
+            ? <RoomLobby audio={audio} room={room} error={errorText} call={call} send={send} onLeave={leaveRoom} />
+            : <Table audio={audio} room={room} error={errorText} skewMs={skewMs} call={call} tutorial={tutorial} onTutorial={startTutorial} send={send} onLeave={leaveRoom} />}</>;
     }
 
     return (
         <Home
+            inviteCode={inviteCode}
             view={home}
             connected={connected}
             name={name}

@@ -1,54 +1,34 @@
 import { useEffect, useRef } from 'react';
 import { useI18n } from '../i18n';
+import Avatar from './Avatar';
 
 interface Props {
     stream: MediaStream | null;
-    /** Self view: muted so you do not hear yourself, and mirrored. */
     self?: boolean;
+    mirror?: boolean;
     label?: string;
-    /** Shown when the camera is off but the call is live. */
     camOff?: boolean;
     micOff?: boolean;
     className?: string;
+    onExpand?: () => void;
 }
 
-export default function VideoTile({ stream, self, label, camOff, micOff, className = '' }: Props) {
+/** Visuals are always silent. CallAudio owns playback across every layout. */
+export default function VideoTile({ stream, self, mirror = true, label = '', camOff, micOff, className = '', onExpand }: Props) {
     const { t } = useI18n();
     const ref = useRef<HTMLVideoElement>(null);
-
     useEffect(() => {
         const el = ref.current;
         if (!el) return;
-        if (el.srcObject !== stream) el.srcObject = stream;
+        el.srcObject = stream;
+        return () => { el.srcObject = null; };
     }, [stream]);
-
     return (
-        <div className={`relative overflow-hidden rounded-lg border border-white/20 bg-black/60 shadow-lg ${className}`}>
-            <video
-                ref={ref}
-                autoPlay
-                playsInline
-                muted={self}
-                className={`h-full w-full object-cover ${self ? 'scale-x-[-1]' : ''} ${camOff ? 'opacity-0' : ''}`}
-            />
-            {camOff && (
-                <span className="absolute inset-0 grid place-items-center text-lg" title={t('video.cam_off')}>
-                    📷
-                </span>
-            )}
-            {micOff && (
-                <span
-                    className="absolute bottom-0.5 left-0.5 rounded bg-rose-600/90 px-1 text-[0.6rem] leading-4"
-                    title={t('video.mic_off')}
-                >
-                    🔇
-                </span>
-            )}
-            {label && (
-                <span className="absolute bottom-0 right-0 max-w-full truncate bg-black/65 px-1 text-[0.6rem] leading-4">
-                    {label}
-                </span>
-            )}
+        <div className={`call-video ${className}`}>
+            <video ref={ref} autoPlay playsInline muted className={`${self && mirror ? 'call-mirrored' : ''} ${camOff || !stream ? 'invisible' : ''}`} />
+            {(camOff || !stream) && <div className="call-avatar"><Avatar id={label} name={label} size={44} /><span>{t(camOff ? 'video.cam_off' : 'call.connecting')}</span></div>}
+            <div className="call-video-caption"><span>{label}</span>{micOff && <span title={t('video.mic_off')} aria-label={t('video.mic_off')}>🔇</span>}</div>
+            {onExpand && <button className="call-expand" onClick={onExpand} aria-label={t('call.expand_person', { name: label })} title={t('call.expand_person', { name: label })}>⛶</button>}
         </div>
     );
 }

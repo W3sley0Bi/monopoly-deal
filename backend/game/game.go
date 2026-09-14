@@ -2,6 +2,7 @@ package game
 
 import (
 	"fmt"
+	"math/rand/v2"
 	"sort"
 	"time"
 )
@@ -84,6 +85,9 @@ const (
 	StartingHand  = 5
 	TurnDraw      = 2
 	EmptyHandDraw = 5
+	// StartRevealDelay gives clients time to present the randomized starting
+	// order before the first turn becomes actionable.
+	StartRevealDelay = 4500 * time.Millisecond
 )
 
 // PropertySet is one colour group in front of a player.
@@ -275,9 +279,22 @@ type Game struct {
 	DeadlineKind string `json:"deadline_kind,omitempty"`
 	// DeadlineSeconds is the length of the current window, for the countdown ring.
 	DeadlineSeconds int `json:"deadline_seconds"`
+	// StartSequence is the authoritative seat order chosen for this match.
+	// StartID changes every time a new match is started, even if the order
+	// happens to repeat.
+	StartSequence []string `json:"start_sequence,omitempty"`
+	StartID       string   `json:"start_id,omitempty"`
+	// StartAtMS is when the first turn becomes actionable. It is non-zero only
+	// during the short starting reveal window.
+	StartAtMS int64 `json:"start_at_ms,omitempty"`
 
 	// clock is swapped out by tests.
-	clock func() time.Time
+	clock          func() time.Time
+	startNo        uint64
+	turnDeadlineMS int64
+	// paymentPausedAt marks the start of a payment interruption. It remains
+	// set across multiple payers and Just Say No rebounds.
+	paymentPausedAt time.Time
 }
 
 func NewGame(id string) *Game {
@@ -483,6 +500,24 @@ func (g *Game) Disconnect(id string) {
 
 // Start deals the opening hands and begins the first turn.
 func (g *Game) Start() error {
+	return g.start(false, false)
+}
+
+// StartRandom starts a match with a randomized seat order. It is kept
+// separate from Start so the deterministic game-unit helper remains useful,
+// while the server can make every real match fair.
+func (g *Game) StartRandom() error {
+	return g.start(true, false)
+}
+
+// StartRandomScheduled starts a real match and leaves a short reveal window
+// before the first turn. The server uses this so a wheel animation cannot
+// race an already-live turn.
+func (g *Game) StartRandomScheduled() error {
+	return g.start(true, true)
+}
+
+func (g *Game) start(randomize, scheduled bool) error {
 	if g.State == StatePlaying {
 		return fault("err.already_started", "game already started")
 	}
@@ -492,15 +527,42 @@ func (g *Game) Start() error {
 	if !g.Mode.Available() {
 		return fault("err.mode_unavailable", "that mode is not available yet")
 	}
+	if randomize {
+		rand.Shuffle(len(g.Players), func(i, j int) {
+			g.Players[i], g.Players[j] = g.Players[j], g.Players[i]
+		})
+	}
 	g.State = StatePlaying
 	g.CurrentTurn = 0
 	g.Pending = nil
+	g.startNo++
+	g.StartID = fmt.Sprintf("%s-start-%d", g.ID, g.startNo)
+	g.StartSequence = make([]string, 0, len(g.Players))
+	for _, p := range g.Players {
+		g.StartSequence = append(g.StartSequence, p.ID)
+	}
 	for _, p := range g.Players {
 		for i := 0; i < StartingHand; i++ {
 			g.drawInto(p)
 		}
 	}
 	g.log("log.game_started", "mode", string(g.Mode), "players", len(g.Players))
+	if scheduled {
+		// Deal the first player's opening draw now so the table is fully
+		// populated while the reveal plays, but leave plays and the timer off.
+		for i := 0; i < TurnDraw; i++ {
+			g.drawInto(g.current())
+		}
+		g.PlaysLeft = 0
+		g.StartAtMS = g.now().Add(StartRevealDelay).UnixMilli()
+		// The visible deadline covers the reveal itself. Tick still treats
+		// StartAtMS as authoritative and does not expire the turn here.
+		g.DeadlineMS = g.StartAtMS
+		g.DeadlineKind = "starting"
+		g.DeadlineSeconds = int(StartRevealDelay / time.Second)
+		return nil
+	}
+	g.StartAtMS = 0
 	g.startTurn()
 	return nil
 }
@@ -539,6 +601,9 @@ func (g *Game) clearTable() {
 	g.Deck = GenerateDeck()
 	g.DiscardPile = nil
 	g.CurrentTurn = 0
+	g.StartSequence = nil
+	g.StartID = ""
+	g.StartAtMS = 0
 	g.State = StateWaiting
 	g.WinnerID = ""
 	g.PlaysLeft = 0
@@ -578,14 +643,20 @@ func (g *Game) drawInto(p *Player) bool {
 func (g *Game) current() *Player { return g.Players[g.CurrentTurn] }
 
 func (g *Game) startTurn() {
+	g.startTurnWithDraw(true)
+}
+
+func (g *Game) startTurnWithDraw(draw bool) {
 	p := g.current()
 	g.PlaysLeft = PlaysPerTurn
-	n := TurnDraw
-	if len(p.Hand) == 0 {
-		n = EmptyHandDraw
-	}
-	for i := 0; i < n; i++ {
-		g.drawInto(p)
+	if draw {
+		n := TurnDraw
+		if len(p.Hand) == 0 {
+			n = EmptyHandDraw
+		}
+		for i := 0; i < n; i++ {
+			g.drawInto(p)
+		}
 	}
 	g.setDeadline("turn")
 	g.log("log.turn", "name", p.Name)
@@ -603,12 +674,40 @@ func (g *Game) clearDeadline() {
 	g.DeadlineMS = 0
 	g.DeadlineKind = ""
 	g.DeadlineSeconds = 0
+	g.turnDeadlineMS = 0
+	g.paymentPausedAt = time.Time{}
 }
 
 func (g *Game) setDeadline(kind string) {
+	if kind == "turn" {
+		secs := g.TurnSeconds
+		if g.State != StatePlaying || secs <= 0 {
+			g.clearDeadline()
+			return
+		}
+		g.turnDeadlineMS = g.now().Add(time.Duration(secs) * time.Second).UnixMilli()
+		g.DeadlineMS = g.turnDeadlineMS
+		g.DeadlineKind = "turn"
+		g.DeadlineSeconds = secs
+		return
+	}
 	secs := g.deadlineSeconds(kind)
 	if g.State != StatePlaying || secs <= 0 {
-		g.clearDeadline()
+		g.DeadlineMS = 0
+		g.DeadlineKind = ""
+		g.DeadlineSeconds = 0
+		return
+	}
+	// A response to a non-payment action uses the remaining turn window. Only
+	// payment gets a fresh, separate grace timer.
+	if g.Pending == nil || g.Pending.Kind != PendingPayment {
+		if g.turnDeadlineMS == 0 {
+			g.clearDeadline()
+			return
+		}
+		g.DeadlineMS = g.turnDeadlineMS
+		g.DeadlineKind = "respond"
+		g.DeadlineSeconds = g.TurnSeconds
 		return
 	}
 	g.DeadlineMS = g.now().Add(time.Duration(secs) * time.Second).UnixMilli()
@@ -624,24 +723,65 @@ func (g *Game) PostAction() {
 		g.clearDeadline()
 		return
 	}
-	kind := "turn"
-	if g.Pending != nil {
-		kind = "respond"
+	if g.StartAtMS != 0 {
+		return
 	}
-	if g.deadlineSeconds(kind) <= 0 {
+	if g.Pending != nil {
+		if g.Pending.Kind == PendingPayment {
+			if g.paymentPausedAt.IsZero() {
+				g.paymentPausedAt = g.now()
+			}
+			// Payment pauses the turn clock and gets its own grace window.
+			if g.DeadlineKind != "respond" || g.DeadlineMS == 0 {
+				g.setDeadline("respond")
+			}
+			return
+		}
+		// Other responses share the original turn deadline. Playing or
+		// answering an action must never extend it.
+		if g.turnDeadlineMS == 0 {
+			g.clearDeadline()
+			return
+		}
+		g.DeadlineMS = g.turnDeadlineMS
+		g.DeadlineKind = "respond"
+		g.DeadlineSeconds = g.TurnSeconds
+		return
+	}
+	if !g.paymentPausedAt.IsZero() {
+		// Resume the turn with exactly the time that remained before payment
+		// began, plus the duration spent resolving the payment.
+		if g.turnDeadlineMS != 0 {
+			pausedMS := g.now().Sub(g.paymentPausedAt).Milliseconds()
+			if pausedMS > 0 {
+				g.turnDeadlineMS += pausedMS
+			}
+		}
+		g.paymentPausedAt = time.Time{}
+	}
+	if g.turnDeadlineMS == 0 {
 		g.clearDeadline()
 		return
 	}
-	// Only restart the clock when we switch between waiting on a turn and
-	// waiting on a response, so individual plays do not extend a turn.
-	if g.DeadlineKind != kind || g.DeadlineMS == 0 {
-		g.setDeadline(kind)
-	}
+	g.DeadlineMS = g.turnDeadlineMS
+	g.DeadlineKind = "turn"
+	g.DeadlineSeconds = g.TurnSeconds
 }
 
 // Tick applies timeouts. It reports whether anything changed.
 func (g *Game) Tick(now time.Time) bool {
-	if g.State != StatePlaying || g.DeadlineMS == 0 {
+	if g.State != StatePlaying {
+		return false
+	}
+	if g.StartAtMS != 0 {
+		if now.UnixMilli() < g.StartAtMS {
+			return false
+		}
+		g.StartAtMS = 0
+		g.startTurnWithDraw(false)
+		return true
+	}
+	if g.DeadlineMS == 0 {
 		return false
 	}
 	if now.UnixMilli() < g.DeadlineMS {
@@ -726,6 +866,9 @@ func (g *Game) autoPayIDs(p *Player, amount int) []string {
 func (g *Game) requireTurn(playerID string) (*Player, error) {
 	if g.State != StatePlaying {
 		return nil, fault("err.no_game", "game is not in progress")
+	}
+	if g.StartAtMS != 0 {
+		return nil, fault("err.game_starting", "the starting order is being revealed")
 	}
 	if g.Pending != nil {
 		return nil, fault("err.resolve_first", "resolve the current action first")

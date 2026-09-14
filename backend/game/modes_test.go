@@ -362,3 +362,194 @@ func TestEachResponderGetsAFreshWindow(t *testing.T) {
 		t.Fatal("Alice's window should not have expired yet")
 	}
 }
+
+func TestPlayingAnActionDoesNotExtendTurnDeadline(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0)
+	g := NewGame("t")
+	g.SetClock(func() time.Time { return now })
+	g.AddPlayer("a", "Alice")
+	g.AddPlayer("b", "Bob")
+	g.Configure(ModeClassic, 30)
+	g.Start()
+	h := give(g, "a", Card{Type: CardTypeAction, Action: ActionPassGo, Name: "Pass Go", Value: 1})
+	deadline := g.DeadlineMS
+	// A play several seconds into the turn must leave the original deadline
+	// intact, rather than granting a fresh thirty seconds.
+	now = now.Add(8 * time.Second)
+	if err := g.PlayAction("a", h[0].ID, ActionOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	g.PostAction()
+	if g.DeadlineMS != deadline {
+		t.Fatalf("action reset the turn deadline from %d to %d", deadline, g.DeadlineMS)
+	}
+}
+
+func TestPaymentPausesTurnAndResumesRemainingTime(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0)
+	g := NewGame("t")
+	g.SetClock(func() time.Time { return now })
+	g.AddPlayer("a", "Alice")
+	g.AddPlayer("b", "Bob")
+	g.Configure(ModeClassic, 30)
+	g.Start()
+	b := g.Player("b")
+	b.Bank = []Card{{ID: generateID(), Type: CardTypeMoney, Name: "$5M", Value: 5}}
+	h := give(g, "a", Card{Type: CardTypeAction, Action: ActionDebtCollector, Name: "Debt Collector", Value: 3})
+	turnDeadline := g.DeadlineMS
+	now = now.Add(8 * time.Second)
+	if err := g.PlayAction("a", h[0].ID, ActionOptions{TargetPlayerID: "b"}); err != nil {
+		t.Fatal(err)
+	}
+	g.PostAction()
+	if g.DeadlineKind != "respond" || g.DeadlineMS != now.Add(PaymentGraceSeconds*time.Second).UnixMilli() {
+		t.Fatalf("expected a payment deadline, got %d/%q", g.DeadlineMS, g.DeadlineKind)
+	}
+	now = now.Add(4 * time.Second)
+	if err := g.Respond("b", false, []string{b.Bank[0].ID}); err != nil {
+		t.Fatal(err)
+	}
+	g.PostAction()
+	if g.Pending != nil {
+		t.Fatal("payment should be settled")
+	}
+	wantDeadline := turnDeadline + 4*1000
+	if g.DeadlineMS != wantDeadline {
+		t.Fatalf("payment should resume the remaining turn window: got %d, want %d", g.DeadlineMS, wantDeadline)
+	}
+	if remaining := g.DeadlineMS - now.UnixMilli(); remaining != 22*1000 {
+		t.Fatalf("payment should leave 22 seconds on the turn, got %dms", remaining)
+	}
+}
+
+func TestMultiPaymentPausePreservesTurnAfterEveryPayer(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0)
+	g := NewGame("t")
+	g.SetClock(func() time.Time { return now })
+	for _, p := range []struct{ id, name string }{{"a", "Alice"}, {"b", "Bob"}, {"c", "Cara"}} {
+		g.AddPlayer(p.id, p.name)
+	}
+	g.Configure(ModeClassic, 30)
+	g.Start()
+	b, c := g.Player("b"), g.Player("c")
+	b.Bank = []Card{{ID: generateID(), Type: CardTypeMoney, Name: "$2M", Value: 2}}
+	c.Bank = []Card{{ID: generateID(), Type: CardTypeMoney, Name: "$2M", Value: 2}}
+	h := give(g, "a", Card{Type: CardTypeAction, Action: ActionBirthday, Name: "It's My Birthday", Value: 2})
+	turnDeadline := g.DeadlineMS
+	now = now.Add(8 * time.Second)
+	if err := g.PlayAction("a", h[0].ID, ActionOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	g.PostAction()
+	now = now.Add(3 * time.Second)
+	if err := g.Respond("b", false, []string{b.Bank[0].ID}); err != nil {
+		t.Fatal(err)
+	}
+	g.PostAction()
+	if g.Pending == nil {
+		t.Fatal("the second payer should still be pending")
+	}
+	// The second payer responds after the first payment window has already
+	// consumed time, but that response time must never eat into the turn.
+	now = now.Add(4 * time.Second)
+	if err := g.Respond("c", false, []string{c.Bank[0].ID}); err != nil {
+		t.Fatal(err)
+	}
+	g.PostAction()
+	wantDeadline := turnDeadline + 7*1000
+	if g.Pending != nil || g.DeadlineMS != wantDeadline {
+		t.Fatalf("multi-payment should restore the original turn deadline: pending=%v deadline=%d want=%d", g.Pending != nil, g.DeadlineMS, wantDeadline)
+	}
+}
+
+func TestPaymentPauseSurvivesJustSayNoRebound(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0)
+	g := NewGame("t")
+	g.SetClock(func() time.Time { return now })
+	g.AddPlayer("a", "Alice")
+	g.AddPlayer("b", "Bob")
+	g.Configure(ModeClassic, 30)
+	g.Start()
+	b := g.Player("b")
+	b.Bank = []Card{{ID: generateID(), Type: CardTypeMoney, Name: "$5M", Value: 5}}
+	b.Hand = []Card{{ID: generateID(), Type: CardTypeAction, Action: ActionJustSayNo, Name: "Just Say No", Value: 4}}
+	h := give(g, "a",
+		Card{Type: CardTypeAction, Action: ActionDebtCollector, Name: "Debt Collector", Value: 5},
+		Card{Type: CardTypeAction, Action: ActionJustSayNo, Name: "Just Say No", Value: 4},
+	)
+	turnDeadline := g.DeadlineMS
+	if err := g.PlayAction("a", h[0].ID, ActionOptions{TargetPlayerID: "b"}); err != nil {
+		t.Fatal(err)
+	}
+	g.PostAction()
+	now = now.Add(3 * time.Second)
+	if err := g.Respond("b", true, nil); err != nil {
+		t.Fatal(err)
+	}
+	g.PostAction()
+	now = now.Add(4 * time.Second)
+	if err := g.Respond("a", true, nil); err != nil {
+		t.Fatal(err)
+	}
+	g.PostAction()
+	now = now.Add(5 * time.Second)
+	if err := g.Respond("b", false, []string{b.Bank[0].ID}); err != nil {
+		t.Fatal(err)
+	}
+	g.PostAction()
+	if g.Pending != nil || g.DeadlineMS != turnDeadline+12*1000 {
+		t.Fatalf("Just Say No rebound should pause as one payment: pending=%v deadline=%d want=%d", g.Pending != nil, g.DeadlineMS, turnDeadline+12*1000)
+	}
+}
+
+func TestPaymentTimeoutResumesTurnAfterGraceWindow(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0)
+	g := NewGame("t")
+	g.SetClock(func() time.Time { return now })
+	g.AddPlayer("a", "Alice")
+	g.AddPlayer("b", "Bob")
+	g.Configure(ModeClassic, 30)
+	g.Start()
+	b := g.Player("b")
+	b.Bank = []Card{{ID: generateID(), Type: CardTypeMoney, Name: "$5M", Value: 5}}
+	h := give(g, "a", Card{Type: CardTypeAction, Action: ActionDebtCollector, Name: "Debt Collector", Value: 5})
+	turnDeadline := g.DeadlineMS
+	if err := g.PlayAction("a", h[0].ID, ActionOptions{TargetPlayerID: "b"}); err != nil {
+		t.Fatal(err)
+	}
+	g.PostAction()
+	now = now.Add(PaymentGraceSeconds * time.Second)
+	if !g.Tick(now) {
+		t.Fatal("payment grace timeout should resolve the debt")
+	}
+	if g.Pending != nil || g.DeadlineMS != turnDeadline+PaymentGraceSeconds*1000 {
+		t.Fatalf("timeout should resume after the grace window: pending=%v deadline=%d want=%d", g.Pending != nil, g.DeadlineMS, turnDeadline+PaymentGraceSeconds*1000)
+	}
+}
+
+func TestScheduledRandomStartRevealsBeforeFirstTurn(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0)
+	g := NewGame("t")
+	g.SetClock(func() time.Time { return now })
+	for _, p := range []struct{ id, name string }{{"a", "Alice"}, {"b", "Bob"}, {"c", "Cara"}} {
+		g.AddPlayer(p.id, p.name)
+	}
+	if err := g.StartRandomScheduled(); err != nil {
+		t.Fatal(err)
+	}
+	if len(g.StartSequence) != 3 || g.StartID == "" || g.StartAtMS != now.Add(StartRevealDelay).UnixMilli() {
+		t.Fatalf("missing start reveal metadata: %+v", g)
+	}
+	if g.PlaysLeft != 0 || g.DeadlineKind != "starting" {
+		t.Fatalf("the turn should be held during the reveal: plays=%d deadline=%q", g.PlaysLeft, g.DeadlineKind)
+	}
+	if g.Tick(now.Add(StartRevealDelay - time.Millisecond)) {
+		t.Fatal("first turn started before the reveal ended")
+	}
+	if !g.Tick(now.Add(StartRevealDelay)) || g.StartAtMS != 0 || g.PlaysLeft != PlaysPerTurn {
+		t.Fatalf("first turn did not start after reveal: at=%d plays=%d", g.StartAtMS, g.PlaysLeft)
+	}
+	if g.Players[g.CurrentTurn].ID != g.StartSequence[0] {
+		t.Fatal("current turn does not match the wheel's first seat")
+	}
+}

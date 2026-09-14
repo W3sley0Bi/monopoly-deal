@@ -2,6 +2,36 @@ import type { Catalog } from '../types';
 
 /** The table itself: top bar, mat, hand, the action dialog and the pending panel. */
 const table: Catalog = {
+    'inspect.rent_rule': "Fordere Miete für eine passende Farbgruppe. Der Betrag hängt von ihren Karten und Gebäuden ab.",
+    'inspect.money_rule': "Lege diese Karte auf die Bank, um Schulden zu bezahlen. Geld auf der Hand kann keine Miete bezahlen.",
+    'inspect.property_rule': "Spiele die Karte in eine passende Farbgruppe. Vervollständige drei Gruppen, um zu gewinnen.",
+    'inspect.banked_rule': "Diese Karte liegt als Geld auf der Bank. Ihre Aktion kann nicht mehr gespielt werden.",
+    'inspect.played_as': "Aktive Farbe",
+    'inspect.set_progress': "Farbgruppe",
+    'inspect.protected': "Vollständige Gruppe: geschützt vor Trickbetrug und Zwangstausch. Ein Geschäftsbruch kann die ganze Gruppe weiterhin stehlen.",
+    'inspect.exposed': "Unvollständige Gruppe: Diese Grundstücke können gestohlen oder getauscht werden.",
+    'inspect.wild_choose': "Wähle beim Ausspielen eine Farbe. Das gewählte Ende zeigt auf dem Tisch nach oben.",
+    'inspect.buildings': "Gebäude",
+    'inspect.assets': "Gesamtvermögen",
+    'inspect.open_board': "Klicken, um alle ausgespielten Karten anzusehen.",
+    'inspect.hand_hint': "Details beim Zeigen · Klicken zum Auswählen · Ziehen zum Spielen",
+
+    'table.reactions': "Reaktionen",
+    'table.reaction_0': "Gut gespielt",
+    'table.reaction_1': "Ganz schön frech",
+    'table.reaction_2': "Wie lustig",
+    'table.reaction_3': "Unglaublich",
+
+    'table.motion': "Kartenanimation",
+    'table.on': "An",
+    'table.off': "Aus",
+    'table.turn_of': "{name} ist dran",
+    'table.shared_space': "Ein Tisch. Die ganze Action.",
+    'table.hero_title': "Kleine Karten.",
+    'table.hero_punch': "Großer Verrat.",
+    'table.robot': "Roboter",
+    'table.player': "Spieler",
+
     // ── Top bar ──────────────────────────────────────────────────────────
     'table.leave_hint': 'Diesen Tisch verlassen und zurück zur Tischliste',
     'table.tables': 'Tische',

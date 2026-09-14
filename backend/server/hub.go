@@ -334,6 +334,7 @@ func (h *Hub) createRoomLocked(c *Client, msg ClientMessage) error {
 	}
 	id := h.newRoomIDLocked()
 	r := newRoom(id, name)
+	r.Private = msg.Private
 	if msg.Mode != "" || msg.TurnSeconds != 0 {
 		mode := msg.Mode
 		if mode == "" {
@@ -362,7 +363,7 @@ func (h *Hub) createRoomLocked(c *Client, msg ClientMessage) error {
 		}
 	}
 	if msg.AutoStart && len(r.Game.Players) >= 2 {
-		if err := r.Game.Start(); err != nil {
+		if err := r.Game.StartRandomScheduled(); err != nil {
 			return err
 		}
 	}
@@ -471,7 +472,7 @@ func (h *Hub) handleRoomLocked(c *Client, msg ClientMessage) error {
 		if !owner {
 			return errNotOwner
 		}
-		return g.Start()
+		return g.StartRandomScheduled()
 
 	case MsgNewGame:
 		if !owner {
@@ -678,6 +679,9 @@ func (h *Hub) homeRoomsLocked() []*Room {
 	out := make([]*Room, 0, len(h.order))
 	for _, id := range h.order {
 		if r := h.rooms[id]; r != nil {
+			if r.Private {
+				continue
+			}
 			out = append(out, r)
 		}
 	}

@@ -2,11 +2,13 @@ import { useState } from 'react';
 import type { ClientMessage, Difficulty, HomeView, Mode } from '../types';
 import { useI18n } from '../i18n';
 import { formatTurn } from '../i18n/format';
+import GameBrand, { Cityscape } from './GameBrand';
 import Avatar from './Avatar';
 import LanguagePicker from './LanguagePicker';
 import { markTutorialSeen, tutorialSeen } from './Tutorial';
 
 interface Props {
+    inviteCode?: string;
     view: HomeView | null;
     connected: boolean;
     name: string;
@@ -25,11 +27,12 @@ const STATE_KEY: Record<string, string> = {
 
 const DIFFICULTIES: Difficulty[] = ['easy', 'normal', 'hard'];
 
-export default function Home({ view, connected, name, playerId, error, onSetName, send }: Props) {
+export default function Home({ inviteCode, view, connected, name, playerId, error, onSetName, send }: Props) {
     const { t } = useI18n();
     const [draftName, setDraftName] = useState(name);
     const [creating, setCreating] = useState(false);
     const [tableName, setTableName] = useState('');
+    const [privateRoom, setPrivateRoom] = useState(false);
     const [mode, setMode] = useState<Mode>('classic');
     const [turnSeconds, setTurnSeconds] = useState(0);
     const [code, setCode] = useState('');
@@ -49,8 +52,8 @@ export default function Home({ view, connected, name, playerId, error, onSetName
     // Step one: everyone needs a name and a face before they can do anything.
     if (!name) {
         return (
-            <div className="grid min-h-full place-items-center p-6">
-                <div className="panel w-full max-w-md overflow-hidden">
+            <div className="welcome-screen grid min-h-full place-items-center p-6">
+                <Cityscape /><div className="welcome-card panel w-full max-w-md overflow-hidden">
                     <Header />
                     <div className="flex flex-col gap-4 px-7 py-6">
                         {/* The language has to be reachable before there is a
@@ -58,6 +61,7 @@ export default function Home({ view, connected, name, playerId, error, onSetName
                         <div className="flex justify-center">
                             <LanguagePicker />
                         </div>
+                        {inviteCode && <p className="invite-arrival">{t('invite.arrival', { code: inviteCode })}</p>}
                         {!connected && <Connecting />}
                         {error && <ErrorLine text={error} />}
                         <div className="flex items-center gap-3">
@@ -96,9 +100,9 @@ export default function Home({ view, connected, name, playerId, error, onSetName
     }
 
     return (
-        <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col gap-4 p-4 sm:p-6">
-            <header className="panel flex flex-wrap items-center gap-3 px-4 py-3">
-                <h1 className="font-display text-3xl tracking-wider text-brass">{t('home.title')}</h1>
+        <div className="home-screen mx-auto flex min-h-full w-full max-w-5xl flex-col gap-4 p-4 sm:p-6">
+            <Cityscape /><header className="home-header flex flex-wrap items-center gap-3 px-4 py-3">
+                <h1><GameBrand compact /></h1>
                 <LanguagePicker />
                 <span className="ml-auto flex items-center gap-2 rounded-full bg-black/30 px-2 py-1">
                     <Avatar id={playerId} name={name} size={28} />
@@ -116,9 +120,11 @@ export default function Home({ view, connected, name, playerId, error, onSetName
 
             {error && <ErrorLine text={error} />}
 
+            <section className="home-hero"><div><p className="label-caps">{t('table.shared_space')}</p><h2>{t('table.hero_title')}<br /><em>{t('table.hero_punch')}</em></h2><p>{t('home.tagline')}</p></div><div className="hero-deck" aria-hidden="true"><span className="hero-card hero-property"><small>PROPERTY</small><b>⌂</b><strong>MAYFAIR</strong></span><span className="hero-card hero-money"><small>MONOPOLY BANK</small><b>5<span>M</span></b></span><span className="hero-card hero-action"><small>ACTION</small><b>⊘</b><strong>JUST SAY NO</strong></span></div></section>
+
             {/* Solo practice: a table of robots, dealt straight away, with the
                 guided tour on top of it. */}
-            <section className="panel flex flex-wrap items-center gap-4 px-4 py-4">
+            <section className="solo-panel panel flex flex-wrap items-center gap-4 px-4 py-4">
                 <div className="min-w-56 flex-1">
                     <h2 className="font-display text-2xl tracking-wide text-brass">{t('home.solo.title')}</h2>
                     <p className="text-sm text-white/60">
@@ -228,6 +234,7 @@ export default function Home({ view, connected, name, playerId, error, onSetName
                                 />
                             </label>
 
+                            <fieldset className="room-visibility"><legend className="label-caps">{t('invite.visibility')}</legend><div>{[false, true].map(isPrivate => <label key={String(isPrivate)} className={privateRoom === isPrivate ? 'selected' : ''}><input type="radio" name="room-visibility" checked={privateRoom === isPrivate} onChange={() => setPrivateRoom(isPrivate)} /><span><strong>{t(isPrivate ? 'invite.private' : 'invite.public')}</strong><small>{t(isPrivate ? 'invite.private_hint' : 'invite.public_hint')}</small></span></label>)}</div></fieldset>
                             <div>
                                 <p className="label-caps mb-2">{t('home.game_mode')}</p>
                                 <div className="grid gap-2 sm:grid-cols-3">
@@ -311,6 +318,7 @@ export default function Home({ view, connected, name, playerId, error, onSetName
                                     send({
                                         type: 'create_room',
                                         room_name: tableName.trim(),
+                                        private: privateRoom,
                                         mode,
                                         turn_seconds: turnSeconds,
                                         bots: createBots,
@@ -481,14 +489,9 @@ function DifficultyPicker({ levels, value, onPick, blurbs }: {
 function Header() {
     const { t } = useI18n();
     return (
-        <div className="relative border-b border-white/10 bg-black/25 px-7 py-8 text-center">
-            <div className="pointer-events-none absolute inset-0 opacity-25"
-                style={{ backgroundImage: 'repeating-linear-gradient(45deg, rgb(242 193 78 / 0.25) 0 10px, transparent 10px 20px)' }} />
-            <p className="label-caps">{t('home.kicker')}</p>
-            <h1 className="font-display text-5xl tracking-wider text-brass drop-shadow-[0_2px_0_rgba(0,0,0,0.5)]">
-                {t('home.title')}
-            </h1>
-            <p className="mt-1 text-sm text-white/60">{t('home.tagline')}</p>
+        <div className="welcome-heading px-7 py-8 text-center">
+            <p className="label-caps">{t('home.kicker')}</p><h1><GameBrand /></h1>
+            <p className="mt-3 text-sm text-white/70">{t('home.tagline')}</p>
         </div>
     );
 }

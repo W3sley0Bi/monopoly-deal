@@ -66,7 +66,8 @@ func (c *testClient) send(m ClientMessage) {
 // await returns the first message satisfying pred, or fails.
 func (c *testClient) await(what string, pred func(rawMsg) bool) rawMsg {
 	c.t.Helper()
-	deadline := time.Now().Add(3 * time.Second)
+	// Normal starts include a 4.5s authoritative reveal window.
+	deadline := time.Now().Add(15 * time.Second)
 	for {
 		if err := c.conn.SetReadDeadline(deadline); err != nil {
 			c.t.Fatal(err)
@@ -165,6 +166,36 @@ func TestRoomAppearsOnHomeForOthers(t *testing.T) {
 	}
 }
 
+func TestPrivateRoomIsHiddenButJoinableByCode(t *testing.T) {
+	srv, _ := newTestServer(t)
+	a := dial(t, srv, "a", "Alice")
+	b := dial(t, srv, "b", "Bob")
+
+	a.send(ClientMessage{Type: MsgCreateRoom, RoomName: "Secret", Private: true})
+	created := a.room("private room created", func(v RoomView) bool { return v.Name == "Secret" })
+	if !created.Private || created.InviteCode != created.ID {
+		t.Fatalf("private room should expose its invite code only to room members: %+v", created)
+	}
+	v := b.home("private room hidden", func(v HomeView) bool {
+		for _, r := range v.Rooms {
+			if r.ID == created.ID {
+				return false
+			}
+		}
+		return true
+	})
+	for _, r := range v.Rooms {
+		if r.ID == created.ID {
+			t.Fatal("private room leaked into the public browser")
+		}
+	}
+	b.send(ClientMessage{Type: MsgJoinRoom, RoomID: strings.ToLower(created.ID)})
+	joined := b.room("private room joined by code", func(v RoomView) bool { return v.ID == created.ID && v.YouSeated })
+	if joined.Private != true || len(joined.Game.Players) != 2 {
+		t.Fatalf("exact-code join should enter the private room: %+v", joined)
+	}
+}
+
 func TestOnlyOwnerStartsAndConfigures(t *testing.T) {
 	srv, _ := newTestServer(t)
 	a := dial(t, srv, "a", "Alice")
@@ -195,8 +226,8 @@ func TestOnlyOwnerStartsAndConfigures(t *testing.T) {
 	if v.Game.DeadlineMS == 0 {
 		t.Fatal("a 60s turn timer should produce a deadline")
 	}
-	if len(v.Game.Players[0].Hand) != 7 {
-		t.Fatalf("first player should hold 5 dealt + 2 drawn cards, got %d", len(v.Game.Players[0].Hand))
+	if v.Game.Players[v.Game.CurrentTurn].HandCount != game.StartingHand+game.TurnDraw {
+		t.Fatalf("starting player should hold 5 dealt + 2 drawn cards, got %d", v.Game.Players[v.Game.CurrentTurn].HandCount)
 	}
 }
 

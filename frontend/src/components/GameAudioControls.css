@@ -1,0 +1,91 @@
+.game-audio-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    width: 100%;
+    gap: 0.5rem;
+    border: 1px solid rgb(255 255 255 / 0.1);
+    border-radius: 0.8rem;
+    padding: 0.55rem 0.7rem;
+    background: rgb(3 22 28 / 0.62);
+    color: rgb(255 255 255 / 0.78);
+}
+
+.game-audio-control {
+    display: flex;
+    min-width: 0;
+    flex: 1 1 12rem;
+    align-items: center;
+    gap: 0.45rem;
+}
+
+.game-audio-toggle {
+    display: inline-flex;
+    min-width: 5.7rem;
+    align-items: center;
+    gap: 0.35rem;
+    border: 1px solid transparent;
+    border-radius: 0.55rem;
+    padding: 0.35rem 0.45rem;
+    color: inherit;
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-align: left;
+    transition: background 160ms ease, color 160ms ease, border-color 160ms ease;
+}
+
+.game-audio-toggle:hover,
+.game-audio-toggle:focus-visible {
+    border-color: rgb(255 255 255 / 0.22);
+    background: rgb(255 255 255 / 0.08);
+    outline: none;
+}
+
+.game-audio-toggle.is-on {
+    color: var(--color-brass, #f2c14e);
+}
+
+.game-audio-control input[type='range'] {
+    min-width: 0;
+    width: 100%;
+    accent-color: var(--color-brass, #f2c14e);
+}
+
+.game-audio-control output {
+    min-width: 2.3rem;
+    color: rgb(255 255 255 / 0.55);
+    font-size: 0.7rem;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+}
+
+.game-audio-controls-compact {
+    gap: 0.2rem;
+    border: 0;
+    padding: 0;
+    background: transparent;
+}
+
+.game-audio-controls-compact .game-audio-control {
+    min-width: auto;
+    flex: 0 0 auto;
+}
+
+.game-audio-controls-compact .game-audio-toggle {
+    min-width: auto;
+    padding: 0.4rem;
+}
+
+@media (max-width: 640px) {
+    .game-audio-controls:not(.game-audio-controls-compact) {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .game-audio-control {
+        min-width: 0;
+    }
+}

@@ -44,7 +44,7 @@ func (g *Game) HumanPlayers() int { return len(g.Players) - g.Bots() }
 // BotWaiting reports whether the game is stuck on a robot's decision, so the
 // caller knows to schedule a step.
 func (g *Game) BotWaiting() bool {
-	if g.State != StatePlaying {
+	if g.State != StatePlaying || g.StartAtMS != 0 {
 		return false
 	}
 	if pd := g.Pending; pd != nil {
@@ -64,7 +64,7 @@ func (g *Game) BotWaiting() bool {
 // BotAct performs at most one move for whichever robot the game is waiting on.
 // It reports whether anything changed, so the caller knows to broadcast.
 func (g *Game) BotAct() bool {
-	if g.State != StatePlaying {
+	if g.State != StatePlaying || g.StartAtMS != 0 {
 		return false
 	}
 	if pd := g.Pending; pd != nil {

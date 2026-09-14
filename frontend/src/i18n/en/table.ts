@@ -2,6 +2,36 @@ import type { Catalog } from '../types';
 
 /** The table itself: top bar, mat, hand, the action dialog and the pending panel. */
 const table: Catalog = {
+    'inspect.rent_rule': "Charge rent for a matching property set. The amount depends on the cards and buildings in that set.",
+    'inspect.money_rule': "Bank this card to pay future debts. Money in your hand cannot pay rent.",
+    'inspect.property_rule': "Play this into a matching color set. Complete three sets to win.",
+    'inspect.banked_rule': "This card is banked as money. Its action can no longer be played.",
+    'inspect.played_as': "Playing as",
+    'inspect.set_progress': "Set progress",
+    'inspect.protected': "Complete set: protected from Sly Deal and Forced Deal. A Deal Breaker can still take the whole set.",
+    'inspect.exposed': "Incomplete set: these properties can be stolen or swapped.",
+    'inspect.wild_choose': "Choose a color when you play. The chosen end faces up on the table.",
+    'inspect.buildings': "Buildings",
+    'inspect.assets': "Total assets",
+    'inspect.open_board': "Click to inspect the full board.",
+    'inspect.hand_hint': "Hover to inspect · Click to choose · Drag to play",
+
+    'table.reactions': "Reactions",
+    'table.reaction_0': "Well played",
+    'table.reaction_1': "Feeling mischievous",
+    'table.reaction_2': "That was funny",
+    'table.reaction_3': "Mind blown",
+
+    'table.motion': "Card animation",
+    'table.on': "On",
+    'table.off': "Off",
+    'table.turn_of': "{name}’s turn",
+    'table.shared_space': "One table. All the action.",
+    'table.hero_title': "Small cards.",
+    'table.hero_punch': "Big betrayals.",
+    'table.robot': "Robot",
+    'table.player': "Player",
+
     // ── Top bar ──────────────────────────────────────────────────────────
     'table.leave_hint': 'Leave this table and go back to the table list',
     'table.tables': 'Tables',

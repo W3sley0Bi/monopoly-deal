@@ -1,3 +1,6 @@
+import { useId } from 'react';
+import { useDialogFocus } from '../game/useDialogFocus';
+import Avatar from './Avatar';
 import type { GameView } from '../types';
 import { useI18n } from '../i18n';
 import { money } from '../i18n/format';
@@ -20,6 +23,8 @@ interface Props {
 
 export default function WinOverlay({ view, isOwner, ownerName, onNewGame, onLeave }: Props) {
     const { t } = useI18n();
+    const focusRef = useDialogFocus();
+    const titleId = useId();
     const winner = view.players.find(p => p.id === view.winner_id);
     const isMe = view.winner_id === view.you;
     // The host's name is emphasised inside the sentence, so interpolate a
@@ -44,9 +49,9 @@ export default function WinOverlay({ view, isOwner, ownerName, onNewGame, onLeav
                 ))}
             </div>
 
-            <div className="panel animate-pop relative z-10 max-w-md px-10 py-8 text-center">
-                <p className="animate-float text-6xl">🏆</p>
-                <h2 className="mt-2 font-display text-5xl tracking-wider text-brass">
+            <div ref={focusRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} className="win-panel panel animate-pop relative z-10 max-w-md px-10 py-8 text-center">
+                <div className="winner-token">{winner && <Avatar id={winner.id} name={winner.name} size={90} active />}<span aria-hidden="true">🏆</span></div>
+                <h2 id={titleId} className="mt-2 font-display text-5xl tracking-wider text-brass">
                     {isMe ? t('win.you') : t('win.player', { name: winner?.name ?? t('win.someone') })}
                 </h2>
                 <p className="mt-2 text-white/70">{t('win.blurb')}</p>

@@ -1,14 +1,19 @@
+import type { GameAudio } from '../game/useGameAudio';
+import GameAudioControls from './GameAudioControls';
+import RoomInvite from './RoomInvite';
 import { useState } from 'react';
 import type { ClientMessage, Difficulty, Mode, RoomView } from '../types';
 import type { Call } from '../game/useWebRTC';
 import { useI18n } from '../i18n';
 import { formatTurn } from '../i18n/format';
+import GameBrand, { Cityscape } from './GameBrand';
 import Avatar from './Avatar';
 import CallControls from './CallControls';
 import ChatBox from './ChatBox';
-import VideoTile from './VideoTile';
+import CallStage from './CallStage';
 
 interface Props {
+    audio: GameAudio;
     room: RoomView;
     error?: string;
     call: Call;
@@ -18,7 +23,7 @@ interface Props {
 
 const DIFFICULTIES: Difficulty[] = ['easy', 'normal', 'hard'];
 
-export default function RoomLobby({ room, error, call, send, onLeave }: Props) {
+export default function RoomLobby({ audio, room, error, call, send, onLeave }: Props) {
     const { t } = useI18n();
     const g = room.game;
     const [confirmKick, setConfirmKick] = useState<string>();
@@ -40,12 +45,14 @@ export default function RoomLobby({ room, error, call, send, onLeave }: Props) {
 
     return (
         <div className="mx-auto flex min-h-full w-full max-w-3xl flex-col gap-4 p-4 sm:p-6">
+            <Cityscape /><div className="lobby-brand"><GameBrand compact /></div>
             <header className="panel flex flex-wrap items-center gap-3 px-4 py-3">
                 <div>
                     <p className="label-caps">{t('lobby.table', { code: room.id })}</p>
                     <h1 className="font-display text-3xl tracking-wide text-brass">{room.name}</h1>
                 </div>
                 <div className="ml-auto flex flex-wrap items-center gap-2">
+                    <RoomInvite room={room} />
                     <CallControls call={call} memberCount={room.call_members.length} />
                     <span className="rounded-full bg-black/30 px-3 py-1 text-xs">
                         {t('lobby.host')} <span className="font-semibold">{room.owner_name}</span>
@@ -55,6 +62,8 @@ export default function RoomLobby({ room, error, call, send, onLeave }: Props) {
                     </button>
                 </div>
             </header>
+            <CallStage call={call} room={room} />
+            <GameAudioControls audio={audio} />
 
             {error && (
                 <p className="animate-shake rounded-lg border border-rose-300/40 bg-rose-600/25 px-3 py-2 text-center text-sm font-semibold text-rose-100">
@@ -72,14 +81,7 @@ export default function RoomLobby({ room, error, call, send, onLeave }: Props) {
                             <span className="grid h-6 w-6 place-items-center rounded-full bg-brass font-bold text-ink">{i + 1}</span>
                             <Avatar id={p.id} name={p.name} size={36} away={!p.connected} />
                             <span className="font-semibold">{p.name}</span>
-                            {room.call_members.includes(p.id) && p.id !== room.you && (
-                                <VideoTile
-                                    stream={call.remote[p.id] ?? null}
-                                    label={p.name}
-                                    camOff={!call.remote[p.id]}
-                                    className="h-10 w-14"
-                                />
-                            )}
+                            {room.call_members.includes(p.id) && <span title={t('call.people')}>◉</span>}
                             {p.bot && <span className="rounded-full bg-white/10 px-2 py-0.5 text-[0.65rem] uppercase tracking-widest text-white/60">{t('lobby.robot_tag')}</span>}
                             {p.id === room.owner_id && <span title={t('lobby.host_title')}>👑</span>}
                             {p.id === room.you && <span className="text-xs text-brass">({t('common.you')})</span>}

@@ -399,7 +399,7 @@ func (g *Game) Respond(playerID string, sayNo bool, cardIDs []string) error {
 			key = "log.just_say_no_cancelled"
 		}
 		g.log(key, "name", p.Name, "label", pd.LabelKey, "label_args", pd.LabelArgs)
-		g.restartResponseClock()
+		g.restartPaymentClock()
 		g.settleAuto()
 		return nil
 	}
@@ -409,7 +409,7 @@ func (g *Game) Respond(playerID string, sayNo bool, cardIDs []string) error {
 		t.Settled = true
 		t.Note = "blocked"
 		g.log("log.accepts_block", "name", p.Name)
-		g.restartResponseClock()
+		g.restartPaymentClock()
 		g.settleAuto()
 		return nil
 	}
@@ -421,21 +421,21 @@ func (g *Game) Respond(playerID string, sayNo bool, cardIDs []string) error {
 			return err
 		}
 		t.Settled = true
-		g.restartResponseClock()
+		g.restartPaymentClock()
 		g.settleAuto()
 		return nil
 	}
 	// Steals and swaps: accepting lets the effect through.
 	t.Settled = true
-	g.restartResponseClock()
+	g.restartPaymentClock()
 	g.settleAuto()
 	return nil
 }
 
-// restartResponseClock clears the deadline so the next responder gets a full
-// window instead of the remains of the previous one.
-func (g *Game) restartResponseClock() {
-	if g.Pending != nil {
+// restartPaymentClock gives each debtor a full payment grace window. It never
+// touches the turn deadline, which remains paused underneath the payment.
+func (g *Game) restartPaymentClock() {
+	if g.Pending != nil && g.Pending.Kind == PendingPayment {
 		g.DeadlineMS = 0
 	}
 }

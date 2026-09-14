@@ -75,6 +75,10 @@ export interface Pending {
 }
 
 export interface GameView {
+    /** Shared reveal window before the first turn begins. */
+    start_id?: string;
+    starts_at_ms?: number;
+    start_sequence?: string[];
     id: string;
     you: string;
     players: PlayerView[];
@@ -95,7 +99,7 @@ export interface GameView {
     bot_difficulty: Difficulty;
     /** Unix ms when the turn or response expires; 0 means no limit. */
     deadline_ms: number;
-    deadline_kind?: 'turn' | 'respond';
+    deadline_kind?: 'turn' | 'respond' | 'starting';
     /** Length of the current countdown window, for the ring proportion. */
     deadline_seconds: number;
     /** Server clock, used to correct countdown drift. */
@@ -140,10 +144,12 @@ export interface RTCEnvelope {
 }
 
 export type RTCSignal =
+    | { kind: 'media'; micOn: boolean; camOn: boolean }
     | { kind: 'offer' | 'answer'; sdp: RTCSessionDescriptionInit }
     | { kind: 'candidate'; candidate: RTCIceCandidateInit };
 
 export interface RoomView {
+    private: boolean;
     id: string;
     name: string;
     owner_id: string;
@@ -211,6 +217,7 @@ export interface ClientMessage {
     player_name?: string;
     room_id?: string;
     room_name?: string;
+    private?: boolean;
     mode?: Mode;
     turn_seconds?: number;
     as_spectator?: boolean;
