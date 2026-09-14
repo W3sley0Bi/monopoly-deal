@@ -24,7 +24,7 @@ const tutorial: Catalog = {
     'tutorial.hand.task': 'Schau sie dir an und drück dann auf Weiter.',
 
     'tutorial.play-property.title': 'Spiel eine Immobilie aus',
-    'tutorial.play-property.body': 'Nur Immobilien gewinnen das Spiel. Zieh eine aus deiner Hand auf den Tisch — oder tipp sie an und wähl eine Farbe, so geht es auf dem Handy.',
+    'tutorial.play-property.body': 'Nur Immobilien gewinnen das Spiel. Zieh eine aus deiner Hand auf die Matte oder tipp sie an und wähl eine Farbe.',
     'tutorial.play-property.task': 'Spiel eine Immobilienkarte in einen Farbsatz.',
     'tutorial.play-property.blocked': 'Warte auf die Roboter — die Tour geht weiter, wenn du dran bist.',
 

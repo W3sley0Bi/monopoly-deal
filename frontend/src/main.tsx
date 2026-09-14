@@ -11,3 +11,16 @@ createRoot(document.getElementById('root')!).render(
     </I18nProvider>
   </StrictMode>,
 )
+
+// The installed app's shell. Registered after load so it never competes with
+// the first render, and only where the page is a secure origin — the service
+// worker API is absent over plain HTTP on the LAN, which is how this is often
+// played.
+if ('serviceWorker' in navigator && import.meta.env.PROD) {
+    window.addEventListener('load', () => {
+        void navigator.serviceWorker.register('/sw.js').catch(() => {
+            // An unregistrable worker costs the page nothing; the table is
+            // live over a socket either way.
+        });
+    });
+}

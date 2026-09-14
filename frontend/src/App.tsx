@@ -203,7 +203,7 @@ export default function App() {
     const errorText = error ? (error.key ? t(error.key, error.args) : error.text) : '';
 
     if (room) {
-        return <><CallAudio call={call} /><StartWheel game={room.game} skewMs={skewMs} />{room.game.state === 'waiting'
+        return <><CallAudio call={call} /><StartWheel game={room.game} skewMs={skewMs} audio={audio} />{room.game.state === 'waiting'
             ? <RoomLobby audio={audio} room={room} error={errorText} call={call} send={send} onLeave={leaveRoom} />
             : <Table audio={audio} room={room} error={errorText} skewMs={skewMs} call={call} tutorial={tutorial} onTutorial={startTutorial} send={send} onLeave={leaveRoom} />}</>;
     }

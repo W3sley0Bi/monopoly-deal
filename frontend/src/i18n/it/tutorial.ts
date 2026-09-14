@@ -24,7 +24,7 @@ const tutorial: Catalog = {
     'tutorial.hand.task': 'Dai un’occhiata, poi premi Avanti.',
 
     'tutorial.play-property.title': 'Gioca una proprietà',
-    'tutorial.play-property.body': 'Le proprietà sono le uniche carte che fanno vincere la partita. Trascinane una dalla mano sul tavolo — oppure toccala e scegli un colore, che è il modo di giocare al telefono.',
+    'tutorial.play-property.body': 'Solo le proprietà fanno vincere. Trascinane una dalla mano sul tappeto, oppure toccala e scegli un colore.',
     'tutorial.play-property.task': 'Gioca una carta proprietà in una serie di colore.',
     'tutorial.play-property.blocked': 'Aspetta i robot — il tutorial riprende quando tocca a te.',
 

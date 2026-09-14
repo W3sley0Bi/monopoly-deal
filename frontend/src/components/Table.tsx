@@ -9,6 +9,7 @@ import type { Card, ClientMessage, Color, PlayerView, RoomView } from '../types'
 import type { Call } from '../game/useWebRTC';
 import { NARROW, PORTRAIT, useMediaQuery } from '../game/useMediaQuery';
 import { DragProvider } from '../game/dragLayer';
+import { usePlayBubbles } from '../game/usePlayBubbles';
 import {
     colorMeta, dropTargets, isPlayableAction, needsTargeting, playableColors,
 } from '../game/meta';
@@ -79,6 +80,9 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
     const narrow = useMediaQuery(NARROW);
     const portrait = useMediaQuery(PORTRAIT);
     const seatCameras = useSeatCameras(call);
+    // The log already records every move; this lifts the newest one back onto
+    // the player who made it, where you would hear it at a real table.
+    const plays = usePlayBubbles(g.log);
 
     const [selectedCard, setSelected] = useState<Card | null>(null);
     const selected = me?.hand?.find(card => card.id === selectedCard?.id) ?? null;
@@ -664,13 +668,20 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
                             {/* What the table would look like if you were
                                 sitting at it: everyone's played property, in
                                 front of the seat that played it. */}
-                            <FeltCards players={g.players} you={g.you} />
+                            <FeltCards
+                                players={g.players}
+                                you={g.you}
+                                turnId={turnPlayer?.id}
+                                interactive={!narrow}
+                            />
                             {/* ── Opponents ───────────────────────────── */}
                             <section data-tour="opponents" className={`opponent-seats ${narrow ? 'rail gap-2 pb-1' : ''}`}>
                                 {narrow && deckChip}
                                 {foes.map(p => {
+                                    const play = plays[p.name];
                                     const shared = {
                                         player: p,
+                                        play: play ? tLog(play.entry) : undefined,
                                         reaction: recentReaction(p.id),
                                         isTurn: turnPlayer?.id === p.id,
                                         isTargeted: pending?.targets.some(t => t.player_id === p.id && !t.settled),
@@ -681,10 +692,11 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
                                         ? <PlayerChip
                                             key={p.id}
                                             {...shared}
+                                            playKey={play?.id}
                                             grow={foes.length <= 3}
                                             onOpen={() => setSheet({ kind: 'player', player: p })}
                                         />
-                                        : <OpponentPanel key={p.id} {...shared} video={seatCameras && room.call_members.includes(p.id) ? <ParticipantVideo call={call} id={p.id} name={p.name} className="seat-camera" /> : undefined} onOpen={() => setSheet({ kind: 'player', player: p })} />;
+                                        : <OpponentPanel key={p.id} {...shared} playKey={play?.id} video={seatCameras && room.call_members.includes(p.id) ? <ParticipantVideo call={call} id={p.id} name={p.name} className="seat-camera" /> : undefined} onOpen={() => setSheet({ kind: 'player', player: p })} />;
                                 })}
                             </section>
 
@@ -742,7 +754,10 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
                                 />
                             )}
                             {!narrow && <div className="table-status" aria-live="polite"><span className={myTurn ? 'status-light active' : 'status-light'} />{myTurn ? t('table.your_turn') : t('table.turn_of', { name: turnPlayer?.name ?? '' })}</div>}
-                            <div className="table-event" aria-live="polite">{g.log.length > 0 ? tLog(g.log[g.log.length - 1]) : t('table.shared_space')}</div>
+                            {/* Keyed on the log, so a new line arrives with a
+                                beat of its own rather than silently swapping
+                                the text under the reader. */}
+                            <div key={g.log.length} className="table-event" aria-live="polite">{g.log.length > 0 ? tLog(g.log[g.log.length - 1]) : t('table.shared_space')}</div>
                         </div>
 
                         {/* ── My board ────────────────────────────────── */}

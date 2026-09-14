@@ -16,15 +16,27 @@ interface Props {
     openOnClick?: boolean;
     content: ReactNode;
     enabled?: boolean;
+    /**
+     * Keeps the panel alive while the pointer is on it, and allows a short
+     * grace to cross the gap. For a panel whose contents are worth reading
+     * through and scrolling, rather than glancing at.
+     */
+    sticky?: boolean;
 }
 
-/** A delayed, hoverable and dismissible preview. Portals escape card rails.
- * Focus shows the same information; non-action triggers can open it on tap. */
+/** A delayed, dismissible preview. Portals escape card rails. Focus shows the
+ * same information; non-action triggers can open it on tap.
+ *
+ * The panel belongs to the thing under the pointer and to nothing else: it
+ * closes the moment the pointer leaves that element, and it never takes the
+ * pointer itself, so crossing over the panel dismisses it rather than holding
+ * it open. */
 export default function HoverDetails({
     children,
     content,
     enabled = true,
     openOnClick = false,
+    sticky = false,
 }: Props) {
     const id = useId();
     const [open, setOpen] = useState(false);
@@ -38,7 +50,13 @@ export default function HoverDetails({
         clear();
         setOpen(false);
     };
+    // A sticky panel is somewhere the pointer is allowed to go, so leaving the
+    // trigger only starts a short grace for crossing the gap between them.
     const leave = () => {
+        if (!sticky) {
+            close();
+            return;
+        }
         clear();
         timer.current = setTimeout(() => setOpen(false), CLOSE_DELAY);
     };
@@ -72,8 +90,11 @@ export default function HoverDetails({
         const el = panel.current,
             trigger = anchor.current;
         if (!el || !trigger) return;
+        // The last known box of the trigger, kept for the stray check below.
+        let box = trigger.getBoundingClientRect();
         const place = () => {
             const r = trigger.getBoundingClientRect();
+            box = r;
             const w = el.offsetWidth,
                 h = el.offsetHeight;
             const right = r.right + 12;
@@ -116,18 +137,41 @@ export default function HoverDetails({
         const scroll = (e: Event) => {
             if (!el.contains(e.target as Node)) setOpen(false);
         };
+        // `pointerleave` is not guaranteed to arrive. A trigger that is covered
+        // by a dialog, re-rendered under the cursor, or left behind when the
+        // pointer jumps never reports the exit, and the panel is then stuck
+        // open with nothing hovering it. So the pointer's own position is the
+        // authority: once it is off the trigger, the panel goes. The margin
+        // covers the few pixels a card travels when it lifts under the cursor.
+        // A sticky panel is part of the target, and the gap between the two
+        // has to be crossable, so it gets a wider margin and counts its own
+        // box as somewhere the pointer is allowed to be.
+        const margin = sticky ? 18 : 8;
+        const within = (r: DOMRect, e: PointerEvent) =>
+            e.clientX >= r.left - margin &&
+            e.clientX <= r.right + margin &&
+            e.clientY >= r.top - margin &&
+            e.clientY <= r.bottom + margin;
+        const stray = (e: PointerEvent) => {
+            if (e.pointerType === 'touch') return;
+            if (within(box, e)) return;
+            if (sticky && within(el.getBoundingClientRect(), e)) return;
+            setOpen(false);
+        };
         window.addEventListener('keydown', dismiss);
         window.addEventListener('pointerdown', outside);
+        window.addEventListener('pointermove', stray, { passive: true });
         window.addEventListener('resize', place);
         window.addEventListener('scroll', scroll, true);
         return () => {
             observer.disconnect();
             window.removeEventListener('keydown', dismiss);
             window.removeEventListener('pointerdown', outside);
+            window.removeEventListener('pointermove', stray);
             window.removeEventListener('resize', place);
             window.removeEventListener('scroll', scroll, true);
         };
-    }, [open, enabled]);
+    }, [open, enabled, sticky]);
     const Trigger = children.type as ElementType<HTMLAttributes<HTMLElement>>;
     return (
         <>
@@ -170,10 +214,10 @@ export default function HoverDetails({
                         id={id}
                         ref={panel}
                         role="tooltip"
-                        className="hover-details"
+                        className={`hover-details ${sticky ? 'hover-sticky' : ''}`}
                         style={{ visibility: 'hidden' }}
-                        onPointerEnter={clear}
-                        onPointerLeave={leave}
+                        onPointerEnter={sticky ? clear : undefined}
+                        onPointerLeave={sticky ? close : undefined}
                     >
                         {content}
                     </div>,

@@ -14,6 +14,8 @@ export type GameAudioCue =
     | 'threat'
     | 'payment'
     | 'shuffle'
+    /** The seat-order wheel, from release to rest. */
+    | 'spin'
     | 'error'
     | 'win';
 
@@ -166,6 +168,25 @@ class AudioEngine {
                 this.tone(100, 0.18, 0.045, now + 0.18, 'sine');
                 this.noise(0.05, 0.012, now + 0.02, 3200);
                 break;
+            // The wheel is one long sound, not an event: a run of ticks that
+            // thin out as the disc loses speed, then the note it settles on.
+            case 'spin': {
+                const ticks = 46;
+                let at = now;
+                let gap = 0.026;
+                for (let i = 0; i < ticks; i += 1) {
+                    const fade = 1 - i / ticks;
+                    this.noise(0.03, 0.016 + 0.02 * fade, at, 2600);
+                    this.tone(84 + Math.round(6 * fade), 0.035, 0.012 + 0.014 * fade, at, 'square');
+                    at += gap;
+                    // Each gap a little longer than the last: the disc slows.
+                    gap *= 1.052;
+                }
+                this.tone(76, 0.22, 0.06, at + 0.04, 'triangle');
+                this.tone(83, 0.3, 0.055, at + 0.16, 'triangle');
+                this.tone(88, 0.42, 0.05, at + 0.28, 'sine');
+                break;
+            }
             case 'shuffle':
                 this.noise(0.12, 0.02, now, 1100);
                 this.noise(0.12, 0.016, now + 0.1, 1500);

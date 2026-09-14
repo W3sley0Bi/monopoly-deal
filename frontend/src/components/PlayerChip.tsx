@@ -2,7 +2,7 @@ import type { ChatMessage, PlayerView } from '../types';
 import { colorMeta } from '../game/meta';
 import { useI18n } from '../i18n';
 import { money } from '../i18n/format';
-import { ReactionBubble } from './Reactions';
+import { PlayBubble, ReactionBubble } from './Reactions';
 import Avatar from './Avatar';
 
 interface Props {
@@ -15,6 +15,10 @@ interface Props {
     grow?: boolean;
     onOpen: () => void;
     reaction?: ChatMessage;
+    /** The move this player just made, already translated. */
+    play?: string;
+    /** Changes with each move, so a repeat still replays the animation. */
+    playKey?: number;
 }
 
 /**
@@ -22,7 +26,7 @@ interface Props {
  * colour bar summarising their sets. Tapping opens their full board in a sheet,
  * so the table stays inside one vertical screen.
  */
-export default function PlayerChip({ player, isTurn, isTargeted, stream, inCall, grow, onOpen, reaction }: Props) {
+export default function PlayerChip({ player, isTurn, isTargeted, stream, inCall, grow, onOpen, reaction, play, playKey }: Props) {
     const { t } = useI18n();
 
     return (
@@ -38,6 +42,7 @@ export default function PlayerChip({ player, isTurn, isTargeted, stream, inCall,
             ].join(' ')}
         >
             {reaction && <ReactionBubble key={reaction.id} message={reaction} />}
+            {play && !reaction && <PlayBubble key={playKey} text={play} />}
             <div className="flex min-w-0 items-center gap-1.5">
                 <Avatar id={player.id} name={player.name} size={28} active={isTurn} away={!player.connected} inCall={Boolean(stream || inCall)} inCallLabel={t('call.in_call')} />
                 <span className="min-w-0 flex-1 truncate font-display text-base leading-none tracking-wide">

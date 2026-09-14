@@ -36,7 +36,22 @@ interface Step {
     /** Wait here until the table is ready for the task. */
     blocked?: (c: Ctx) => boolean;
     blockedNoteKey?: string;
+    /**
+     * A selector for the cards or controls the task is actually about.
+     * Pointing at the mat tells you where a property lands but never which
+     * card in your hand is one, which is the half a beginner is missing.
+     */
+    targets?: string;
+    /** How the task is done, drawn as a moving hand over the table. */
+    gesture?: 'drag' | 'tap';
 }
+
+/** Hand cards that can start a colour set. */
+const PROPERTY_IN_HAND =
+    '.hand-card[data-card-type="property"], .hand-card[data-card-type="property_wildcard"]';
+/** Hand cards worth banking: money first, and any action is worth its value. */
+const BANKABLE_IN_HAND =
+    '.hand-card[data-card-type="money"], .hand-card[data-card-type="action"], .hand-card[data-card-type="rent"]';
 
 const propertiesInPlay = (c: Ctx) => (c.me?.sets ?? []).reduce((n, s) => n + s.cards.length, 0);
 
@@ -56,6 +71,7 @@ export const STEPS: Step[] = [
     {
         id: 'hand',
         anchor: 'hand',
+        targets: '.hand-card',
         titleKey: 'tutorial.hand.title',
         bodyKey: 'tutorial.hand.body',
         taskKey: 'tutorial.hand.task',
@@ -66,6 +82,8 @@ export const STEPS: Step[] = [
         titleKey: 'tutorial.play-property.title',
         bodyKey: 'tutorial.play-property.body',
         taskKey: 'tutorial.play-property.task',
+        targets: PROPERTY_IN_HAND,
+        gesture: 'drag',
         blocked: c => !c.myTurn,
         blockedNoteKey: 'tutorial.play-property.blocked',
         done: c => propertiesInPlay(c) > 0,
@@ -76,6 +94,8 @@ export const STEPS: Step[] = [
         titleKey: 'tutorial.bank.title',
         bodyKey: 'tutorial.bank.body',
         taskKey: 'tutorial.bank.task',
+        targets: BANKABLE_IN_HAND,
+        gesture: 'drag',
         blocked: c => !c.myTurn,
         blockedNoteKey: 'tutorial.bank.blocked',
         done: c => (c.me?.bank.length ?? 0) > 0,
@@ -111,6 +131,8 @@ export const STEPS: Step[] = [
         titleKey: 'tutorial.end-turn.title',
         bodyKey: 'tutorial.end-turn.body',
         taskKey: 'tutorial.end-turn.task',
+        targets: '[data-tour="end-turn"]',
+        gesture: 'tap',
         blocked: c => !c.myTurn,
         blockedNoteKey: 'tutorial.end-turn.blocked',
         done: c => !c.myTurn,
@@ -130,6 +152,48 @@ export const STEPS: Step[] = [
         taskKey: 'tutorial.done.task',
     },
 ];
+
+/**
+ * A hand that mimes the move: it picks the card up, carries it to where it
+ * goes, and puts it down, over and over until the player does it themselves.
+ * Words describe a gesture; this performs one.
+ */
+function TourHand({
+    from,
+    to,
+    gesture,
+}: {
+    from: { x: number; y: number };
+    to: { x: number; y: number };
+    gesture: 'drag' | 'tap';
+}) {
+    return (
+        <div
+            className={`tour-hand tour-hand-${gesture}`}
+            aria-hidden="true"
+            style={
+                {
+                    '--x1': `${from.x}px`,
+                    '--y1': `${from.y}px`,
+                    '--x2': `${to.x}px`,
+                    '--y2': `${to.y}px`,
+                } as React.CSSProperties
+            }
+        >
+            <svg viewBox="0 0 40 46" width="40" height="46">
+                <g fill="#fff" stroke="rgb(9 30 28 / 0.55)" strokeWidth="1.5">
+                    {/* Three curled fingers and a thumb behind an index that
+                        points at whatever the hand is over. */}
+                    <rect x="13.5" y="2" width="7.5" height="21" rx="3.75" />
+                    <rect x="20" y="12" width="7" height="12" rx="3.5" />
+                    <rect x="26" y="15" width="6.5" height="10" rx="3.25" />
+                    <rect x="7" y="15" width="6.5" height="10" rx="3.25" />
+                    <path d="M7 20h25v10a12 12 0 0 1-12 12h-1a12 12 0 0 1-12-12z" />
+                </g>
+            </svg>
+        </div>
+    );
+}
 
 const STORAGE_KEY = 'md.tutorial.done';
 
@@ -154,10 +218,16 @@ interface Props {
 
 interface Rect { top: number; left: number; width: number; height: number }
 
+/** Ringing every card in a full hand highlights nothing. */
+const MAX_TARGETS = 4;
+
+const centre = (r: Rect) => ({ x: r.left + r.width / 2, y: r.top + r.height / 2 });
+
 export default function Tutorial({ room, narrow, compact, onClose }: Props) {
     const { t } = useI18n();
     const [index, setIndex] = useState(0);
     const [rect, setRect] = useState<Rect | null>(null);
+    const [targets, setTargets] = useState<Rect[]>([]);
     const [handRect, setHandRect] = useState<Rect | null>(null);
     const [cardHeight, setCardHeight] = useState(200);
     const cardRef = useRef<HTMLDivElement | null>(null);
@@ -221,6 +291,36 @@ export default function Tutorial({ room, narrow, compact, onClose }: Props) {
             window.removeEventListener('scroll', measure, true);
         };
     }, [anchor, index]);
+
+    // The cards the step is about. Remeasured on the same beat as the anchor,
+    // because a hand re-fans itself whenever a card leaves it.
+    const targetSelector = compact ? undefined : step?.targets;
+    useEffect(() => {
+        if (!targetSelector) {
+            setTargets([]);
+            return;
+        }
+        const measure = () => {
+            const found = Array.from(
+                document.querySelectorAll<HTMLElement>(targetSelector),
+            ).slice(0, MAX_TARGETS);
+            setTargets(
+                found.map(el => {
+                    const r = el.getBoundingClientRect();
+                    return { top: r.top, left: r.left, width: r.width, height: r.height };
+                }),
+            );
+        };
+        measure();
+        const timer = setInterval(measure, 250);
+        window.addEventListener('resize', measure);
+        window.addEventListener('scroll', measure, true);
+        return () => {
+            clearInterval(timer);
+            window.removeEventListener('resize', measure);
+            window.removeEventListener('scroll', measure, true);
+        };
+    }, [targetSelector, index]);
 
     // The hand is the one region the card may never cover.
     useEffect(() => {
@@ -317,11 +417,62 @@ export default function Tutorial({ room, narrow, compact, onClose }: Props) {
         );
     }
 
+    // Where the task starts and where it ends, for the hand that mimes it.
+    const from = targets.length > 0 ? centre(targets[0]) : null;
+    const to = step.gesture === 'drag' && box
+        ? centre(box)
+        : step.gesture === 'tap' && from
+          ? from
+          : null;
+    const showGesture = Boolean(from && to && !blocked && !complete);
+
+    // Every hole the dimmer has to leave open: the region being explained, and
+    // each card the player is being asked to move. A spread box-shadow can
+    // only cut one, so the dimmer is a masked rectangle instead.
+    const holes = [...(box ? [box] : []), ...targets];
+
     return (
         <div className="pointer-events-none fixed inset-0 z-[80]">
-            {/* Dimmer. With an anchor it is the spotlight's own shadow, so the
-                highlighted control stays fully visible and clickable. */}
-            {box ? (
+            {holes.length > 0 ? (
+                <svg className="absolute inset-0 h-full w-full" aria-hidden="true">
+                    <defs>
+                        <mask id="tour-mask">
+                            <rect width="100%" height="100%" fill="white" />
+                            {holes.map((h, i) => (
+                                <rect
+                                    key={i}
+                                    x={h.left}
+                                    y={h.top}
+                                    width={h.width}
+                                    height={h.height}
+                                    rx={12}
+                                    fill="black"
+                                />
+                            ))}
+                        </mask>
+                    </defs>
+                    <rect
+                        width="100%"
+                        height="100%"
+                        fill="rgb(2 12 8 / 0.62)"
+                        mask="url(#tour-mask)"
+                    />
+                    {/* The route the card takes, drawn between the two. */}
+                    {showGesture && step.gesture === 'drag' && from && to && (
+                        <line
+                            className="tour-route"
+                            x1={from.x}
+                            y1={from.y}
+                            x2={to.x}
+                            y2={to.y}
+                        />
+                    )}
+                </svg>
+            ) : (
+                <div className="absolute inset-0 bg-[rgb(2_12_8_/_0.62)]" />
+            )}
+
+            {box && (
                 <div
                     className="absolute rounded-2xl ring-2 ring-brass transition-all duration-300"
                     style={{
@@ -329,11 +480,28 @@ export default function Tutorial({ room, narrow, compact, onClose }: Props) {
                         left: box.left,
                         width: box.width,
                         height: box.height,
-                        boxShadow: '0 0 0 9999px rgb(2 12 8 / 0.62), 0 0 30px rgb(242 193 78 / 0.45)',
+                        boxShadow: '0 0 30px rgb(242 193 78 / 0.45)',
                     }}
                 />
-            ) : (
-                <div className="absolute inset-0 bg-[rgb(2_12_8_/_0.62)]" />
+            )}
+
+            {/* The cards the task is about, each ringed where it actually is. */}
+            {targets.map((target, i) => (
+                <div
+                    key={i}
+                    className="tour-target"
+                    style={{
+                        top: target.top,
+                        left: target.left,
+                        width: target.width,
+                        height: target.height,
+                        animationDelay: `${i * 140}ms`,
+                    }}
+                />
+            ))}
+
+            {showGesture && from && to && (
+                <TourHand from={from} to={to} gesture={step.gesture ?? 'tap'} />
             )}
 
             <div

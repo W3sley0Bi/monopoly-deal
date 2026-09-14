@@ -2,8 +2,7 @@ import type { ChatMessage, PlayerView } from '../types';
 import { useI18n } from '../i18n';
 import { money } from '../i18n/format';
 import HoverDetails from './HoverDetails';
-import OpponentProperties from './OpponentProperties';
-import { ReactionBubble } from './Reactions';
+import { PlayBubble, ReactionBubble } from './Reactions';
 import Avatar from './Avatar';
 import { CardBack } from './PlayingCard';
 import type { ReactNode } from 'react';
@@ -17,6 +16,10 @@ interface Props {
     video?: ReactNode;
     onOpen: () => void;
     reaction?: ChatMessage;
+    /** The move this player just made, already translated. */
+    play?: string;
+    /** Changes with each move, so a repeat still replays the animation. */
+    playKey?: number;
 }
 
 export default function OpponentPanel({
@@ -27,6 +30,8 @@ export default function OpponentPanel({
     video,
     onOpen,
     reaction,
+    play,
+    playKey,
 }: Props) {
     const { t, tCard } = useI18n();
     const fan = Math.min(player.hand_count, 7);
@@ -38,6 +43,7 @@ export default function OpponentPanel({
             {reaction && (
                 <ReactionBubble key={reaction.id} message={reaction} />
             )}
+            {play && !reaction && <PlayBubble key={playKey} text={play} />}
             {video}
             <HoverDetails
                 content={
@@ -165,8 +171,6 @@ export default function OpponentPanel({
                     />
                 ))}
             </div>
-            <OpponentProperties player={player} onOpen={onOpen} />
-
         </div>
     );
 }

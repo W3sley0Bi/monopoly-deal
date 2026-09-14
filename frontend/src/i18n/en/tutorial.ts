@@ -24,7 +24,7 @@ const tutorial: Catalog = {
     'tutorial.hand.task': 'Have a look, then press Next.',
 
     'tutorial.play-property.title': 'Play a property',
-    'tutorial.play-property.body': 'Properties are the only cards that win the game. Drag one from your hand onto the mat — or tap it and choose a colour, which is the way to play on a phone.',
+    'tutorial.play-property.body': 'Properties are the only cards that win the game. Drag one from your hand onto the mat, or tap it and choose a colour.',
     'tutorial.play-property.task': 'Play one property card into a colour set.',
     'tutorial.play-property.blocked': 'Wait for the robots — the tour continues on your turn.',
 

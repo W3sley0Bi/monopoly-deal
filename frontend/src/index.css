@@ -1872,12 +1872,24 @@ select:focus-visible {
 }
 
 /* Inspect the table without leaving it. Previews live outside overflow rails. */
+/* The panel is a picture of the thing you are pointing at, never a target of
+   its own: taking the pointer would hold it open past the moment it is done,
+   and crossing onto it has to dismiss it like anywhere else. */
 .hover-details {
+    pointer-events: none;
     position: fixed; z-index: 100; width: 330px; max-width: calc(100vw - 24px);
     max-height: calc(100dvh - 24px); overflow-y: auto; padding: 16px;
     background: oklch(23% .038 211); color: oklch(96% .018 95);
     border: 1px solid oklch(82% .06 185 / .35); border-radius: 16px;
     box-shadow: 0 18px 55px oklch(8% .02 211 / .55); font-size: 12px; line-height: 1.45;
+}
+/* The one panel the pointer may enter: it holds a whole board, which is read
+   and scrolled rather than glanced at. */
+.hover-details.hover-sticky {
+    pointer-events: auto;
+    /* It holds a whole board — property groups, buildings and a bank — which
+       does not fit the width of a single-card note. */
+    width: 460px;
 }
 .hover-details h3 { font-weight: 850; font-size: 17px; line-height: 1.2; margin: 4px 0 10px; }
 .hover-details p { margin-bottom: 9px; }
@@ -1940,16 +1952,9 @@ select:focus-visible {
 @media (prefers-reduced-motion: reduce) { .wildcard-rotator { transition: none; } }
 /* Keep public hands separate from property labels and leave the center unobstructed. */
 .seat-cards { height: 43px; }
-@media (min-width: 900px) {
-    .seats-1 .opponent-seat, .seats-3 .opponent-seat:first-child {
-        width: 356px; left: calc(50% - 178px); display: grid; grid-template-columns: 180px 168px; column-gap: 8px;
-    }
-    .seats-1 .opponent-seat > .seat-profile, .seats-3 .opponent-seat:first-child > .seat-profile,
-    .seats-1 .opponent-seat > .seat-assets, .seats-3 .opponent-seat:first-child > .seat-assets,
-    .seats-1 .opponent-seat > .seat-cards, .seats-3 .opponent-seat:first-child > .seat-cards { grid-column: 1; }
-    .seats-1 .opponent-properties, .seats-3 .opponent-seat:first-child .opponent-properties,
-    .seats-1 .opponent-properties-empty, .seats-3 .opponent-seat:first-child .opponent-properties-empty { grid-column: 2; grid-row: 1 / 4; align-self: center; }
-}
+/* The seat at the head of the table used to run a second column for its
+   property groups. The felt carries those now, so it is the same size as
+   every other seat. */
 @media (min-width: 900px) and (max-height: 780px) {
     .seat-cards { height: 34px; }
     .my-board { min-height: 135px; max-height: 150px; }
@@ -2379,15 +2384,40 @@ body.is-dragging {
         flex: 0 1 auto;
         min-height: 0;
     }
+    /* This line is the phone's whole record of what just happened — there is
+       no log column beside the table to fall back on — so it is a banner
+       rather than a caption. */
     .table-event {
         position: static;
         flex: none;
         left: auto;
         right: auto;
-        width: 100%;
-        margin-top: 4px;
-        padding: 0 6px;
-        font-size: 10px;
+        width: auto;
+        margin: 5px 2px 0;
+        padding: 6px 10px;
+        border-radius: 10px;
+        border: 1px solid oklch(88% 0.06 175 / 0.22);
+        background: oklch(14% 0.03 208 / 0.72);
+        backdrop-filter: blur(2px);
+        color: oklch(97% 0.02 185);
+        font-size: 12px;
+        font-weight: 600;
+        line-height: 1.3;
+        text-align: center;
+        /* Two lines, because a rent line naming a colour and an amount does
+           not fit one at this width, and an ellipsis loses the amount. */
+        white-space: normal;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        animation: table-event-in 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    @keyframes table-event-in {
+        from {
+            opacity: 0;
+            transform: translateY(-4px);
+        }
     }
 }
 @media (max-width: 899px) and (orientation: landscape) {
@@ -2688,27 +2718,6 @@ body.is-dragging {
         font-size: 6px;
     }
 
-    /* The seat at the head of the table already runs two columns wide, so the
-       fan takes the top of the right one and the properties start below it. */
-    .seats-1 .opponent-seat > .seat-cards,
-    .seats-3 .opponent-seat:first-child > .seat-cards {
-        grid-column: 2;
-        grid-row: 1;
-        justify-content: flex-end;
-        transform: none;
-    }
-    .seats-1 .opponent-properties,
-    .seats-3 .opponent-seat:first-child .opponent-properties,
-    .seats-1 .opponent-properties-empty,
-    .seats-3 .opponent-seat:first-child .opponent-properties-empty {
-        grid-column: 2;
-        grid-row: 2 / 5;
-        align-self: start;
-    }
-    .seats-1 .opponent-seat > .seat-assets,
-    .seats-3 .opponent-seat:first-child > .seat-assets {
-        grid-column: 1;
-    }
 }
 
 /* ── The board of whoever is playing ──────────────────────────────────────
@@ -2912,11 +2921,32 @@ body.is-dragging {
    empty green — the one part of the game that looks nothing like the game.
    These are the cards in front of each seat: no text, no handles, nothing to
    press. A picture of state the table already holds. */
+/* Wide screens make a place readable enough to point at. The layer stays
+   untouchable so it never swallows a click meant for the table; only the
+   places themselves answer the pointer. */
+.felt-live .felt-pile {
+    pointer-events: auto;
+    cursor: help;
+}
+.felt-live .felt-pile:hover {
+    filter: brightness(1.14) drop-shadow(0 0 7px oklch(89% 0.17 113 / 0.45));
+}
+.felt-board {
+    min-width: 0;
+}
+.felt-board > h3 {
+    margin-bottom: 12px;
+}
+
 .felt-cards {
     /* How far a place sits from the middle. A phone keeps them tight; a table
        with a drawn centre pushes them out past it. */
     --reach-x: 26%;
     --reach-y: 23%;
+    /* The felt is an ellipse seen from behind and above, so its middle sits
+       higher on screen than the middle of the box it is drawn in. Without this
+       the far places ride up onto the rim instead of resting inside it. */
+    --felt-shift: 6%;
     position: absolute;
     inset: 0;
     /* Negative, so the cards lie ON the felt: above the painted surface but
@@ -2932,7 +2962,7 @@ body.is-dragging {
        next to the `+`, and the grouping leaves nothing for a parser to weigh
        up. */
     left: calc(50% + (var(--ux) * var(--reach-x)));
-    top: calc(50% + (var(--uy) * var(--reach-y)));
+    top: calc(50% + var(--felt-shift) + (var(--uy) * var(--reach-y)));
     display: flex;
     align-items: flex-end;
     justify-content: center;
@@ -3018,26 +3048,49 @@ body.is-dragging {
     .felt-cards {
         --reach-x: 31%;
         --reach-y: 26%;
+        /* The felt is drawn in perspective, so cards standing square to the
+           screen on top of it read as stickers. They lie on the same plane
+           and share one vanishing point.
+           The lens is longer than the surface's own 1100px: the table is one
+           big shape and can carry a strong tilt, while a 17px card skewed that
+           hard stops looking like a card at all. */
+        perspective: 1800px;
+        perspective-origin: 50% 40%;
+        --felt-shift: 8%;
     }
     .felt-pile {
         width: 10rem;
         gap: 8px;
+        /* Tilt onto the table first, then turn within it to face the seat. */
+        transform: translate(-50%, -50%) rotateX(19deg)
+            rotateZ(var(--face, 0deg));
     }
+    /* Foreshortening eats height, so the cards start a little taller. */
     .felt-set > i {
-        width: 16px;
-        height: 23px;
+        width: 17px;
+        height: 25px;
     }
     .felt-set > i + i {
         margin-left: -10px;
     }
     .felt-money {
-        width: 16px;
-        height: 29px;
+        width: 17px;
+        height: 32px;
     }
     .felt-money > i {
-        width: 16px;
-        height: 23px;
+        width: 17px;
+        height: 25px;
         font-size: 9px;
+    }
+    /* Lying flat, a card casts along the table rather than straight down. */
+    .felt-set > i,
+    .felt-money > i {
+        box-shadow: 1px 2px 3px oklch(10% 0.02 220 / 0.45);
+    }
+    .felt-set-complete > i {
+        box-shadow:
+            0 0 0 1px var(--color-brass),
+            1px 2px 4px oklch(10% 0.02 220 / 0.45);
     }
 }
 
@@ -3157,5 +3210,220 @@ body.is-dragging {
     }
     .pending-mine-cards {
         gap: 6px;
+    }
+}
+
+/* ── What a player just did ───────────────────────────────────────────────
+   The log column records every move, but off to one side. At a real table you
+   learn a move from the person who made it, so the newest line is spoken from
+   the seat that caused it and then fades. */
+.seat-play {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: -12px;
+    z-index: 38;
+    margin: 0 auto;
+    width: max-content;
+    max-width: 100%;
+    padding: 5px 10px;
+    border-radius: 12px 12px 12px 4px;
+    background: oklch(96% 0.02 95);
+    color: oklch(20% 0.03 215);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.25;
+    text-align: left;
+    box-shadow: 0 8px 20px oklch(8% 0.02 211 / 0.4);
+    pointer-events: none;
+    animation: seat-play-life 4.2s ease-out forwards;
+}
+@keyframes seat-play-life {
+    0% {
+        opacity: 0;
+        transform: translateY(6px) scale(0.94);
+    }
+    7% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+    84% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+    100% {
+        opacity: 0;
+        transform: translateY(-5px) scale(0.98);
+    }
+}
+/* The seat sits against the top of the felt, so its bubble hangs underneath
+   rather than off the edge of the table. */
+.seats-1 .seat-play,
+.seats-3 .opponent-seat:first-child .seat-play,
+.seats-4 .opponent-seat:first-child .seat-play,
+.seats-4 .opponent-seat:nth-child(2) .seat-play {
+    top: auto;
+    bottom: -14px;
+    border-radius: 12px 12px 4px 12px;
+}
+/* On a phone the seats are a sideways rail with no room above them, so the
+   bubble sits over the chip it belongs to. */
+.compact-room .seat-play {
+    top: auto;
+    bottom: 2px;
+    left: 2px;
+    right: 2px;
+    margin: 0;
+    width: auto;
+    font-size: 10px;
+    padding: 3px 7px;
+    border-radius: 9px;
+}
+@media (prefers-reduced-motion: reduce) {
+    .seat-play {
+        animation: none;
+    }
+}
+
+/* ── Keeping the table on a home screen ───────────────────────────────────
+   Offered where somebody is already deciding what to do, never over a game. */
+.install-banner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 12px 14px;
+}
+.install-banner > img {
+    flex-shrink: 0;
+    border-radius: 11px;
+    box-shadow: 0 6px 16px oklch(8% 0.02 220 / 0.45);
+}
+.install-copy {
+    flex: 1 1 14rem;
+    min-width: 0;
+}
+.install-copy > strong {
+    display: block;
+    font-family: var(--font-display);
+    font-size: 16px;
+    letter-spacing: 0.01em;
+    color: oklch(96% 0.02 95);
+}
+.install-copy > p {
+    margin-top: 2px;
+    font-size: 12px;
+    color: oklch(100% 0 0 / 0.6);
+}
+@media (max-width: 599px) {
+    .install-banner {
+        gap: 10px;
+        padding: 10px;
+    }
+    .install-banner > img {
+        width: 38px;
+        height: 38px;
+    }
+    .install-copy {
+        flex: 1 1 8rem;
+    }
+    .install-copy > strong {
+        font-size: 14px;
+    }
+}
+
+/* ── The guided tour ──────────────────────────────────────────────────────
+   Pointing at the mat says where a property lands but never which card in
+   your hand is one — so the cards the step is about are ringed where they
+   actually sit, and a hand mimes the move until the player makes it. */
+.tour-target {
+    position: absolute;
+    border-radius: 12px;
+    pointer-events: none;
+    box-shadow:
+        0 0 0 2px var(--color-brass),
+        0 0 22px -2px oklch(89% 0.17 113 / 0.75);
+    animation: tour-target-pulse 1.5s ease-in-out infinite;
+}
+@keyframes tour-target-pulse {
+    50% {
+        box-shadow:
+            0 0 0 3px var(--color-brass),
+            0 0 34px 2px oklch(89% 0.17 113 / 0.9);
+    }
+}
+
+.tour-route {
+    stroke: oklch(89% 0.17 113 / 0.55);
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-dasharray: 3 9;
+    animation: tour-route-run 1s linear infinite;
+}
+@keyframes tour-route-run {
+    to {
+        stroke-dashoffset: -12;
+    }
+}
+
+.tour-hand {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 2;
+    pointer-events: none;
+    /* The fingertip does the pointing, so the shape hangs below and right of
+       the position it is given. */
+    margin: -6px 0 0 -13px;
+    filter: drop-shadow(0 6px 10px oklch(8% 0.02 220 / 0.55));
+}
+.tour-hand-drag {
+    animation: tour-drag 2.6s cubic-bezier(0.37, 0, 0.35, 1) infinite;
+}
+.tour-hand-tap {
+    animation: tour-tap 1.6s ease-in-out infinite;
+}
+/* Arrive, close on the card, carry it over, set it down, fade, repeat. */
+@keyframes tour-drag {
+    0% {
+        opacity: 0;
+        transform: translate(var(--x1), var(--y1)) scale(1.15);
+    }
+    12% {
+        opacity: 1;
+        transform: translate(var(--x1), var(--y1)) scale(1);
+    }
+    22% {
+        transform: translate(var(--x1), var(--y1)) scale(0.88);
+    }
+    62% {
+        opacity: 1;
+        transform: translate(var(--x2), var(--y2)) scale(0.88);
+    }
+    74% {
+        transform: translate(var(--x2), var(--y2)) scale(1);
+    }
+    88%,
+    100% {
+        opacity: 0;
+        transform: translate(var(--x2), var(--y2)) scale(1);
+    }
+}
+@keyframes tour-tap {
+    0%,
+    100% {
+        opacity: 0.9;
+        transform: translate(var(--x1), var(--y1)) scale(1);
+    }
+    45% {
+        opacity: 1;
+        transform: translate(var(--x1), var(--y1)) scale(0.85);
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .tour-target,
+    .tour-route,
+    .tour-hand {
+        animation: none;
     }
 }

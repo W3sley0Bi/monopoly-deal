@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -48,6 +49,14 @@ func main() {
 	}
 }
 
+func init() {
+	// Go's table has no entry for this extension, which would leave the
+	// installed-app manifest served as plain bytes.
+	if err := mime.AddExtensionType(".webmanifest", "application/manifest+json"); err != nil {
+		log.Printf("webmanifest mime: %v", err)
+	}
+}
+
 // spaHandler serves static files and falls back to index.html for app routes.
 func spaHandler(dir string) http.Handler {
 	fs := http.FileServer(http.Dir(dir))
@@ -58,6 +67,12 @@ func spaHandler(dir string) http.Handler {
 			// Asset names carry a content hash, so they can be cached hard.
 			if strings.HasPrefix(r.URL.Path, "/assets/") {
 				w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+			}
+			// A cached service worker is a version of the app that can never
+			// replace itself, so this one file always comes from the server.
+			if r.URL.Path == "/sw.js" {
+				w.Header().Set("Cache-Control", "no-cache")
+				w.Header().Set("Service-Worker-Allowed", "/")
 			}
 			fs.ServeHTTP(w, r)
 			return

@@ -5,6 +5,7 @@ import { formatTurn } from '../i18n/format';
 import GameBrand, { Cityscape } from './GameBrand';
 import Avatar from './Avatar';
 import LanguagePicker from './LanguagePicker';
+import InstallBanner from './InstallBanner';
 import { markTutorialSeen, tutorialSeen } from './Tutorial';
 
 interface Props {
@@ -119,6 +120,8 @@ export default function Home({ inviteCode, view, connected, name, playerId, erro
             </header>
 
             {error && <ErrorLine text={error} />}
+
+            <InstallBanner />
 
             <section className="home-hero"><div><p className="label-caps">{t('table.shared_space')}</p><h2>{t('table.hero_title')}<br /><em>{t('table.hero_punch')}</em></h2><p>{t('home.tagline')}</p></div><div className="hero-deck" aria-hidden="true"><span className="hero-card hero-property"><small>PROPERTY</small><b>⌂</b><strong>MAYFAIR</strong></span><span className="hero-card hero-money"><small>MONOPOLY BANK</small><b>5<span>M</span></b></span><span className="hero-card hero-action"><small>ACTION</small><b>⊘</b><strong>JUST SAY NO</strong></span></div></section>
 

@@ -1,11 +1,24 @@
 import type { CSSProperties } from 'react';
+import { Fragment } from 'react';
 import type { PlayerView } from '../types';
 import { colorMeta, moneyMeta } from '../game/meta';
+import { useI18n } from '../i18n';
+import HoverDetails from './HoverDetails';
+import PlayerBoard from './PlayerBoard';
 
 interface Props {
     players: PlayerView[];
     /** Your own id, so your place is the near edge of the table. */
     you: string;
+    /** Whose turn it is, so their board opens already labelled as such. */
+    turnId?: string;
+    /**
+     * Wide screens make a place big enough to point at, so hovering one opens
+     * that player's whole board — which is why the seat panels no longer carry
+     * a second copy of it. A phone has no pointer and its own way in, the chip
+     * and the sheet, so the cards there stay a picture and nothing more.
+     */
+    interactive?: boolean;
 }
 
 /** Only the top of a pile is readable, so there is no point drawing more. */
@@ -28,12 +41,13 @@ const PILE_DEPTH = 2;
  * meant the whole table shuffled itself each time somebody new put a card
  * down, and cards already on the felt do not move.
  */
-export default function FeltCards({ players, you }: Props) {
+export default function FeltCards({ players, you, turnId, interactive }: Props) {
+    const { t } = useI18n();
     const start = players.findIndex(p => p.id === you);
     const seats = start < 0 ? players : [...players.slice(start), ...players.slice(0, start)];
 
     return (
-        <div className="felt-cards" aria-hidden="true">
+        <div className={`felt-cards ${interactive ? 'felt-live' : ''}`} aria-hidden="true">
             {seats.map((player, seat) => {
                 // Straight down is your own edge; the rest run round from it.
                 const angle = Math.PI / 2 + (seat * 2 * Math.PI) / seats.length;
@@ -43,18 +57,25 @@ export default function FeltCards({ players, you }: Props) {
                 // Only the direction is decided here. How far out a place
                 // sits is a layout question, so the reach lives in CSS and can
                 // differ between a phone and a table with room to spare.
+                //
+                // Facing snaps to a quarter turn. Sat at a real table people
+                // square their cards to the edge in front of them; left at the
+                // exact seat angle, a place at 45 or 72 degrees turns every
+                // card into a diamond, which reads as debris rather than as
+                // somebody's hand laid out.
+                const face = Math.round(((angle * 180) / Math.PI - 90) / 90) * 90;
                 const style = {
                     '--ux': Math.cos(angle).toFixed(4),
                     '--uy': Math.sin(angle).toFixed(4),
-                    '--face': `${(angle * 180) / Math.PI - 90}deg`,
+                    '--face': `${face}deg`,
                 } as CSSProperties;
                 // Highest note on top: a pile shows its best card.
                 const bank = [...player.bank]
                     .sort((a, b) => a.value - b.value)
                     .slice(-MAX_BANK);
 
-                return (
-                    <div key={player.id} className="felt-pile" style={style}>
+                const pile = (
+                    <div className="felt-pile" style={style}>
                         <span className="felt-props">
                             {player.sets.map(set => {
                                 const meta = colorMeta(set.color);
@@ -104,6 +125,24 @@ export default function FeltCards({ players, you }: Props) {
                             </span>
                         )}
                     </div>
+                );
+
+                // A phone has no pointer to hover with, and its own way in.
+                if (!interactive) return <Fragment key={player.id}>{pile}</Fragment>;
+                return (
+                    <HoverDetails
+                        key={player.id}
+                        sticky
+                        content={
+                            <div className="felt-board">
+                                <p className="label-caps">{t('table.their_board')}</p>
+                                <h3>{player.name}</h3>
+                                <PlayerBoard player={player} isTurn={player.id === turnId} />
+                            </div>
+                        }
+                    >
+                        {pile}
+                    </HoverDetails>
                 );
             })}
         </div>

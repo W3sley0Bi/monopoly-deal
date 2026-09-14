@@ -18,6 +18,20 @@ export function ReactionBubble({ message }: { message: ChatMessage }) {
     );
 }
 
+/**
+ * What a player just did, spoken from their seat.
+ *
+ * The log column says the same thing, but off to one side; at a real table you
+ * learn a move from the person who made it.
+ */
+export function PlayBubble({ text }: { text: string }) {
+    return (
+        <span className="seat-play" role="status">
+            {text}
+        </span>
+    );
+}
+
 export default function Reactions({
     onSend,
 }: {

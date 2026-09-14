@@ -1,6 +1,7 @@
-import { useEffect, useId, useState, type CSSProperties } from 'react';
+import { useEffect, useId, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import type { GameView } from '../types';
+import type { GameAudio } from '../game/useGameAudio';
 import { useI18n } from '../i18n';
 import { useDialogFocus } from '../game/useDialogFocus';
 import Avatar from './Avatar';
@@ -8,7 +9,7 @@ import Avatar from './Avatar';
 const COLORS = ['#ffe256', '#76d8ed', '#fc7785', '#aab1ff', '#7be3b0'];
 const INTRO_MS = 4500;
 
-function WheelReveal({ game, skewMs }: { game: GameView; skewMs: number }) {
+function WheelReveal({ game, skewMs, audio }: { game: GameView; skewMs: number; audio?: GameAudio }) {
     const { t } = useI18n();
     const focus = useDialogFocus();
     const titleId = useId();
@@ -22,6 +23,15 @@ function WheelReveal({ game, skewMs }: { game: GameView; skewMs: number }) {
         }, 80);
         return () => clearInterval(timer);
     }, [skewMs, game.starts_at_ms]);
+    // The wheel is already turning when a late joiner arrives, and starting the
+    // sound halfway through would be a tick track with no wheel behind it.
+    const spun = useRef(false);
+    useEffect(() => {
+        if (spun.current || !audio || elapsed > 400) return;
+        spun.current = true;
+        audio.play('spin');
+    }, [audio, elapsed]);
+
     const winner = game.players.find(p => p.id === game.start_sequence?.[0]) ?? game.players[0];
     const sectors = [...game.players].sort((a, b) => a.id.localeCompare(b.id));
     const angle = 360 / sectors.length;
@@ -38,7 +48,7 @@ function WheelReveal({ game, skewMs }: { game: GameView; skewMs: number }) {
         <div className={`start-wheel-order ${landed ? 'revealed' : ''}`}><p className="label-caps">{t('wheel.order')}</p><ol>{game.players.map((p, i) => <li key={p.id}><span>{i + 1}</span>{p.name}</li>)}</ol></div>
     </div></div>, document.body);
 }
-export default function StartWheel({ game, skewMs }: { game: GameView; skewMs: number }) {
+export default function StartWheel({ game, skewMs, audio }: { game: GameView; skewMs: number; audio?: GameAudio }) {
     if (!game.starts_at_ms || game.state !== 'playing') return null;
-    return <WheelReveal key={game.start_id || game.starts_at_ms} game={game} skewMs={skewMs} />;
+    return <WheelReveal key={game.start_id || game.starts_at_ms} game={game} skewMs={skewMs} audio={audio} />;
 }
