@@ -2338,19 +2338,10 @@ body.is-dragging {
         flex: 1 1 auto;
         min-height: 150px;
     }
-    .board-folded .opponent-seats {
-        flex-wrap: wrap;
-        align-content: flex-start;
-        overflow-x: hidden;
-        overflow-y: auto;
-    }
-    .board-folded .opponent-seats > .panel {
-        flex: 1 1 9.5rem;
-        width: auto;
-    }
-    .board-folded .chip-sets {
-        height: 10px;
-    }
+    /* The seats stay a sideways rail whatever the board is doing. Letting
+       them wrap into a grid turned every rival into a full-width panel and
+       swallowed the table; only the player actually taking a turn expands,
+       and that is the spotlight's job. */
 }
 .chip-sets {
     height: 4px;
@@ -2913,5 +2904,258 @@ body.is-dragging {
     .game-menu .btn {
         min-height: 40px;
         padding-inline: 12px;
+    }
+}
+
+/* ── Cards on the felt ────────────────────────────────────────────────────
+   A phone reduces every rival to a chip and leaves the middle of the table as
+   empty green — the one part of the game that looks nothing like the game.
+   These are the cards in front of each seat: no text, no handles, nothing to
+   press. A picture of state the table already holds. */
+.felt-cards {
+    /* How far a place sits from the middle. A phone keeps them tight; a table
+       with a drawn centre pushes them out past it. */
+    --reach-x: 26%;
+    --reach-y: 23%;
+    position: absolute;
+    inset: 0;
+    /* Negative, so the cards lie ON the felt: above the painted surface but
+       under the chips and the spotlight, the way they would on a real table.
+       `.arena-top` isolates, so this cannot sink through the page. */
+    z-index: -1;
+    pointer-events: none;
+    overflow: hidden;
+}
+.felt-pile {
+    position: absolute;
+    /* Parenthesised: a custom property that expands to a negative number sits
+       next to the `+`, and the grouping leaves nothing for a parser to weigh
+       up. */
+    left: calc(50% + (var(--ux) * var(--reach-x)));
+    top: calc(50% + (var(--uy) * var(--reach-y)));
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 6px;
+    width: 8.5rem;
+    /* Each place is turned to face the seat that owns it: yours upright, the
+       one across the table upside down, the sides on their ends. */
+    transform: translate(-50%, -50%) rotate(var(--face, 0deg));
+}
+.felt-props {
+    display: flex;
+    flex: 0 1 auto;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: flex-end;
+    gap: 5px 4px;
+}
+/* The bank sits beside the property, piled the way notes actually are: one
+   squared-up stack where only the top card can be read. */
+.felt-money {
+    position: relative;
+    flex-shrink: 0;
+    width: 13px;
+    /* Room above for the couple of edges that show under the top card. */
+    height: 24px;
+}
+/* A note is its whole colour, with the figure on it: at this size the band
+   that works for property reads as an unmarked rectangle. */
+.felt-money > i {
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    display: grid;
+    place-items: center;
+    width: 13px;
+    height: 19px;
+    border-radius: 2px;
+    border: 1px solid oklch(18% 0.02 210 / 0.6);
+    background: var(--c);
+    color: var(--ink);
+    font-size: 8px;
+    font-weight: 900;
+    font-style: normal;
+    line-height: 1;
+    box-shadow: 0 1px 2px oklch(10% 0.02 220 / 0.5);
+    /* Each card below the top one sits back and to the left by a hair, so the
+       pile has thickness without any of it competing to be read. */
+    transform: translate(calc(var(--d) * -1.5px), calc(var(--d) * -2px))
+        rotate(var(--r));
+}
+.felt-set {
+    display: flex;
+    align-items: flex-end;
+}
+.felt-set > i {
+    width: 13px;
+    height: 19px;
+    flex-shrink: 0;
+    border-radius: 2px;
+    border: 1px solid oklch(18% 0.02 210 / 0.6);
+    /* A colour band over a cream body reads as a property card at any size,
+       which is the whole vocabulary these need. */
+    background: linear-gradient(
+        180deg,
+        var(--c) 0 36%,
+        oklch(95% 0.012 95) 36% 100%
+    );
+    box-shadow: 0 1px 2px oklch(10% 0.02 220 / 0.5);
+    transform: rotate(var(--r));
+}
+.felt-set > i + i {
+    margin-left: -8px;
+}
+.felt-set-complete > i {
+    box-shadow:
+        0 0 0 1px var(--color-brass),
+        0 1px 3px oklch(10% 0.02 220 / 0.5);
+}
+
+/* A wide table draws its own centre — deck, discard, action space — so the
+   places sit out past it, and there is room for slightly bigger cards. */
+@media (min-width: 900px) {
+    .felt-cards {
+        --reach-x: 31%;
+        --reach-y: 26%;
+    }
+    .felt-pile {
+        width: 10rem;
+        gap: 8px;
+    }
+    .felt-set > i {
+        width: 16px;
+        height: 23px;
+    }
+    .felt-set > i + i {
+        margin-left: -10px;
+    }
+    .felt-money {
+        width: 16px;
+        height: 29px;
+    }
+    .felt-money > i {
+        width: 16px;
+        height: 23px;
+        font-size: 9px;
+    }
+}
+
+/* ── A pending action ─────────────────────────────────────────────────────
+   The card played against you and the cards you are being asked to hand over
+   sat in one undifferentiated row, so which was which had to be worked out.
+   The action stands alone at the top, ringed in red and named; your own cards
+   are a separate, labelled section underneath it. */
+.pending-header {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 9px;
+    padding-bottom: 16px;
+    text-align: center;
+    border-bottom: 1px solid oklch(100% 0 0 / 0.1);
+}
+.pending-action {
+    position: relative;
+    flex-shrink: 0;
+    margin-bottom: 4px;
+}
+.is-mine .pending-action {
+    margin-top: 6px;
+    margin-bottom: 8px;
+}
+.pending-action .card-face {
+    box-shadow:
+        0 0 0 3px var(--pending-edge),
+        0 14px 30px oklch(10% 0.02 220 / 0.55);
+}
+/* Aimed at you it is a threat; played by you it is your move. */
+.is-against {
+    --pending-edge: oklch(62% 0.21 25);
+    --pending-ink: oklch(99% 0 0);
+}
+.is-mine {
+    --pending-edge: oklch(70% 0.19 150);
+    --pending-ink: oklch(16% 0.03 210);
+}
+.pending-action-tag {
+    position: absolute;
+    left: 50%;
+    bottom: -8px;
+    transform: translateX(-50%);
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--pending-edge);
+    color: var(--pending-ink);
+    font-size: 8px;
+    font-weight: 900;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+.pending-action-title {
+    font-family: var(--font-display);
+    font-size: 21px;
+    line-height: 1.15;
+    letter-spacing: 0.02em;
+    color: var(--color-brass);
+}
+.pending-action-note {
+    font-size: 13px;
+    color: oklch(100% 0 0 / 0.7);
+}
+
+.pending-mine {
+    margin-top: 16px;
+}
+.pending-mine-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 9px;
+}
+.pending-mine-head > span:last-child {
+    font-size: 12px;
+    color: oklch(100% 0 0 / 0.55);
+}
+.pending-mine-cards {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.pending-pick {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 5px 4px 3px;
+    border-radius: 12px;
+    border: 1px solid transparent;
+    transition: background 0.15s, border-color 0.15s;
+}
+.pending-pick > span {
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: oklch(100% 0 0 / 0.45);
+}
+/* Chosen cards read as a set you are handing over, not as stray highlights. */
+.pending-pick.is-picked {
+    border-color: oklch(84% 0.16 155 / 0.6);
+    background: oklch(84% 0.16 155 / 0.12);
+}
+.pending-pick.is-picked > span {
+    color: oklch(88% 0.14 155);
+}
+@media (max-width: 599px) {
+    .pending-action-title {
+        font-size: 18px;
+    }
+    .pending-action-note {
+        font-size: 12px;
+    }
+    .pending-mine-cards {
+        gap: 6px;
     }
 }

@@ -1,7 +1,7 @@
 import type { CSSProperties } from 'react';
 import type { Card, Color, SetView } from '../types';
 import type { I18n } from '../i18n';
-import { ACTION_BLURB_KEY, colorMeta } from '../game/meta';
+import { ACTION_BLURB_KEY, colorMeta, moneyMeta } from '../game/meta';
 import { useOptionalDragLayer } from '../game/dragLayer';
 import type { DragAxis } from '../game/dragLayer';
 import { useI18n } from '../i18n';
@@ -90,6 +90,7 @@ export default function PlayingCard({
     inspectable = true,
 }: Props) {
     const { t, tCard, tColor } = useI18n();
+    const note = card.type === 'money' ? moneyMeta(card.value) : null;
     const dragLayer = useOptionalDragLayer();
     const pickUp = draggable && dragLayer ? dragLayer.begin : null;
     const interactive = Boolean(onClick);
@@ -205,9 +206,8 @@ export default function PlayingCard({
                     {
                         '--card-color': cols.length
                             ? colorMeta(activeColor ?? cols[0]).hex
-                            : card.type === 'money'
-                              ? '#42bd97'
-                              : '#f5b643',
+                            : (note?.hex ?? '#f5b643'),
+                        '--note-ink': note?.ink,
                         // A finger that pulls a card up must not also scroll
                         // the rail the card is sitting in.
                         touchAction: pickUp
@@ -267,13 +267,12 @@ export default function PlayingCard({
                             </div>
                         )}
 
-                        {card.type === 'money' && (
+                        {note && (
                             <div
-                                className="flex h-[26%] w-full items-center justify-between border-b border-emerald-900/30 px-1.5 font-black uppercase"
+                                className="flex h-[26%] w-full items-center justify-between border-b border-black/25 px-1.5 font-black uppercase"
                                 style={{
-                                    background:
-                                        'linear-gradient(180deg,#bbf7d0,#4ade80)',
-                                    color: '#04240f',
+                                    background: `linear-gradient(180deg, color-mix(in srgb, ${note.hex} 55%, white), ${note.hex})`,
+                                    color: note.ink,
                                 }}
                             >
                                 <span className="text-[0.85em] tracking-widest">
@@ -336,11 +335,12 @@ export default function PlayingCard({
                                 </span>
                             )}
 
-                            {card.type === 'money' ? (
+                            {note ? (
                                 <>
                                     <span
-                                        className="font-display text-[2.8em] leading-none text-emerald-800"
+                                        className="font-display text-[2.8em] leading-none"
                                         style={{
+                                            color: `color-mix(in srgb, ${note.hex} 78%, black)`,
                                             textShadow:
                                                 '0 1px 0 rgb(255 255 255 / 0.7)',
                                         }}

@@ -76,15 +76,28 @@ export default function PendingPanel({ view, skewMs, send }: Props) {
         />
     ) : null;
 
-    const header = (
-        <div className="flex items-center gap-3">
+    // The card that was played and the cards you are being asked to hand over
+    // sat in one undifferentiated row, so it was not obvious which was which.
+    // The action now stands alone, named, and takes a side: a card aimed at
+    // you is a red threat over the table, and one you played is your own
+    // green move, resting at your edge of it.
+    const byMe = pd.by_id === view.you;
+    const actionCard = (
+        <div className="pending-action">
             <PlayingCard card={pd.card} size="sm" />
-            <div>
-                <p className="font-display text-xl tracking-wide text-brass">
-                    {(pd.action && ACTION_ICON[pd.action]) || '💸'} {t(pd.label_key, pd.label_args)}
-                </p>
-                <p className="text-sm text-white/70">{describe(view, i18n)}</p>
-            </div>
+            <span className="pending-action-tag">
+                {t(byMe ? 'pending.ui.your_play' : 'pending.ui.action_card')}
+            </span>
+        </div>
+    );
+    const header = (
+        <div className={`pending-header ${byMe ? 'is-mine' : 'is-against'}`}>
+            {!byMe && actionCard}
+            <p className="pending-action-title">
+                {(pd.action && ACTION_ICON[pd.action]) || '💸'} {t(pd.label_key, pd.label_args)}
+            </p>
+            <p className="pending-action-note">{describe(view, i18n)}</p>
+            {byMe && actionCard}
         </div>
     );
 
@@ -233,19 +246,31 @@ export default function PendingPanel({ view, skewMs, send }: Props) {
             {myAssets.length === 0 ? (
                 <p className="mt-4 text-sm text-white/60">{t('pending.ui.nothing_in_play')}</p>
             ) : (
-                <div className="mt-4 flex flex-wrap gap-2">
-                    {myAssets.map(({ card, from }) => (
-                        <div key={card.id} className="flex flex-col items-center gap-1">
-                            <PlayingCard
-                                card={card}
-                                size="sm"
-                                selected={picked.has(card.id)}
-                                onClick={() => toggle(card.id)}
-                            />
-                            <span className="text-[0.6rem] uppercase tracking-wide text-white/45">{from}</span>
-                        </div>
-                    ))}
-                </div>
+                <section className="pending-mine">
+                    <p className="pending-mine-head">
+                        <span className="label-caps">{t('pending.ui.your_cards')}</span>
+                        <span>{t('pending.ui.selected', {
+                            selected: money(t, selectedTotal),
+                            owed: money(t, owed),
+                        })}</span>
+                    </p>
+                    <div className="pending-mine-cards">
+                        {myAssets.map(({ card, from }) => (
+                            <div
+                                key={card.id}
+                                className={`pending-pick ${picked.has(card.id) ? 'is-picked' : ''}`}
+                            >
+                                <PlayingCard
+                                    card={card}
+                                    size="sm"
+                                    selected={picked.has(card.id)}
+                                    onClick={() => toggle(card.id)}
+                                />
+                                <span>{from}</span>
+                            </div>
+                        ))}
+                    </div>
+                </section>
             )}
         </Modal>
     );

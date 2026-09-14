@@ -8,6 +8,10 @@ export type GameAudioCue =
     | 'bank'
     | 'turn'
     | 'action'
+    /** An attack you are launching. */
+    | 'strike'
+    /** An attack landing on you. */
+    | 'threat'
     | 'payment'
     | 'shuffle'
     | 'error'
@@ -140,6 +144,21 @@ class AudioEngine {
                 this.tone(79, 0.1, 0.06, now, 'square');
                 this.tone(86, 0.12, 0.045, now + 0.07, 'square');
                 this.tone(91, 0.2, 0.04, now + 0.14, 'triangle');
+                break;
+            // An attack is the loudest thing that happens at this table, and
+            // which side of it you are on should be audible without looking.
+            case 'strike':
+                this.noise(0.06, 0.05, now, 700);
+                this.tone(64, 0.09, 0.075, now, 'sawtooth');
+                this.tone(71, 0.1, 0.07, now + 0.06, 'square');
+                this.tone(76, 0.14, 0.065, now + 0.12, 'square');
+                this.tone(83, 0.26, 0.055, now + 0.19, 'triangle');
+                break;
+            case 'threat':
+                this.noise(0.09, 0.04, now, 450);
+                this.tone(59, 0.14, 0.075, now, 'sawtooth');
+                this.tone(55, 0.16, 0.07, now + 0.1, 'sawtooth');
+                this.tone(50, 0.34, 0.06, now + 0.21, 'square');
                 break;
             case 'payment':
                 this.tone(88, 0.08, 0.055, now, 'sine');
@@ -380,6 +399,25 @@ export function useGameAudio(game: GameView | null, radio?: RadioState | null): 
             const cue = cueForLog(signature.slice(0, signature.indexOf(':')));
             if (cue) play(cue);
         });
+    }, [game, play]);
+
+    // The log says an attack happened; only the pending state says whose it
+    // is. It is announced from here so the two sides of one get two sounds.
+    const previousPending = useRef<string | null>(null);
+    useEffect(() => {
+        const pending = game?.pending;
+        if (!game || !pending) {
+            previousPending.current = null;
+            return;
+        }
+        const signature = `${game.id}:${pending.kind}:${pending.by_id}:${pending.card.id}`;
+        if (previousPending.current === signature) return;
+        const first = previousPending.current === null;
+        previousPending.current = signature;
+        // Joining a table mid-action should not open with a war cry.
+        if (first && !game.log.length) return;
+        if (pending.by_id === game.you) play('strike');
+        else if (pending.targets.some(target => target.player_id === game.you && !target.settled)) play('threat');
     }, [game, play]);
 
     useEffect(() => () => engine.current?.dispose(), []);

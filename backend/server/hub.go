@@ -344,6 +344,11 @@ func (h *Hub) createRoomLocked(c *Client, msg ClientMessage) error {
 			return err
 		}
 	}
+	if msg.RespondSeconds != nil {
+		if err := r.Game.SetRespondSeconds(*msg.RespondSeconds); err != nil {
+			return err
+		}
+	}
 	if msg.BotDifficulty != "" {
 		if err := r.Game.SetBotDifficulty(msg.BotDifficulty); err != nil {
 			return err
@@ -463,6 +468,11 @@ func (h *Hub) handleRoomLocked(c *Client, msg ClientMessage) error {
 		}
 		if msg.BotDifficulty != "" {
 			if err := g.SetBotDifficulty(msg.BotDifficulty); err != nil {
+				return err
+			}
+		}
+		if msg.RespondSeconds != nil {
+			if err := g.SetRespondSeconds(*msg.RespondSeconds); err != nil {
 				return err
 			}
 		}
@@ -685,13 +695,14 @@ func (h *Hub) snapshotLocked() []outbound {
 			rooms = append(rooms, r.summary(c.playerID, live[r.ID]))
 		}
 		batch = append(batch, outbound{c, ServerMessage{Type: "home", Payload: HomeView{
-			You:          c.playerID,
-			Name:         c.name,
-			Rooms:        rooms,
-			Modes:        modeInfos(),
-			TurnOptions:  game.TurnSecondOptions,
-			Difficulties: game.Difficulties,
-			MaxPlayers:   game.MaxPlayers,
+			You:            c.playerID,
+			Name:           c.name,
+			Rooms:          rooms,
+			Modes:          modeInfos(),
+			TurnOptions:    game.TurnSecondOptions,
+			RespondOptions: game.RespondSecondOptions,
+			Difficulties:   game.Difficulties,
+			MaxPlayers:     game.MaxPlayers,
 		}}})
 	}
 	return batch

@@ -72,10 +72,15 @@ func ValidDifficulty(d Difficulty) bool {
 // TurnSecondOptions are the turn lengths an owner may pick. 0 means no limit.
 var TurnSecondOptions = []int{0, 30, 60, 120}
 
+// RespondSecondOptions are the response windows an owner may pick. 0 means no
+// limit.
+var RespondSecondOptions = []int{0, 10, 15, 30}
+
 const (
-	// PaymentGraceSeconds is how long a debtor gets to choose which cards to
-	// hand over before the server picks for them. It applies even when the
-	// table has no turn timer, since a debt blocks everyone else.
+	// PaymentGraceSeconds is the default answer window: how long a player gets
+	// to choose which cards to hand over before the server picks for them. It
+	// applies even when the table has no turn timer, since a debt blocks
+	// everyone else. Owners may change it with SetRespondSeconds.
 	PaymentGraceSeconds = 10
 
 	MaxPlayers    = 5
@@ -212,6 +217,9 @@ type Target struct {
 	Amount   int    `json:"amount"`
 	// Responder is the player who must act next on this target.
 	Responder string `json:"responder"`
+	// DeadlineMS is when THIS target's answer is due, in unix millis. Each one
+	// runs on its own clock from the moment the card hit the table.
+	DeadlineMS int64 `json:"deadline_ms,omitempty"`
 	// Cancelled flips with every Just Say No played on this target.
 	Cancelled bool   `json:"cancelled"`
 	Settled   bool   `json:"settled"`
@@ -271,6 +279,10 @@ type Game struct {
 
 	Mode        Mode `json:"mode"`
 	TurnSeconds int  `json:"turn_seconds"`
+	// RespondSeconds is how long each player gets to answer an action aimed at
+	// them. Every target's window runs from when the card was played, so one
+	// player answering never shortens or extends anybody else's.
+	RespondSeconds int `json:"respond_seconds"`
 	// BotDifficulty is how hard every robot at this table plays.
 	BotDifficulty Difficulty `json:"bot_difficulty"`
 	// DeadlineMS is when the current turn or response expires, in unix millis.
@@ -299,13 +311,14 @@ type Game struct {
 
 func NewGame(id string) *Game {
 	return &Game{
-		ID:            id,
-		State:         StateWaiting,
-		Deck:          GenerateDeck(),
-		Players:       []*Player{},
-		Log:           []LogEntry{},
-		Mode:          ModeClassic,
-		BotDifficulty: DifficultyNormal,
+		ID:             id,
+		State:          StateWaiting,
+		Deck:           GenerateDeck(),
+		Players:        []*Player{},
+		Log:            []LogEntry{},
+		Mode:           ModeClassic,
+		BotDifficulty:  DifficultyNormal,
+		RespondSeconds: PaymentGraceSeconds,
 	}
 }
 
@@ -343,6 +356,21 @@ func (g *Game) Configure(mode Mode, turnSeconds int) error {
 	g.Mode = mode
 	g.TurnSeconds = turnSeconds
 	return nil
+}
+
+// SetRespondSeconds changes how long each player gets to answer an action.
+// Lobby only, so nobody's clock moves under them mid-game.
+func (g *Game) SetRespondSeconds(secs int) error {
+	if g.State != StateWaiting {
+		return fault("err.respond_lobby_only", "the response time can only change before the game starts")
+	}
+	for _, s := range RespondSecondOptions {
+		if s == secs {
+			g.RespondSeconds = secs
+			return nil
+		}
+	}
+	return fault("err.bad_respond_length", "unsupported response length")
 }
 
 // SetBotDifficulty changes how hard the robots play. Lobby only, so a game
@@ -665,9 +693,74 @@ func (g *Game) startTurnWithDraw(draw bool) {
 // deadlineSeconds is the window length for the thing we are waiting on.
 func (g *Game) deadlineSeconds(kind string) int {
 	if kind == "respond" && g.Pending != nil && g.Pending.Kind == PendingPayment {
-		return PaymentGraceSeconds
+		return g.respondSeconds()
 	}
 	return g.TurnSeconds
+}
+
+// respondSeconds is the per-player answer window this table was set up with.
+func (g *Game) respondSeconds() int {
+	if g.RespondSeconds < 0 {
+		return 0
+	}
+	return g.RespondSeconds
+}
+
+// stampTargets starts every target's own clock. Called once, when the action
+// is played: that is the moment all of them are answering from.
+func (g *Game) stampTargets(pd *Pending) {
+	secs := g.respondSeconds()
+	if secs <= 0 {
+		return
+	}
+	due := g.now().Add(time.Duration(secs) * time.Second).UnixMilli()
+	for _, t := range pd.Targets {
+		t.DeadlineMS = due
+	}
+}
+
+// restampTarget gives one target a fresh window, for when a Just Say No hands
+// the decision to somebody who has not had a chance to think about it yet.
+func (g *Game) restampTarget(t *Target) {
+	secs := g.respondSeconds()
+	if secs <= 0 {
+		t.DeadlineMS = 0
+		return
+	}
+	t.DeadlineMS = g.now().Add(time.Duration(secs) * time.Second).UnixMilli()
+}
+
+// nextTargetDeadline is the soonest answer still outstanding, which is when
+// the table next has to do something about a target that ran out of time.
+func (g *Game) nextTargetDeadline() int64 {
+	var soonest int64
+	if g.Pending == nil {
+		return 0
+	}
+	for _, t := range g.Pending.Targets {
+		if t.Settled || t.DeadlineMS == 0 {
+			continue
+		}
+		if soonest == 0 || t.DeadlineMS < soonest {
+			soonest = t.DeadlineMS
+		}
+	}
+	return soonest
+}
+
+// TargetDeadline is the answer due from one player, for their own countdown.
+// Zero means this player is not being waited on, or the table has no limit.
+func (g *Game) TargetDeadline(playerID string) int64 {
+	if g.Pending == nil {
+		return 0
+	}
+	for _, t := range g.Pending.Targets {
+		if t.Settled || t.Responder != playerID {
+			continue
+		}
+		return t.DeadlineMS
+	}
+	return 0
 }
 
 func (g *Game) clearDeadline() {
@@ -710,9 +803,16 @@ func (g *Game) setDeadline(kind string) {
 		g.DeadlineSeconds = g.TurnSeconds
 		return
 	}
-	g.DeadlineMS = g.now().Add(time.Duration(secs) * time.Second).UnixMilli()
+	// The table's clock is only ever the soonest outstanding answer. Each
+	// target owns its own; this is the tick that acts on whichever runs out
+	// first.
+	g.DeadlineMS = g.nextTargetDeadline()
 	g.DeadlineKind = kind
 	g.DeadlineSeconds = secs
+	if g.DeadlineMS == 0 {
+		g.DeadlineKind = ""
+		g.DeadlineSeconds = 0
+	}
 }
 
 // PostAction re-checks the win condition and the countdown. The server calls it
@@ -731,9 +831,14 @@ func (g *Game) PostAction() {
 			if g.paymentPausedAt.IsZero() {
 				g.paymentPausedAt = g.now()
 			}
-			// Payment pauses the turn clock and gets its own grace window.
-			if g.DeadlineKind != "respond" || g.DeadlineMS == 0 {
-				g.setDeadline("respond")
+			// Payment pauses the turn clock; each target answers on the
+			// window it was given when the card was played.
+			g.DeadlineMS = g.nextTargetDeadline()
+			g.DeadlineKind = "respond"
+			g.DeadlineSeconds = g.respondSeconds()
+			if g.DeadlineMS == 0 {
+				g.DeadlineKind = ""
+				g.DeadlineSeconds = 0
 			}
 			return
 		}
@@ -789,12 +894,16 @@ func (g *Game) Tick(now time.Time) bool {
 	}
 
 	if pd := g.Pending; pd != nil {
-		// Answer for whoever is holding things up.
+		// Answer only for the players whose own window has run out. Everybody
+		// else is still inside the time they were given when the card landed.
 		for _, t := range append([]*Target{}, pd.Targets...) {
 			if g.Pending == nil {
 				break
 			}
 			if t.Settled {
+				continue
+			}
+			if t.DeadlineMS != 0 && now.UnixMilli() < t.DeadlineMS {
 				continue
 			}
 			if t.Responder == pd.ByID {

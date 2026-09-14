@@ -96,6 +96,8 @@ export interface GameView {
     mode: Mode;
     mode_label: string;
     turn_seconds: number;
+    /** Each player's own window to answer an action aimed at them. */
+    respond_seconds: number;
     bot_difficulty: Difficulty;
     /** Unix ms when the turn or response expires; 0 means no limit. */
     deadline_ms: number;
@@ -174,6 +176,7 @@ export interface RoomView {
     seats_free: number;
     modes: ModeInfo[];
     turn_options: number[];
+    respond_options: number[];
     difficulties: Difficulty[];
     game: GameView;
     radio: RadioState;
@@ -211,6 +214,7 @@ export interface HomeView {
     rooms: RoomSummary[];
     modes: ModeInfo[];
     turn_options: number[];
+    respond_options: number[];
     difficulties: Difficulty[];
     max_players: number;
 }
@@ -232,6 +236,7 @@ export interface ClientMessage {
     private?: boolean;
     mode?: Mode;
     turn_seconds?: number;
+    respond_seconds?: number;
     as_spectator?: boolean;
     bot_difficulty?: Difficulty;
     /** Robot seats to fill when opening a table. */

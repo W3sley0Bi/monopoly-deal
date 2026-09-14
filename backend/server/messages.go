@@ -59,7 +59,10 @@ type ClientMessage struct {
 	Private     bool      `json:"private,omitempty"`
 	Mode        game.Mode `json:"mode,omitempty"`
 	TurnSeconds int       `json:"turn_seconds,omitempty"`
-	AsSpectator bool      `json:"as_spectator,omitempty"`
+	// RespondSeconds is a pointer because 0 is a real choice here — no limit —
+	// and has to be told apart from the field being left out.
+	RespondSeconds *int `json:"respond_seconds,omitempty"`
+	AsSpectator    bool `json:"as_spectator,omitempty"`
 	// Bots is how many robot seats to fill when opening a table.
 	Bots int `json:"bots,omitempty"`
 	// AutoStart deals the cards as soon as the table is open, for solo play.
@@ -187,26 +190,28 @@ type PlayerView struct {
 
 // GameView is the table as one player sees it.
 type GameView struct {
-	ID            string          `json:"id"`
-	You           string          `json:"you"`
-	Players       []PlayerView    `json:"players"`
-	DeckCount     int             `json:"deck_count"`
-	DiscardCount  int             `json:"discard_count"`
-	DiscardTop    *game.Card      `json:"discard_top"`
-	CurrentTurn   int             `json:"current_turn"`
-	State         game.GameState  `json:"state"`
-	WinnerID      string          `json:"winner_id,omitempty"`
-	PlaysLeft     int             `json:"plays_left"`
-	Pending       *game.Pending   `json:"pending"`
-	Log           []game.LogEntry `json:"log"`
-	SetSizes      map[string]int  `json:"set_sizes"`
-	Colors        []game.Color    `json:"colors"`
-	Mode          game.Mode       `json:"mode"`
-	ModeLabel     string          `json:"mode_label"`
-	TurnSeconds   int             `json:"turn_seconds"`
-	BotDifficulty game.Difficulty `json:"bot_difficulty"`
-	DeadlineMS    int64           `json:"deadline_ms"`
-	DeadlineKind  string          `json:"deadline_kind,omitempty"`
+	ID           string          `json:"id"`
+	You          string          `json:"you"`
+	Players      []PlayerView    `json:"players"`
+	DeckCount    int             `json:"deck_count"`
+	DiscardCount int             `json:"discard_count"`
+	DiscardTop   *game.Card      `json:"discard_top"`
+	CurrentTurn  int             `json:"current_turn"`
+	State        game.GameState  `json:"state"`
+	WinnerID     string          `json:"winner_id,omitempty"`
+	PlaysLeft    int             `json:"plays_left"`
+	Pending      *game.Pending   `json:"pending"`
+	Log          []game.LogEntry `json:"log"`
+	SetSizes     map[string]int  `json:"set_sizes"`
+	Colors       []game.Color    `json:"colors"`
+	Mode         game.Mode       `json:"mode"`
+	ModeLabel    string          `json:"mode_label"`
+	TurnSeconds  int             `json:"turn_seconds"`
+	// RespondSeconds is each player's own window to answer an action.
+	RespondSeconds int             `json:"respond_seconds"`
+	BotDifficulty  game.Difficulty `json:"bot_difficulty"`
+	DeadlineMS     int64           `json:"deadline_ms"`
+	DeadlineKind   string          `json:"deadline_kind,omitempty"`
 	// DeadlineSeconds is the length of the current countdown window.
 	DeadlineSeconds int `json:"deadline_seconds"`
 	// NowMS lets the client correct for clock skew when drawing the countdown.
@@ -220,23 +225,24 @@ type GameView struct {
 
 // RoomView is everything a client in a room needs.
 type RoomView struct {
-	ID           string            `json:"id"`
-	Name         string            `json:"name"`
-	Private      bool              `json:"private"`
-	InviteCode   string            `json:"invite_code"`
-	OwnerID      string            `json:"owner_id"`
-	OwnerName    string            `json:"owner_name"`
-	IsOwner      bool              `json:"is_owner"`
-	You          string            `json:"you"`
-	YouSeated    bool              `json:"you_seated"`
-	YouRequested bool              `json:"you_requested"`
-	Spectators   []Seat            `json:"spectators"`
-	Requests     []Seat            `json:"requests"`
-	SeatsFree    int               `json:"seats_free"`
-	Modes        []ModeInfo        `json:"modes"`
-	TurnOptions  []int             `json:"turn_options"`
-	Difficulties []game.Difficulty `json:"difficulties"`
-	Game         GameView          `json:"game"`
+	ID             string            `json:"id"`
+	Name           string            `json:"name"`
+	Private        bool              `json:"private"`
+	InviteCode     string            `json:"invite_code"`
+	OwnerID        string            `json:"owner_id"`
+	OwnerName      string            `json:"owner_name"`
+	IsOwner        bool              `json:"is_owner"`
+	You            string            `json:"you"`
+	YouSeated      bool              `json:"you_seated"`
+	YouRequested   bool              `json:"you_requested"`
+	Spectators     []Seat            `json:"spectators"`
+	Requests       []Seat            `json:"requests"`
+	SeatsFree      int               `json:"seats_free"`
+	Modes          []ModeInfo        `json:"modes"`
+	TurnOptions    []int             `json:"turn_options"`
+	RespondOptions []int             `json:"respond_options"`
+	Difficulties   []game.Difficulty `json:"difficulties"`
+	Game           GameView          `json:"game"`
 
 	Radio RadioState `json:"radio"`
 
@@ -284,13 +290,14 @@ type RoomSummary struct {
 
 // HomeView is the lobby outside any room.
 type HomeView struct {
-	You          string            `json:"you"`
-	Name         string            `json:"name"`
-	Rooms        []RoomSummary     `json:"rooms"`
-	Modes        []ModeInfo        `json:"modes"`
-	TurnOptions  []int             `json:"turn_options"`
-	Difficulties []game.Difficulty `json:"difficulties"`
-	MaxPlayers   int               `json:"max_players"`
+	You            string            `json:"you"`
+	Name           string            `json:"name"`
+	Rooms          []RoomSummary     `json:"rooms"`
+	Modes          []ModeInfo        `json:"modes"`
+	TurnOptions    []int             `json:"turn_options"`
+	RespondOptions []int             `json:"respond_options"`
+	Difficulties   []game.Difficulty `json:"difficulties"`
+	MaxPlayers     int               `json:"max_players"`
 }
 
 // gameView renders the game from one seat. Pass an empty id for spectators.
@@ -316,10 +323,19 @@ func gameView(g *game.Game, you string) GameView {
 		DeadlineMS:      g.DeadlineMS,
 		DeadlineKind:    g.DeadlineKind,
 		DeadlineSeconds: g.DeadlineSeconds,
+		RespondSeconds:  g.RespondSeconds,
 		StartSequence:   append([]string{}, g.StartSequence...),
 		StartID:         g.StartID,
 		StartsAtMS:      g.StartAtMS,
 		NowMS:           time.Now().UnixMilli(),
+	}
+	// The table's clock is the soonest answer owed by anyone; a player's own
+	// countdown has to be their own answer, or four people watching one debtor
+	// would all see a clock that is not theirs.
+	if you != "" && v.DeadlineKind == "respond" {
+		if due := g.TargetDeadline(you); due != 0 {
+			v.DeadlineMS = due
+		}
 	}
 	if g.Log != nil {
 		v.Log = g.Log

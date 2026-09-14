@@ -553,3 +553,128 @@ func TestScheduledRandomStartRevealsBeforeFirstTurn(t *testing.T) {
 		t.Fatal("current turn does not match the wheel's first seat")
 	}
 }
+
+// One debtor paying used to zero the table's deadline, which minted a fresh
+// full window for everybody still deciding. Each target answers on its own
+// clock, started when the card was played.
+func TestEachTargetKeepsItsOwnResponseWindow(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0)
+	g := NewGame("t")
+	g.SetClock(func() time.Time { return now })
+	g.AddPlayer("a", "Alice")
+	g.AddPlayer("b", "Bob")
+	g.AddPlayer("c", "Carol")
+	if err := g.Configure(ModeClassic, 0); err != nil {
+		t.Fatal(err)
+	}
+	g.Start()
+
+	for _, id := range []string{"b", "c"} {
+		p := g.Player(id)
+		p.Hand = []Card{}
+		p.Bank = []Card{{ID: generateID(), Type: CardTypeMoney, Name: "$5M", Value: 5}}
+	}
+
+	h := give(g, "a", Card{Type: CardTypeAction, Action: ActionBirthday, Name: "Birthday", Value: 2})
+	g.PlaysLeft = 3
+	if err := g.PlayAction("a", h[0].ID, ActionOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	g.PostAction()
+
+	if g.Pending == nil || len(g.Pending.Targets) != 2 {
+		t.Fatalf("expected two debtors, got %+v", g.Pending)
+	}
+	due := now.Add(PaymentGraceSeconds * time.Second).UnixMilli()
+	for _, target := range g.Pending.Targets {
+		if target.DeadlineMS != due {
+			t.Fatalf("%s answers at %d, want %d", target.PlayerID, target.DeadlineMS, due)
+		}
+	}
+
+	// Bob pays with eight seconds gone. Carol's clock must not move.
+	now = now.Add(8 * time.Second)
+	bob := g.Player("b")
+	if err := g.Respond("b", false, []string{bob.Bank[0].ID}); err != nil {
+		t.Fatal(err)
+	}
+	g.PostAction()
+
+	carol := g.Pending.target("c")
+	if carol == nil || carol.Settled {
+		t.Fatal("Carol should still owe")
+	}
+	if carol.DeadlineMS != due {
+		t.Fatalf("Bob paying moved Carol's deadline to %d, want %d", carol.DeadlineMS, due)
+	}
+	if g.DeadlineMS != due {
+		t.Fatalf("table clock is %d, want the soonest outstanding answer %d", g.DeadlineMS, due)
+	}
+
+	// Two seconds later Carol is out of time, on the original window.
+	now = now.Add(3 * time.Second)
+	if !g.Tick(now) {
+		t.Fatal("Carol's own window should have expired")
+	}
+	if g.Pending != nil {
+		t.Fatalf("debt should be settled, still pending: %+v", g.Pending)
+	}
+}
+
+// The window is the table's to choose before anyone sits down.
+func TestRespondSecondsIsConfigurable(t *testing.T) {
+	g := newTwoPlayer(t)
+	g.Terminate("a")
+	if g.RespondSeconds != PaymentGraceSeconds {
+		t.Fatalf("default window is %d, want %d", g.RespondSeconds, PaymentGraceSeconds)
+	}
+	if err := g.SetRespondSeconds(7); err == nil {
+		t.Fatal("7 seconds is not on the menu and should be refused")
+	}
+	for _, secs := range RespondSecondOptions {
+		if err := g.SetRespondSeconds(secs); err != nil {
+			t.Fatalf("%ds should be allowed: %v", secs, err)
+		}
+	}
+	g.Start()
+	if err := g.SetRespondSeconds(30); err == nil {
+		t.Fatal("the window must not change once the game is running")
+	}
+}
+
+// No limit means nobody is ever answered for.
+func TestNoResponseLimitNeverAutoPays(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0)
+	g := NewGame("t")
+	g.SetClock(func() time.Time { return now })
+	g.AddPlayer("a", "Alice")
+	g.AddPlayer("b", "Bob")
+	if err := g.Configure(ModeClassic, 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := g.SetRespondSeconds(0); err != nil {
+		t.Fatal(err)
+	}
+	g.Start()
+
+	b := g.Player("b")
+	b.Hand = []Card{}
+	b.Bank = []Card{{ID: generateID(), Type: CardTypeMoney, Name: "$5M", Value: 5}}
+
+	h := give(g, "a", Card{Type: CardTypeAction, Action: ActionDebtCollector, Name: "Debt Collector", Value: 3})
+	g.PlaysLeft = 3
+	if err := g.PlayAction("a", h[0].ID, ActionOptions{TargetPlayerID: "b"}); err != nil {
+		t.Fatal(err)
+	}
+	g.PostAction()
+
+	if g.DeadlineMS != 0 {
+		t.Fatalf("no limit should leave no deadline, got %d", g.DeadlineMS)
+	}
+	if g.Tick(now.Add(10 * time.Minute)) {
+		t.Fatal("nothing should expire when the table has no response limit")
+	}
+	if g.Pending == nil {
+		t.Fatal("the debt should still be waiting on Bob")
+	}
+}

@@ -93,6 +93,8 @@ const home: Catalog = {
     'lobby.mode_soon': '🔒 presto',
     'lobby.turn_timer': 'Timer del turno',
     'lobby.turn_hint': 'Allo scadere del tempo il turno finisce da solo; un debito in sospeso viene pagato con la banca prima che con le proprietà.',
+    'lobby.respond_timer': 'Tempo per rispondere',
+    'lobby.respond_hint': 'Ogni giocatore ha questo tempo per rispondere a una carta giocata contro di lui, a partire da quando è stata giocata. La risposta di uno non cambia mai il tempo degli altri.',
     'lobby.watching': 'Spettatori ({n})',
     'lobby.remove_from_table': 'Rimuovi dal tavolo',
     'lobby.waiting_seat': 'In attesa di un posto',

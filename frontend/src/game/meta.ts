@@ -23,6 +23,25 @@ export const COLORS: Record<Exclude<Color, 'all'>, ColorMeta> = {
     utility: { label: 'Utility', short: 'Util', hex: '#94a3b8', ink: '#0f172a' },
 };
 
+/**
+ * Denominations are told apart by colour before anyone reads the figure, so
+ * every bank note carries its own. Faces, mini cards on the felt and swatches
+ * all draw from here, and nowhere else.
+ */
+const MONEY: Record<number, { hex: string; ink: string }> = {
+    1: { hex: '#9ca3af', ink: '#111827' },
+    2: { hex: '#facc15', ink: '#2b2200' },
+    3: { hex: '#facc15', ink: '#2b2200' },
+    4: { hex: '#7dd3fc', ink: '#0b2b3a' },
+    5: { hex: '#a855f7', ink: '#fff' },
+    10: { hex: '#dc2626', ink: '#fff' },
+};
+
+/** The note colour for a value, falling back for any denomination not listed. */
+export function moneyMeta(value: number): { hex: string; ink: string } {
+    return MONEY[value] ?? { hex: '#42bd97', ink: '#04240f' };
+}
+
 export function colorMeta(c?: Color): ColorMeta {
     if (!c || c === 'all') return { label: 'Any Colour', short: 'Any', hex: '#a855f7', ink: '#fff' };
     return COLORS[c] ?? { label: c, short: c, hex: '#64748b', ink: '#fff' };

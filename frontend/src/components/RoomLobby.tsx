@@ -36,6 +36,12 @@ export default function RoomLobby({ audio, room, error, call, send, onLeave }: P
     // the two it is not changing.
     const setMode = (mode: Mode) => send({ type: 'set_options', mode, turn_seconds: g.turn_seconds });
     const setTimer = (seconds: number) => send({ type: 'set_options', mode: g.mode, turn_seconds: seconds });
+    const setRespond = (seconds: number) => send({
+        type: 'set_options',
+        mode: g.mode,
+        turn_seconds: g.turn_seconds,
+        respond_seconds: seconds,
+    });
     const setDifficulty = (level: Difficulty) => send({
         type: 'set_options',
         mode: g.mode,
@@ -213,6 +219,24 @@ export default function RoomLobby({ audio, room, error, call, send, onLeave }: P
                 </div>
                 <p className="mt-2 text-xs text-white/45">
                     {t('lobby.turn_hint')}
+                </p>
+
+                <p className="label-caps mb-2 mt-4">{t('lobby.respond_timer')}</p>
+                <div className="flex flex-wrap gap-2">
+                    {(room.respond_options ?? [0, 10, 15, 30]).map(s => (
+                        <button
+                            key={s}
+                            type="button"
+                            disabled={!owner}
+                            onClick={() => setRespond(s)}
+                            className={`btn !py-1.5 !text-sm ${g.respond_seconds === s ? 'btn-gold' : 'btn-ghost'} ${owner ? '' : 'cursor-not-allowed'}`}
+                        >
+                            {formatTurn(t, s)}
+                        </button>
+                    ))}
+                </div>
+                <p className="mt-2 text-xs text-white/45">
+                    {t('lobby.respond_hint')}
                 </p>
             </section>
 

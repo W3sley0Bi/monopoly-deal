@@ -199,6 +199,7 @@ func (g *Game) startPayment(p *Player, c Card, targets []*Player, amount int, la
 		})
 	}
 	g.Pending = pd
+	g.stampTargets(pd)
 	if len(pd.Targets) == len(g.Players)-1 && len(pd.Targets) > 1 {
 		g.log("log.charge_everyone", "name", p.Name, "card", c.Key, "amount", amount)
 	} else {
@@ -394,12 +395,15 @@ func (g *Game) Respond(playerID string, sayNo bool, cardIDs []string) error {
 		} else {
 			t.Responder = pd.ByID
 		}
+		// The decision just moved to somebody who has not had a chance to
+		// think about it, so their window starts now.
+		g.restampTarget(t)
 		key := "log.just_say_no_back_on"
 		if t.Cancelled {
 			key = "log.just_say_no_cancelled"
 		}
 		g.log(key, "name", p.Name, "label", pd.LabelKey, "label_args", pd.LabelArgs)
-		g.restartPaymentClock()
+		g.syncPaymentClock()
 		g.settleAuto()
 		return nil
 	}
@@ -409,7 +413,7 @@ func (g *Game) Respond(playerID string, sayNo bool, cardIDs []string) error {
 		t.Settled = true
 		t.Note = "blocked"
 		g.log("log.accepts_block", "name", p.Name)
-		g.restartPaymentClock()
+		g.syncPaymentClock()
 		g.settleAuto()
 		return nil
 	}
@@ -421,22 +425,26 @@ func (g *Game) Respond(playerID string, sayNo bool, cardIDs []string) error {
 			return err
 		}
 		t.Settled = true
-		g.restartPaymentClock()
+		g.syncPaymentClock()
 		g.settleAuto()
 		return nil
 	}
 	// Steals and swaps: accepting lets the effect through.
 	t.Settled = true
-	g.restartPaymentClock()
+	g.syncPaymentClock()
 	g.settleAuto()
 	return nil
 }
 
-// restartPaymentClock gives each debtor a full payment grace window. It never
-// touches the turn deadline, which remains paused underneath the payment.
-func (g *Game) restartPaymentClock() {
+// syncPaymentClock points the table's clock at the soonest answer still owed.
+//
+// It used to zero the deadline, which made PostAction mint a fresh full window
+// every time anybody responded: one player paying restarted the countdown for
+// everyone still deciding. Each target now carries its own deadline, stamped
+// when the card was played, and this only picks out the next one to expire.
+func (g *Game) syncPaymentClock() {
 	if g.Pending != nil && g.Pending.Kind == PendingPayment {
-		g.DeadlineMS = 0
+		g.DeadlineMS = g.nextTargetDeadline()
 	}
 }
 

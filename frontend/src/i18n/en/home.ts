@@ -93,6 +93,8 @@ const home: Catalog = {
     'lobby.mode_soon': '🔒 soon',
     'lobby.turn_timer': 'Turn timer',
     'lobby.turn_hint': 'On timeout the turn ends by itself; a pending debt is auto-paid from the bank before any property.',
+    'lobby.respond_timer': 'Time to answer',
+    'lobby.respond_hint': 'Each player gets this long to answer an action aimed at them, counted from when the card was played. One answer never changes the clock of anyone else.',
     'lobby.watching': 'Watching ({n})',
     'lobby.remove_from_table': 'Remove from table',
     'lobby.waiting_seat': 'Waiting for a seat',

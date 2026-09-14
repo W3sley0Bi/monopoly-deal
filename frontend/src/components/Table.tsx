@@ -25,6 +25,7 @@ import ActiveBoard from './ActiveBoard';
 import Avatar from './Avatar';
 import CallControls from './CallControls';
 import DropZone from './DropZone';
+import FeltCards from './FeltCards';
 import OpponentPanel from './OpponentPanel';
 import PendingPanel from './PendingPanel';
 import PlayerBoard from './PlayerBoard';
@@ -660,6 +661,10 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
                     <div className="table-field flex min-h-0 min-w-0 flex-1 flex-col">
                         <div className={`arena-top seats-${foes.length}`}>
                             <div className="arena-surface" aria-hidden="true"><div className="arena-orbit" /><span className="table-wordmark">MONOPOLY <b>DEAL</b></span></div>
+                            {/* What the table would look like if you were
+                                sitting at it: everyone's played property, in
+                                front of the seat that played it. */}
+                            <FeltCards players={g.players} you={g.you} />
                             {/* ── Opponents ───────────────────────────── */}
                             <section data-tour="opponents" className={`opponent-seats ${narrow ? 'rail gap-2 pb-1' : ''}`}>
                                 {narrow && deckChip}

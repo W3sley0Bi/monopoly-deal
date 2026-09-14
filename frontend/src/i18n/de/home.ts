@@ -94,6 +94,8 @@ const home: Catalog = {
     'lobby.mode_soon': '🔒 bald',
     'lobby.turn_timer': 'Rundentimer',
     'lobby.turn_hint': 'Bei Zeitablauf endet die Runde von selbst; offene Schulden werden vor jeder Immobilie automatisch aus der Bank bezahlt.',
+    'lobby.respond_timer': 'Zeit zum Antworten',
+    'lobby.respond_hint': 'So lange hat jede Spielerin und jeder Spieler, um auf eine Aktion zu antworten — gerechnet ab dem Ausspielen der Karte. Eine Antwort ändert nie die Uhr der anderen.',
     'lobby.watching': 'Zuschauer ({n})',
     'lobby.remove_from_table': 'Vom Tisch entfernen',
     'lobby.waiting_seat': 'Warte auf einen Platz',
