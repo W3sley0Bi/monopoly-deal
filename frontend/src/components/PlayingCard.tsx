@@ -185,6 +185,7 @@ export default function PlayingCard({
                 type="button"
                 data-card-id={card.id}
                 data-card-type={card.type}
+                data-card-action={card.action}
                 data-active-color={activeColor}
                 data-dual={dual || undefined}
                 data-selected={selected || undefined}

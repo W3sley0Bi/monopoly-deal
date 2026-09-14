@@ -163,7 +163,9 @@ export default function App() {
         && room.game.players.some(p => p.bot),
     );
     useEffect(() => {
-        if (playingWithBots && !tutorialSeen()) setTutorial(true);
+        // A scripted table is the tutorial: the coach is not optional there.
+        if (room?.game.tutorial) setTutorial(true);
+        else if (playingWithBots && !tutorialSeen()) setTutorial(true);
     }, [playingWithBots]);
 
     // Leaving the table closes the tour.

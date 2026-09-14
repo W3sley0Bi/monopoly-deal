@@ -50,7 +50,7 @@ export default function RoomLobby({ audio, room, error, call, send, onLeave }: P
     });
 
     return (
-        <div className="mx-auto flex min-h-full w-full max-w-3xl flex-col gap-4 p-4 sm:p-6">
+        <div className="safe-screen mx-auto flex min-h-full w-full max-w-3xl flex-col gap-4 p-4 sm:p-6">
             <Cityscape /><div className="lobby-brand"><GameBrand compact /></div>
             <header className="panel flex flex-wrap items-center gap-3 px-4 py-3">
                 <div>

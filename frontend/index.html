@@ -13,7 +13,10 @@
     <!-- iOS reads none of the manifest: standalone mode, the status bar and
          the home-screen name are all still its own meta tags. -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <!-- `black-translucent` lays the page UNDER the status bar, so the header
+         ends up beneath the Dynamic Island. `default` makes iOS reserve that
+         strip; the safe-area padding below is the belt to this braces. -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Deal" />
     <meta name="mobile-web-app-capable" content="yes" />
     <title>Monopoly Deal</title>

@@ -9,7 +9,7 @@ export type Color =
     | 'yellow' | 'green' | 'blue' | 'railroad' | 'utility' | 'all';
 
 export type GameState = 'waiting' | 'playing' | 'finished';
-export type Mode = 'classic' | 'deathmatch' | 'golden_rush';
+export type Mode = 'classic' | 'deathmatch' | 'golden_rush' | 'tutorial';
 export type Difficulty = 'easy' | 'normal' | 'hard';
 export type PendingKind = 'payment' | 'sly_deal' | 'forced_deal' | 'deal_breaker';
 
@@ -98,6 +98,8 @@ export interface GameView {
     turn_seconds: number;
     /** Each player's own window to answer an action aimed at them. */
     respond_seconds: number;
+    /** Present only on a scripted tutorial table. */
+    tutorial?: TutorialState;
     bot_difficulty: Difficulty;
     /** Unix ms when the turn or response expires; 0 means no limit. */
     deadline_ms: number;
@@ -208,6 +210,19 @@ export interface RoomSummary {
     you_may_close: boolean;
 }
 
+/** The lesson a scripted tutorial table is teaching. */
+export interface TutorialState {
+    /** 1-based, for "4 of 15". */
+    step: number;
+    total: number;
+    /** Names the lesson; the client keys its copy and its hints off this. */
+    id: string;
+    /** The lesson asks for a move rather than a read. */
+    task: boolean;
+    /** The move has been made and the table is waiting to go on. */
+    done: boolean;
+}
+
 export interface HomeView {
     you: string;
     name: string;
@@ -228,7 +243,7 @@ export interface ClientMessage {
         | 'add_bot' | 'remove_bot' | 'set_radio'
         | 'rtc_join' | 'rtc_leave' | 'rtc_signal'
         | 'play_bank' | 'play_property' | 'play_action' | 'move_wildcard'
-        | 'discard' | 'end_turn' | 'respond';
+        | 'discard' | 'end_turn' | 'respond' | 'tutorial_next';
     player_id?: string;
     player_name?: string;
     room_id?: string;

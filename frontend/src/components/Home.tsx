@@ -6,6 +6,7 @@ import GameBrand, { Cityscape } from './GameBrand';
 import Avatar from './Avatar';
 import LanguagePicker from './LanguagePicker';
 import InstallBanner from './InstallBanner';
+import { NARROW, useMediaQuery } from '../game/useMediaQuery';
 import { markTutorialSeen, tutorialSeen } from './Tutorial';
 
 interface Props {
@@ -41,7 +42,14 @@ export default function Home({ inviteCode, view, connected, name, playerId, erro
     // The creation form starts with a table of people, so no robots by default.
     const [createBots, setCreateBots] = useState(0);
     const [difficulty, setDifficulty] = useState<Difficulty>('normal');
-    const [withTour, setWithTour] = useState(() => !tutorialSeen());
+    // Only to decide whether the offer reads as "learn" or "run it again".
+    const [tourDone] = useState(tutorialSeen);
+    const narrow = useMediaQuery(NARROW);
+    // A phone gets one button and the settings folded away behind it. Four
+    // robot counts and three difficulties are a screenful of choices nobody
+    // has an opinion about until their second game.
+    const [soloOpen, setSoloOpen] = useState(false);
+    const soloOptions = !narrow || soloOpen;
     // Closing a table is destructive, so the button asks once before it fires.
     const [closing, setClosing] = useState<string | null>(null);
 
@@ -126,17 +134,25 @@ export default function Home({ inviteCode, view, connected, name, playerId, erro
             <section className="home-hero"><div><p className="label-caps">{t('table.shared_space')}</p><h2>{t('table.hero_title')}<br /><em>{t('table.hero_punch')}</em></h2><p>{t('home.tagline')}</p></div><div className="hero-deck" aria-hidden="true"><span className="hero-card hero-property"><small>PROPERTY</small><b>⌂</b><strong>MAYFAIR</strong></span><span className="hero-card hero-money"><small>MONOPOLY BANK</small><b>5<span>M</span></b></span><span className="hero-card hero-action"><small>ACTION</small><b>⊘</b><strong>JUST SAY NO</strong></span></div></section>
 
             {/* Solo practice: a table of robots, dealt straight away, with the
-                guided tour on top of it. */}
+                a real game, as gentle or as brutal as you set it. */}
             <section className="solo-panel panel flex flex-wrap items-center gap-4 px-4 py-4">
                 <div className="min-w-56 flex-1">
                     <h2 className="font-display text-2xl tracking-wide text-brass">{t('home.solo.title')}</h2>
-                    <p className="text-sm text-white/60">
-                        {t('home.solo.blurb')}
-                        {withTour && ` ${t('home.solo.tour')}`}
-                    </p>
+                    <p className="text-sm text-white/60">{t('home.solo.blurb')}</p>
                 </div>
 
-                <div className="flex flex-col gap-2">
+                {narrow && (
+                    <button
+                        type="button"
+                        className="btn btn-ghost !py-1 !text-xs"
+                        aria-expanded={soloOpen}
+                        onClick={() => setSoloOpen(open => !open)}
+                    >
+                        {t('home.solo.options', { robots: bots, level: t(`difficulty.${difficulty}`) })}
+                    </button>
+                )}
+
+                <div className="flex flex-col gap-2" hidden={!soloOptions}>
                     <div className="flex items-center gap-2">
                         <span className="label-caps">{t('home.solo.robots')}</span>
                         {[1, 2, 3, 4].map(n => (
@@ -158,15 +174,6 @@ export default function Home({ inviteCode, view, connected, name, playerId, erro
                         onPick={setDifficulty}
                         blurbs={false}
                     />
-                    <label className="flex items-center gap-2 text-xs text-white/60">
-                        <input
-                            type="checkbox"
-                            checked={withTour}
-                            onChange={e => setWithTour(e.target.checked)}
-                            className="accent-[color:var(--color-brass)]"
-                        />
-                        {t('home.solo.show_tutorial')}
-                    </label>
                 </div>
 
                 <button
@@ -174,7 +181,6 @@ export default function Home({ inviteCode, view, connected, name, playerId, erro
                     className="btn btn-green !py-2.5 !text-lg"
                     disabled={!connected}
                     onClick={() => {
-                        markTutorialSeen(!withTour);
                         send({
                             type: 'create_room',
                             room_name: t('home.solo.table_name', { name }),
@@ -187,6 +193,34 @@ export default function Home({ inviteCode, view, connected, name, playerId, erro
                     }}
                 >
                     {t('home.solo.play')}
+                </button>
+            </section>
+
+            {/* The tutorial is its own table now, not a tour bolted onto a game
+                against robots: a real game will not deal you a Deal Breaker the
+                moment you need to learn one. */}
+            <section className="panel flex flex-wrap items-center gap-3 px-4 py-4">
+                <div className="min-w-0 flex-1">
+                    <h2 className="font-display text-2xl tracking-wide">{t('home.learn.title')}</h2>
+                    <p className="mt-1 text-sm text-white/60">{t('home.learn.blurb')}</p>
+                </div>
+                <button
+                    type="button"
+                    className={`btn !py-2.5 ${tourDone ? 'btn-ghost' : 'btn-gold'}`}
+                    disabled={!connected}
+                    onClick={() => {
+                        markTutorialSeen(false);
+                        send({
+                            type: 'create_room',
+                            room_name: t('home.learn.table_name', { name }),
+                            mode: 'tutorial',
+                            turn_seconds: 0,
+                            bots: 1,
+                            auto_start: true,
+                        });
+                    }}
+                >
+                    {t(tourDone ? 'home.learn.again' : 'home.learn.start')}
                 </button>
             </section>
 

@@ -23,18 +23,28 @@ const (
 	ModeClassic Mode = "classic"
 	// ModeDeathmatch also requires an empty hand.
 	ModeDeathmatch Mode = "deathmatch"
+	// ModeTutorial is a scripted solo table, not a game. See tutorial.go.
+	ModeTutorial Mode = "tutorial"
 	// ModeGoldenRush is not implemented yet.
 	ModeGoldenRush Mode = "golden_rush"
 )
 
 // Modes lists every mode in display order.
+// Modes are the ones an owner may choose for a table. ModeTutorial is not
+// among them: it is a scripted solo table the Learn button opens, not a way to
+// play with other people.
 var Modes = []Mode{ModeClassic, ModeDeathmatch, ModeGoldenRush}
 
 // Available reports whether a mode can actually be played.
-func (m Mode) Available() bool { return m == ModeClassic || m == ModeDeathmatch }
+func (m Mode) Available() bool {
+	return m == ModeClassic || m == ModeDeathmatch || m == ModeTutorial
+}
 
 // Valid reports whether a mode is a known value.
 func (m Mode) Valid() bool {
+	if m == ModeTutorial {
+		return true
+	}
 	for _, x := range Modes {
 		if x == m {
 			return true
@@ -277,8 +287,10 @@ type Game struct {
 	Pending     *Pending   `json:"pending"`
 	Log         []LogEntry `json:"log"`
 
-	Mode        Mode `json:"mode"`
-	TurnSeconds int  `json:"turn_seconds"`
+	Mode Mode `json:"mode"`
+	// Tutorial is the lesson a scripted table is on, and nil everywhere else.
+	Tutorial    *TutorialState `json:"tutorial,omitempty"`
+	TurnSeconds int            `json:"turn_seconds"`
 	// RespondSeconds is how long each player gets to answer an action aimed at
 	// them. Every target's window runs from when the card was played, so one
 	// player answering never shortens or extends anybody else's.
@@ -303,6 +315,8 @@ type Game struct {
 	// clock is swapped out by tests.
 	clock          func() time.Time
 	startNo        uint64
+	tutorialAt     int
+	tutorialDone   bool
 	turnDeadlineMS int64
 	// paymentPausedAt marks the start of a payment interruption. It remains
 	// set across multiple payers and Just Say No rebounds.
@@ -565,6 +579,13 @@ func (g *Game) start(randomize, scheduled bool) error {
 	g.Pending = nil
 	g.startNo++
 	g.StartID = fmt.Sprintf("%s-start-%d", g.ID, g.startNo)
+	// A scripted table deals nothing: every lesson builds its own situation,
+	// and there is no wheel to decide who goes first on a table of one.
+	if g.Mode == ModeTutorial {
+		g.log("log.game_started", "mode", string(g.Mode), "players", len(g.Players))
+		g.tutorialStart()
+		return nil
+	}
 	g.StartSequence = make([]string, 0, len(g.Players))
 	for _, p := range g.Players {
 		g.StartSequence = append(g.StartSequence, p.ID)
@@ -602,6 +623,8 @@ func (m Mode) Label() string {
 		return "Death Match"
 	case ModeGoldenRush:
 		return "Golden Rush"
+	case ModeTutorial:
+		return "Tutorial"
 	default:
 		return "Classic"
 	}
@@ -688,6 +711,14 @@ func (g *Game) startTurnWithDraw(draw bool) {
 	}
 	g.setDeadline("turn")
 	g.log("log.turn", "name", p.Name)
+}
+
+// tutorialStart takes over from the normal deal on a scripted table.
+func (g *Game) tutorialStart() {
+	g.State = StatePlaying
+	g.StartAtMS = 0
+	g.StartSequence = nil
+	g.startTutorial()
 }
 
 // deadlineSeconds is the window length for the thing we are waiting on.
@@ -819,6 +850,11 @@ func (g *Game) setDeadline(kind string) {
 // after every accepted message so no mutator can forget.
 func (g *Game) PostAction() {
 	g.evaluateWin()
+	if g.Mode == ModeTutorial {
+		g.tutorialPostAction()
+		g.clearDeadline()
+		return
+	}
 	if g.State != StatePlaying {
 		g.clearDeadline()
 		return
@@ -1184,6 +1220,12 @@ func (g *Game) checkWin(p *Player) {
 // someone else's turn.
 func (g *Game) evaluateWin() {
 	if g.State != StatePlaying {
+		return
+	}
+	// Half the lessons put finished sets in front of the learner so there is
+	// something to charge rent on or build a house upon. Only the last lesson
+	// is about winning, so until then the table cannot end.
+	if g.tutorialHoldsWin() {
 		return
 	}
 	for _, p := range g.Players {

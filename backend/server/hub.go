@@ -349,6 +349,11 @@ func (h *Hub) createRoomLocked(c *Client, msg ClientMessage) error {
 			return err
 		}
 	}
+	// Somebody working through the lessons is not looking for company, and a
+	// scripted table is unjoinable anyway: keep it out of the browser.
+	if r.Game.Mode == game.ModeTutorial {
+		r.Private = true
+	}
 	if msg.BotDifficulty != "" {
 		if err := r.Game.SetBotDifficulty(msg.BotDifficulty); err != nil {
 			return err
@@ -511,6 +516,9 @@ func (h *Hub) handleRoomLocked(c *Client, msg ClientMessage) error {
 			return errNotOwner
 		}
 		return g.Reset()
+
+	case MsgTutorialNext:
+		return g.TutorialNext(c.playerID)
 
 	case MsgTerminate:
 		if !r.isSeated(c.playerID) && !owner {

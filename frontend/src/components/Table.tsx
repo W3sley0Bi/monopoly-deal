@@ -39,6 +39,7 @@ import TalkSheet from './TalkSheet';
 import Tutorial from './Tutorial';
 import TurnBanner from './TurnBanner';
 import TurnTimer from './TurnTimer';
+import TutorialDone from './TutorialDone';
 import WinOverlay from './WinOverlay';
 
 interface Props {
@@ -461,6 +462,7 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
             <DropZone
                 active={Boolean(drag && drag.from === 'hand' && canPlay && isPlayableAction(drag.card))}
                 onDrop={() => drag && playActionCard(drag.card)}
+                tour="action-space"
                 className="board-target rounded-xl"
             >
                 <div className="board-target-slot">
@@ -736,6 +738,7 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
                                     active={Boolean(drag && drag.from === 'hand' && canPlay && isPlayableAction(drag.card))}
                                     hint={t('table.play_it')}
                                     onDrop={() => drag && playActionCard(drag.card)}
+                                    tour="action-space"
                                     className="rounded-xl"
                                 >
                                     <div className="action-landing">
@@ -1006,7 +1009,11 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
 
             {pending && !dialog && <PendingPanel view={g} skewMs={skewMs} send={act} />}
 
-            {g.state === 'finished' && (
+            {/* A scripted table has no rematch and nobody to play on against,
+                so finishing it means welcoming the player to the real thing. */}
+            {g.state === 'finished' && g.mode === 'tutorial' && <TutorialDone onLeave={onLeave} />}
+
+            {g.state === 'finished' && g.mode !== 'tutorial' && (
                 <WinOverlay
                     view={g}
                     isOwner={room.is_owner}
@@ -1020,13 +1027,14 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
                 <Tutorial
                     room={room}
                     narrow={narrow}
+                    send={send}
                     compact={Boolean(dialog || sheet || pending || g.state === 'finished')}
-                    onClose={() => onTutorial(false)}
+                    onClose={() => (g.mode === 'tutorial' ? onLeave() : onTutorial(false))}
                 />
             )}
 
             {error && (
-                <div className="animate-shake fixed left-1/2 top-3 z-[70] max-w-[92vw] -translate-x-1/2 rounded-xl border border-rose-300/40 bg-rose-600/95 px-4 py-2 text-center font-semibold shadow-lg">
+                <div className="error-toast animate-shake fixed left-1/2 top-3 z-[70] max-w-[92vw] -translate-x-1/2 rounded-xl border border-rose-300/40 bg-rose-600/95 px-4 py-2 text-center font-semibold shadow-lg">
                     {error}
                 </div>
             )}

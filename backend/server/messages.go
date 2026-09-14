@@ -43,6 +43,8 @@ const (
 	MsgDiscard      = "discard"
 	MsgEndTurn      = "end_turn"
 	MsgRespond      = "respond"
+	// MsgTutorialNext moves a scripted table on to the next lesson.
+	MsgTutorialNext = "tutorial_next"
 )
 
 // ClientMessage is the single inbound envelope.
@@ -208,10 +210,12 @@ type GameView struct {
 	ModeLabel    string          `json:"mode_label"`
 	TurnSeconds  int             `json:"turn_seconds"`
 	// RespondSeconds is each player's own window to answer an action.
-	RespondSeconds int             `json:"respond_seconds"`
-	BotDifficulty  game.Difficulty `json:"bot_difficulty"`
-	DeadlineMS     int64           `json:"deadline_ms"`
-	DeadlineKind   string          `json:"deadline_kind,omitempty"`
+	RespondSeconds int `json:"respond_seconds"`
+	// Tutorial is the lesson a scripted table is on, and absent elsewhere.
+	Tutorial      *game.TutorialState `json:"tutorial,omitempty"`
+	BotDifficulty game.Difficulty     `json:"bot_difficulty"`
+	DeadlineMS    int64               `json:"deadline_ms"`
+	DeadlineKind  string              `json:"deadline_kind,omitempty"`
 	// DeadlineSeconds is the length of the current countdown window.
 	DeadlineSeconds int `json:"deadline_seconds"`
 	// NowMS lets the client correct for clock skew when drawing the countdown.
@@ -324,6 +328,7 @@ func gameView(g *game.Game, you string) GameView {
 		DeadlineKind:    g.DeadlineKind,
 		DeadlineSeconds: g.DeadlineSeconds,
 		RespondSeconds:  g.RespondSeconds,
+		Tutorial:        g.Tutorial,
 		StartSequence:   append([]string{}, g.StartSequence...),
 		StartID:         g.StartID,
 		StartsAtMS:      g.StartAtMS,

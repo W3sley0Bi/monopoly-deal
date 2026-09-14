@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef } from 'react';
 import { useI18n } from '../i18n';
 import type { GameView } from '../types';
+import { wasPlacedByHand } from '../game/dragLayer';
 
 type Position = { x: number; y: number; width: number; height: number };
 
@@ -86,6 +87,11 @@ export default function TableMotion({
                 const old = previous.current.get(id);
                 if (old && previousZones.current.get(id) === zones.get(id))
                     return;
+                // A card the player just carried here by hand is already where
+                // they put it. Flying it again reads as a second drop nobody
+                // made, which is the one move on the table that does not need
+                // explaining.
+                if (wasPlacedByHand(id)) return;
                 const inHand = !!el.closest('.hand-zone');
                 const from = old ?? (inHand ? deckPosition : actorPosition);
                 if (!old && !inHand && previous.current.size === 0) return;

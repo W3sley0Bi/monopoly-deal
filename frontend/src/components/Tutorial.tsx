@@ -1,157 +1,92 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import type { GameView, PlayerView, RoomView } from '../types';
+import { useEffect, useRef, useState } from 'react';
+import type { ClientMessage, RoomView } from '../types';
 import { useI18n } from '../i18n';
 
 /**
- * A guided tour that doubles as the tutorial. Each step points at a real part
- * of the table (through `data-tour` attributes) and most of them finish when
- * the player actually does the thing, not when they press Next — so the tour
- * teaches by having you play rather than by reading.
+ * The coach for a scripted tutorial table.
+ *
+ * The server owns the curriculum: which lesson you are on, what is on the
+ * table for it, and whether you have done the thing. That is the half that has
+ * to agree with the rules. This file owns the half that does not — the words,
+ * what to point at, and which gesture to mime — because a mouse and a finger
+ * are taught differently and the server has no idea which one you have.
  */
 
-interface Ctx {
-    g: GameView;
-    me?: PlayerView;
-    /** Your turn, nothing pending. */
-    myTurn: boolean;
-    narrow: boolean;
-}
-
-interface Step {
-    id: string;
-    /** `data-tour` value to spotlight. Omitted for a centred card. */
+interface Hint {
+    /** `data-tour` region the lesson is about. */
     anchor?: string;
     /** Narrow screens sometimes need a different anchor. */
     anchorNarrow?: string;
-    /** Steps carry catalog keys, never English text, so a step reads in the
-     *  language the player chose and switching language re-renders the tour. */
-    titleKey: string;
-    bodyKey: string;
-    /** Shown in amber under the body: what to actually do. */
-    taskKey?: string;
-    /** True once the player has done the step's task; advances by itself. */
-    done?: (c: Ctx) => boolean;
-    /** Only show the step while this holds. */
-    when?: (c: Ctx) => boolean;
-    /** Wait here until the table is ready for the task. */
-    blocked?: (c: Ctx) => boolean;
-    blockedNoteKey?: string;
-    /**
-     * A selector for the cards or controls the task is actually about.
-     * Pointing at the mat tells you where a property lands but never which
-     * card in your hand is one, which is the half a beginner is missing.
-     */
+    /** The cards or controls the task is actually about. */
     targets?: string;
-    /** How the task is done, drawn as a moving hand over the table. */
     gesture?: 'drag' | 'tap';
 }
 
 /** Hand cards that can start a colour set. */
 const PROPERTY_IN_HAND =
     '.hand-card[data-card-type="property"], .hand-card[data-card-type="property_wildcard"]';
-/** Hand cards worth banking: money first, and any action is worth its value. */
-const BANKABLE_IN_HAND =
-    '.hand-card[data-card-type="money"], .hand-card[data-card-type="action"], .hand-card[data-card-type="rent"]';
 
-const propertiesInPlay = (c: Ctx) => (c.me?.sets ?? []).reduce((n, s) => n + s.cards.length, 0);
+/** One named action card in hand, rather than every action you happen to hold. */
+const action = (name: string) => `.hand-card[data-card-action="${name}"]`;
 
-export const STEPS: Step[] = [
-    {
-        id: 'welcome',
-        titleKey: 'tutorial.welcome.title',
-        bodyKey: 'tutorial.welcome.body',
-        taskKey: 'tutorial.welcome.task',
-    },
-    {
-        id: 'goal',
-        titleKey: 'tutorial.goal.title',
-        bodyKey: 'tutorial.goal.body',
-        anchor: 'sets-progress',
-    },
-    {
-        id: 'hand',
-        anchor: 'hand',
-        targets: '.hand-card',
-        titleKey: 'tutorial.hand.title',
-        bodyKey: 'tutorial.hand.body',
-        taskKey: 'tutorial.hand.task',
-    },
-    {
-        id: 'play-property',
+/**
+ * Where each lesson points. Keyed by the lesson id the server sends, so adding
+ * a lesson in Go without a hint here degrades to a centred card rather than
+ * breaking.
+ */
+const HINTS: Record<string, Hint> = {
+    hand: { anchor: 'hand', targets: '.hand-card' },
+    property: { anchor: 'properties', targets: PROPERTY_IN_HAND, gesture: 'drag' },
+    wildcard: {
         anchor: 'properties',
-        titleKey: 'tutorial.play-property.title',
-        bodyKey: 'tutorial.play-property.body',
-        taskKey: 'tutorial.play-property.task',
-        targets: PROPERTY_IN_HAND,
+        targets: '.hand-card[data-card-type="property_wildcard"]',
         gesture: 'drag',
-        blocked: c => !c.myTurn,
-        blockedNoteKey: 'tutorial.play-property.blocked',
-        done: c => propertiesInPlay(c) > 0,
     },
-    {
-        id: 'bank',
-        anchor: 'bank',
-        titleKey: 'tutorial.bank.title',
-        bodyKey: 'tutorial.bank.body',
-        taskKey: 'tutorial.bank.task',
-        targets: BANKABLE_IN_HAND,
+    // Dragging is not the only way in: every card opens a menu when it is
+    // clicked or tapped, so the lesson points at the card and mimes a tap.
+    tapping: { anchor: 'hand', targets: PROPERTY_IN_HAND, gesture: 'tap' },
+    bank: { anchor: 'bank', targets: '.hand-card[data-card-type="money"]', gesture: 'drag' },
+    // An action card is played by putting it in the action space, so that is
+    // where the lesson points — lighting the card alone says what to pick up
+    // but never where it goes.
+    pass_go: { anchor: 'action-space', targets: action('pass_go'), gesture: 'drag' },
+    end_turn: { anchor: 'end-turn', targets: '[data-tour="end-turn"]', gesture: 'tap' },
+    rent: { anchor: 'action-space', targets: '.hand-card[data-card-type="rent"]', gesture: 'drag' },
+    double_rent: {
+        // Both halves of the move: the rent and the card that doubles it.
+        anchor: 'action-space',
+        targets: `.hand-card[data-card-type="rent"], ${action('double_rent')}`,
         gesture: 'drag',
-        blocked: c => !c.myTurn,
-        blockedNoteKey: 'tutorial.bank.blocked',
-        done: c => (c.me?.bank.length ?? 0) > 0,
     },
-    {
-        id: 'plays',
-        anchor: 'plays',
-        titleKey: 'tutorial.plays.title',
-        bodyKey: 'tutorial.plays.body',
-    },
-    {
-        id: 'actions',
-        anchor: 'hand',
-        titleKey: 'tutorial.actions.title',
-        bodyKey: 'tutorial.actions.body',
-    },
-    {
-        id: 'opponents',
-        anchor: 'opponents',
-        titleKey: 'tutorial.opponents.title',
-        bodyKey: 'tutorial.opponents.body',
-    },
-    {
-        id: 'log',
-        anchor: 'log',
-        anchorNarrow: 'log-narrow',
-        titleKey: 'tutorial.log.title',
-        bodyKey: 'tutorial.log.body',
-    },
-    {
-        id: 'end-turn',
-        anchor: 'end-turn',
-        titleKey: 'tutorial.end-turn.title',
-        bodyKey: 'tutorial.end-turn.body',
-        taskKey: 'tutorial.end-turn.task',
-        targets: '[data-tour="end-turn"]',
-        gesture: 'tap',
-        blocked: c => !c.myTurn,
-        blockedNoteKey: 'tutorial.end-turn.blocked',
-        done: c => !c.myTurn,
-    },
-    {
-        id: 'pending',
-        titleKey: 'tutorial.pending.title',
-        bodyKey: 'tutorial.pending.body',
-        when: c => Boolean(c.g.pending),
-        done: c => !c.g.pending,
-        taskKey: 'tutorial.pending.task',
-    },
-    {
-        id: 'done',
-        titleKey: 'tutorial.done.title',
-        bodyKey: 'tutorial.done.body',
-        taskKey: 'tutorial.done.task',
-    },
-];
+    // A pending action owns the screen, so the coach is a strip and has
+    // nothing of its own to point at.
+    paying: {},
+    just_say_no: {},
+    sly_deal: { anchor: 'action-space', targets: action('sly_deal'), gesture: 'drag' },
+    forced_deal: { anchor: 'action-space', targets: action('forced_deal'), gesture: 'drag' },
+    deal_breaker: { anchor: 'action-space', targets: action('deal_breaker'), gesture: 'drag' },
+    house: { anchor: 'action-space', targets: action('house'), gesture: 'drag' },
+    win: { anchor: 'properties', targets: PROPERTY_IN_HAND, gesture: 'drag' },
+};
+
+const STORAGE_KEY = 'md.tutorial.done';
+
+/** Whether this device has already been through the tutorial. */
+export function tutorialSeen(): boolean {
+    return localStorage.getItem(STORAGE_KEY) === '1';
+}
+
+export function markTutorialSeen(seen: boolean) {
+    if (seen) localStorage.setItem(STORAGE_KEY, '1');
+    else localStorage.removeItem(STORAGE_KEY);
+}
+
+interface Rect { top: number; left: number; width: number; height: number }
+
+/** Ringing every card in a full hand highlights nothing. */
+const MAX_TARGETS = 4;
+
+const centre = (r: Rect) => ({ x: r.left + r.width / 2, y: r.top + r.height / 2 });
 
 /**
  * A hand that mimes the move: it picks the card up, carries it to where it
@@ -182,8 +117,6 @@ function TourHand({
         >
             <svg viewBox="0 0 40 46" width="40" height="46">
                 <g fill="#fff" stroke="rgb(9 30 28 / 0.55)" strokeWidth="1.5">
-                    {/* Three curled fingers and a thumb behind an index that
-                        points at whatever the hand is over. */}
                     <rect x="13.5" y="2" width="7.5" height="21" rx="3.75" />
                     <rect x="20" y="12" width="7" height="12" rx="3.5" />
                     <rect x="26" y="15" width="6.5" height="10" rx="3.25" />
@@ -195,116 +128,17 @@ function TourHand({
     );
 }
 
-const STORAGE_KEY = 'md.tutorial.done';
-
-/** Whether this device has already been through the tour. */
-export function tutorialSeen(): boolean {
-    return localStorage.getItem(STORAGE_KEY) === '1';
-}
-
-export function markTutorialSeen(seen: boolean) {
-    if (seen) localStorage.setItem(STORAGE_KEY, '1');
-    else localStorage.removeItem(STORAGE_KEY);
-}
-
-interface Props {
-    room: RoomView;
-    narrow: boolean;
-    /** A dialog or payment panel owns the screen: shrink to a hint strip so the
-     *  tour never covers the thing it just asked the player to use. */
-    compact: boolean;
-    onClose: () => void;
-}
-
-interface Rect { top: number; left: number; width: number; height: number }
-
-/** Ringing every card in a full hand highlights nothing. */
-const MAX_TARGETS = 4;
-
-const centre = (r: Rect) => ({ x: r.left + r.width / 2, y: r.top + r.height / 2 });
-
-export default function Tutorial({ room, narrow, compact, onClose }: Props) {
-    const { t } = useI18n();
-    const [index, setIndex] = useState(0);
-    const [rect, setRect] = useState<Rect | null>(null);
-    const [targets, setTargets] = useState<Rect[]>([]);
-    const [handRect, setHandRect] = useState<Rect | null>(null);
-    const [cardHeight, setCardHeight] = useState(200);
-    const cardRef = useRef<HTMLDivElement | null>(null);
-
-    const g = room.game;
-    const me = g.players.find(p => p.id === g.you);
-    const ctx: Ctx = useMemo(() => ({
-        g,
-        me,
-        myTurn: g.players[g.current_turn]?.id === g.you && !g.pending,
-        narrow,
-    }), [g, me, narrow]);
-
-    // Steps whose `when` no longer holds are skipped, so the conditional ones
-    // (like the payment panel) only appear when the table shows them.
-    const visible = useMemo(() => STEPS.filter(s => !s.when || s.when(ctx)), [ctx]);
-    const step = visible[Math.min(index, visible.length - 1)];
-    const last = index >= visible.length - 1;
-
-    const blocked = Boolean(step?.blocked?.(ctx));
-    const complete = Boolean(step?.done?.(ctx));
-
-    // A step with a task finishes itself the moment the player does it.
+/** Tracks a region of the page as the table reflows under it. */
+function useRects(selector: string | undefined, limit: number): Rect[] {
+    const [rects, setRects] = useState<Rect[]>([]);
     useEffect(() => {
-        if (!step?.done || blocked || !complete) return;
-        const t = setTimeout(() => setIndex(i => Math.min(i + 1, visible.length - 1)), 650);
-        return () => clearTimeout(t);
-    }, [step, blocked, complete, visible.length]);
-
-    // A pending action jumps the tour to the step that explains it.
-    useEffect(() => {
-        if (!g.pending) return;
-        const at = visible.findIndex(s => s.id === 'pending');
-        if (at >= 0) setIndex(i => (i < at ? at : i));
-    }, [g.pending, visible]);
-
-    // The table reflows constantly, so re-measure the anchor rather than
-    // trusting a single read.
-    const anchor = compact ? undefined : (narrow && step?.anchorNarrow) || step?.anchor;
-    useEffect(() => {
-        if (!anchor) {
-            setRect(null);
+        if (!selector) {
+            setRects([]);
             return;
         }
         const measure = () => {
-            const el = document.querySelector<HTMLElement>(`[data-tour="${anchor}"]`);
-            if (!el) {
-                setRect(null);
-                return;
-            }
-            const r = el.getBoundingClientRect();
-            setRect({ top: r.top, left: r.left, width: r.width, height: r.height });
-        };
-        measure();
-        const timer = setInterval(measure, 250);
-        window.addEventListener('resize', measure);
-        window.addEventListener('scroll', measure, true);
-        return () => {
-            clearInterval(timer);
-            window.removeEventListener('resize', measure);
-            window.removeEventListener('scroll', measure, true);
-        };
-    }, [anchor, index]);
-
-    // The cards the step is about. Remeasured on the same beat as the anchor,
-    // because a hand re-fans itself whenever a card leaves it.
-    const targetSelector = compact ? undefined : step?.targets;
-    useEffect(() => {
-        if (!targetSelector) {
-            setTargets([]);
-            return;
-        }
-        const measure = () => {
-            const found = Array.from(
-                document.querySelectorAll<HTMLElement>(targetSelector),
-            ).slice(0, MAX_TARGETS);
-            setTargets(
+            const found = Array.from(document.querySelectorAll<HTMLElement>(selector)).slice(0, limit);
+            setRects(
                 found.map(el => {
                     const r = el.getBoundingClientRect();
                     return { top: r.top, left: r.left, width: r.width, height: r.height };
@@ -312,50 +146,90 @@ export default function Tutorial({ room, narrow, compact, onClose }: Props) {
             );
         };
         measure();
-        const timer = setInterval(measure, 250);
+        // The table reflows constantly — a hand re-fans itself whenever a card
+        // leaves it — so this re-measures rather than trusting one read.
+        const timer = window.setInterval(measure, 250);
         window.addEventListener('resize', measure);
         window.addEventListener('scroll', measure, true);
         return () => {
-            clearInterval(timer);
+            window.clearInterval(timer);
             window.removeEventListener('resize', measure);
             window.removeEventListener('scroll', measure, true);
         };
-    }, [targetSelector, index]);
+    }, [selector, limit]);
+    return rects;
+}
 
-    // The hand is the one region the card may never cover.
-    useEffect(() => {
-        const measure = () => {
-            const el = document.querySelector<HTMLElement>('[data-tour="hand"]');
-            if (!el) {
-                setHandRect(null);
-                return;
-            }
-            const r = el.getBoundingClientRect();
-            setHandRect({ top: r.top, left: r.left, width: r.width, height: r.height });
-        };
-        measure();
-        const timer = setInterval(measure, 250);
-        window.addEventListener('resize', measure);
-        return () => {
-            clearInterval(timer);
-            window.removeEventListener('resize', measure);
-        };
-    }, []);
+interface Props {
+    room: RoomView;
+    narrow: boolean;
+    /** A dialog or payment panel owns the screen: shrink to a hint strip so the
+     *  coach never covers the thing it just asked the player to use. */
+    compact: boolean;
+    send: (msg: ClientMessage) => void;
+    onClose: () => void;
+}
+
+export default function Tutorial({ room, narrow, compact, send, onClose }: Props) {
+    const { t } = useI18n();
+    const [cardHeight, setCardHeight] = useState(220);
+    const cardRef = useRef<HTMLDivElement | null>(null);
+
+    const lesson = room.game.tutorial;
+    const hint = lesson ? (HINTS[lesson.id] ?? {}) : {};
+
+    const anchorName = compact ? undefined : (narrow && hint.anchorNarrow) || hint.anchor;
+    const anchorRects = useRects(anchorName ? `[data-tour="${anchorName}"]` : undefined, 1);
+    // A read-through lesson has nothing to point at; a finished one has
+    // nothing left to ask for.
+    const wantTargets = Boolean(lesson && lesson.task && !lesson.done && !compact);
+    const targets = useRects(wantTargets ? hint.targets : undefined, MAX_TARGETS);
+    const handRects = useRects('[data-tour="hand"]', 1);
 
     useEffect(() => {
         const h = cardRef.current?.offsetHeight;
         if (h && Math.abs(h - cardHeight) > 4) setCardHeight(h);
     });
 
-    const keepClear = anchor === 'hand' ? null : handRect;
+    // Which half of the screen the coach parks in, decided once per lesson.
+    // It used to be recomputed from the anchor on every measurement, so the
+    // card crept around the screen as the hand re-fanned and cards left it —
+    // that is, while the player was trying to aim at something.
+    const [slot, setSlot] = useState<'top' | 'bottom'>('top');
+    const slotFor = useRef<string | null>(null);
+    const lessonId = lesson?.id;
 
-    if (!step) return null;
+    useEffect(() => {
+        slotFor.current = null;
+        setSlot('top');
+    }, [lessonId]);
+
+    useEffect(() => {
+        if (!lessonId || slotFor.current === lessonId) return;
+        const r = anchorRects[0];
+        if (!r) return;
+        slotFor.current = lessonId;
+        // Only a region high on the screen pushes the coach down. Everything
+        // else a lesson explains lives at the bottom, so above is where it
+        // belongs.
+        setSlot(r.top < cardHeight + 40 ? 'bottom' : 'top');
+    }, [lessonId, anchorRects, cardHeight]);
+
+    if (!lesson) return null;
 
     const finish = () => {
         markTutorialSeen(true);
         onClose();
     };
-    const next = () => (last ? finish() : setIndex(i => i + 1));
+    const advance = () => {
+        if (lesson.step >= lesson.total) {
+            finish();
+            return;
+        }
+        send({ type: 'tutorial_next' });
+    };
+
+    const rect = anchorRects[0] ?? null;
 
     const pad = 8;
     const box = rect && {
@@ -368,42 +242,48 @@ export default function Tutorial({ room, narrow, compact, onClose }: Props) {
     const vw = window.innerWidth;
     const vh = window.innerHeight;
     const cardWidth = Math.min(340, vw - 24);
-    const cardStyle: React.CSSProperties = { width: cardWidth };
+    // Parked, not tracked: centred across, and in the slot chosen when the
+    // lesson opened. The highlight still follows what it is pointing at; the
+    // words do not have to.
+    const cardStyle: React.CSSProperties = {
+        width: cardWidth,
+        left: '50%',
+        transform: 'translateX(-50%)',
+    };
+    // The hand is the one thing the coach must never cover, and its top edge
+    // stays put even as the cards inside it move.
+    const handTop = handRects[0]?.top ?? vh;
+    if (slot === 'bottom') cardStyle.bottom = Math.max(vh - handTop + 8, 12);
+    else cardStyle.top = 12;
 
-    if (!box) {
-        cardStyle.top = '50%';
-        cardStyle.left = '50%';
-        cardStyle.transform = 'translate(-50%, -50%)';
-    } else {
-        cardStyle.left = Math.min(
-            Math.max(box.left + box.width / 2 - cardWidth / 2, 12),
-            Math.max(vw - cardWidth - 12, 12),
-        );
-        // A tall, mostly empty spotlight (the property mat) has room for the
-        // card inside it; anything else gets the card below, or above when
-        // there is no space underneath.
-        const below = box.top + box.height + 12;
-        let top: number;
-        if (box.height >= cardHeight + 60) top = box.top + (box.height - cardHeight) / 2;
-        else if (below + cardHeight + 12 <= vh) top = below;
-        else top = box.top - cardHeight - 12;
+    // On a phone there is often no room above the hand for a full card. Rather
+    // than clamp it into the cards it is pointing at, the coach becomes a strip
+    // and gets out of the way entirely.
+    const cramped = handTop - 24 < cardHeight;
 
-        // The card must never sit on top of the hand — that is what the player
-        // needs to reach for most of these steps.
-        if (keepClear && top + cardHeight > keepClear.top - 8) {
-            top = Math.min(top, keepClear.top - cardHeight - 8);
-        }
-        cardStyle.top = Math.min(Math.max(top, 12), Math.max(vh - cardHeight - 12, 12));
-    }
+    const titleKey = `lesson.${lesson.id}.title`;
+    const bodyKey = `lesson.${lesson.id}.body`;
+    const taskKey = `lesson.${lesson.id}.task`;
+    // The same move is a drag with a mouse and a pull with a thumb, and the
+    // two need different words as well as a different mime.
+    const gestureKey = hint.gesture
+        ? `tutorial.gesture.${hint.gesture}_${narrow ? 'touch' : 'pc'}`
+        : null;
 
-    if (compact) {
+    if (compact || cramped) {
+        // A dialog owns the bottom of the screen, so the strip sits under it;
+        // a cramped table owns the bottom with the hand, so it sits on top.
         return (
-            <div className="pointer-events-none fixed inset-x-2 bottom-2 z-[90] flex justify-center">
+            <div
+                className={`pointer-events-none fixed inset-x-2 z-[90] flex justify-center ${
+                    compact ? 'bottom-2' : 'tour-strip-top top-2'
+                }`}
+            >
                 <div className="panel pointer-events-auto flex max-w-lg items-center gap-3 border-brass/40 px-3 py-2">
                     <span className="label-caps shrink-0 text-brass">{t('tutorial.label')}</span>
                     <p className="min-w-0 flex-1 truncate text-sm">
-                        <span className="font-semibold">{t(step.titleKey)}</span>
-                        {step.taskKey && <span className="text-white/60"> — {t(step.taskKey)}</span>}
+                        <span className="font-semibold">{t(titleKey)}</span>
+                        {lesson.task && <span className="text-white/60"> — {t(taskKey)}</span>}
                     </p>
                     <button
                         type="button"
@@ -417,18 +297,17 @@ export default function Tutorial({ room, narrow, compact, onClose }: Props) {
         );
     }
 
-    // Where the task starts and where it ends, for the hand that mimes it.
     const from = targets.length > 0 ? centre(targets[0]) : null;
-    const to = step.gesture === 'drag' && box
+    const to = hint.gesture === 'drag' && box
         ? centre(box)
-        : step.gesture === 'tap' && from
+        : hint.gesture === 'tap' && from
           ? from
           : null;
-    const showGesture = Boolean(from && to && !blocked && !complete);
+    const showGesture = Boolean(from && to && wantTargets);
 
-    // Every hole the dimmer has to leave open: the region being explained, and
-    // each card the player is being asked to move. A spread box-shadow can
-    // only cut one, so the dimmer is a masked rectangle instead.
+    // Every hole the dimmer leaves open: the region being explained, and each
+    // card the player is being asked to move. A spread box-shadow can only cut
+    // one, so the dimmer is a masked rectangle instead.
     const holes = [...(box ? [box] : []), ...targets];
 
     return (
@@ -439,33 +318,13 @@ export default function Tutorial({ room, narrow, compact, onClose }: Props) {
                         <mask id="tour-mask">
                             <rect width="100%" height="100%" fill="white" />
                             {holes.map((h, i) => (
-                                <rect
-                                    key={i}
-                                    x={h.left}
-                                    y={h.top}
-                                    width={h.width}
-                                    height={h.height}
-                                    rx={12}
-                                    fill="black"
-                                />
+                                <rect key={i} x={h.left} y={h.top} width={h.width} height={h.height} rx={12} fill="black" />
                             ))}
                         </mask>
                     </defs>
-                    <rect
-                        width="100%"
-                        height="100%"
-                        fill="rgb(2 12 8 / 0.62)"
-                        mask="url(#tour-mask)"
-                    />
-                    {/* The route the card takes, drawn between the two. */}
-                    {showGesture && step.gesture === 'drag' && from && to && (
-                        <line
-                            className="tour-route"
-                            x1={from.x}
-                            y1={from.y}
-                            x2={to.x}
-                            y2={to.y}
-                        />
+                    <rect width="100%" height="100%" fill="rgb(2 12 8 / 0.62)" mask="url(#tour-mask)" />
+                    {showGesture && hint.gesture === 'drag' && from && to && (
+                        <line className="tour-route" x1={from.x} y1={from.y} x2={to.x} y2={to.y} />
                     )}
                 </svg>
             ) : (
@@ -485,7 +344,6 @@ export default function Tutorial({ room, narrow, compact, onClose }: Props) {
                 />
             )}
 
-            {/* The cards the task is about, each ringed where it actually is. */}
             {targets.map((target, i) => (
                 <div
                     key={i}
@@ -501,7 +359,7 @@ export default function Tutorial({ room, narrow, compact, onClose }: Props) {
             ))}
 
             {showGesture && from && to && (
-                <TourHand from={from} to={to} gesture={step.gesture ?? 'tap'} />
+                <TourHand from={from} to={to} gesture={hint.gesture ?? 'tap'} />
             )}
 
             <div
@@ -511,7 +369,7 @@ export default function Tutorial({ room, narrow, compact, onClose }: Props) {
             >
                 <div className="mb-1 flex items-center gap-2">
                     <span className="label-caps text-brass">
-                        {t('tutorial.progress', { current: index + 1, total: visible.length })}
+                        {t('tutorial.progress', { current: lesson.step, total: lesson.total })}
                     </span>
                     <button
                         type="button"
@@ -522,52 +380,41 @@ export default function Tutorial({ room, narrow, compact, onClose }: Props) {
                     </button>
                 </div>
 
-                <h2 className="font-display text-2xl leading-tight tracking-wide text-brass">{t(step.titleKey)}</h2>
-                <p className="mt-1 text-sm leading-snug text-white/80">{t(step.bodyKey)}</p>
+                <h2 className="font-display text-2xl leading-tight tracking-wide text-brass">{t(titleKey)}</h2>
+                <p className="mt-1 text-sm leading-snug text-white/80">{t(bodyKey)}</p>
 
-                {step.taskKey && (
+                {lesson.task && (
                     <p className={`mt-2 rounded-lg px-2.5 py-1.5 text-xs font-semibold ${
-                        complete
-                            ? 'bg-emerald-500/20 text-emerald-200'
-                            : blocked
-                                ? 'bg-white/10 text-white/60'
-                                : 'bg-brass/15 text-amber-200'
+                        lesson.done ? 'bg-emerald-500/20 text-emerald-200' : 'bg-brass/15 text-amber-200'
                     }`}>
-                        {complete
-                            ? t('tutorial.taskDone')
-                            : blocked
-                                ? t(step.blockedNoteKey ?? 'tutorial.waiting')
-                                : `→ ${t(step.taskKey)}`}
+                        {lesson.done ? t('tutorial.taskDone') : `→ ${t(taskKey)}`}
                     </p>
                 )}
 
+                {/* How to do it with what you are holding. */}
+                {lesson.task && !lesson.done && gestureKey && (
+                    <p className="mt-1.5 text-xs text-white/50">{t(gestureKey)}</p>
+                )}
+
                 <div className="mt-3 flex items-center gap-2">
-                    <button
-                        type="button"
-                        className="btn btn-ghost !py-1.5 !text-sm"
-                        disabled={index === 0}
-                        onClick={() => setIndex(i => Math.max(i - 1, 0))}
-                    >
-                        {t('common.back')}
-                    </button>
-                    <span className="flex gap-1">
-                        {visible.map((s, i) => (
+                    <span className="flex flex-1 gap-1">
+                        {Array.from({ length: lesson.total }).map((_, i) => (
                             <span
-                                key={s.id}
-                                className={`h-1.5 w-1.5 rounded-full ${i <= index ? 'bg-brass' : 'bg-white/25'}`}
+                                key={i}
+                                className={`h-1.5 flex-1 rounded-full ${i < lesson.step ? 'bg-brass' : 'bg-white/25'}`}
                             />
                         ))}
                     </span>
                     <button
                         type="button"
-                        className="btn btn-gold ml-auto !py-1.5 !text-sm"
-                        onClick={next}
+                        className={`btn ml-auto !py-1.5 !text-sm ${lesson.done ? 'btn-gold' : 'btn-ghost'}`}
+                        onClick={advance}
                     >
-                        {last
+                        {lesson.step >= lesson.total
                             ? t('tutorial.finish')
-                            : step.done && !complete
-                                ? t('tutorial.skipStep')
-                                : t('common.next')}
+                            : lesson.task && !lesson.done
+                              ? t('tutorial.skipStep')
+                              : t('common.next')}
                     </button>
                 </div>
             </div>

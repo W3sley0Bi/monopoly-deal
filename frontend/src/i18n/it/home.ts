@@ -25,8 +25,14 @@ const home: Catalog = {
     'home.solo.blurb': 'Un tavolo di allenamento contro robot, senza timer e senza nessuno che ti aspetta.',
     'home.solo.tour': 'Il tutorial ti accompagna nel tuo primo turno.',
     'home.solo.robots': 'Robot',
+    'home.solo.options': 'Opzioni: {robots} robot, {level} ▾',
     'home.solo.show_tutorial': 'Mostra il tutorial',
     'home.solo.play': '🎓 Allenati contro i robot',
+    'home.learn.title': 'Impara a giocare',
+    'home.learn.blurb': 'Quindici lezioni pratiche su un tavolo costruito per ognuna, dalla prima proprietà al Deal Breaker.',
+    'home.learn.start': 'Avvia il tutorial',
+    'home.learn.again': 'Rifallo',
+    'home.learn.table_name': '{name} sta imparando',
     // Sent to the server as the table's name, so it reads in the language of
     // whoever opened it rather than of whoever is looking at the list.
     'home.solo.table_name': 'Allenamento di {name}',

@@ -51,6 +51,30 @@ export function useOptionalDragLayer(): DragApi | null {
 
 /** How far a pointer travels before a press turns into a drag. */
 const START_PX = 8;
+/** How long a card stays marked as hand-placed, for TableMotion to skip. */
+const PLACED_MS = 900;
+/** How long a refused card takes to fall back into the hand. */
+const SNAP_MS = 260;
+
+/**
+ * Cards the player has just put down with their own hand.
+ *
+ * The table animates every card that changes place, which is right when
+ * somebody else moves one and wrong for the card you are still holding: your
+ * finger already carried it there, and flying it again reads as a second drop
+ * you did not make. TableMotion asks here and leaves those alone.
+ */
+const placed = new Map<string, number>();
+
+export function wasPlacedByHand(cardId: string): boolean {
+    const at = placed.get(cardId);
+    if (at === undefined) return false;
+    if (performance.now() - at > PLACED_MS) {
+        placed.delete(cardId);
+        return false;
+    }
+    return true;
+}
 /** The ghost sits slightly larger and tilted, so it reads as "in hand". */
 const GHOST_POSE = 'rotate(3deg) scale(1.05)';
 /** How close to a scrolling panel's edge the card has to be to pull it along. */
@@ -154,22 +178,52 @@ export function DragProvider({ children }: { children: ReactNode }) {
             window.setTimeout(() => window.removeEventListener('click', swallow, true), 350);
         };
 
+        // A card that finds nowhere to go falls back to where it came from.
+        // Vanishing from under the finger gives no answer at all; watching it
+        // drop back into the hand says plainly that the table refused it.
+        const snapBack = (node: HTMLElement) => {
+            const home = source.getBoundingClientRect();
+            node.style.transition = `transform ${SNAP_MS}ms cubic-bezier(0.32, 0, 0.35, 1), opacity ${SNAP_MS}ms ease-in`;
+            node.style.transform = `translate3d(${home.left}px, ${home.top}px, 0) scale(0.96)`;
+            node.style.opacity = '0';
+            window.setTimeout(() => node.remove(), SNAP_MS + 40);
+        };
+
         const finish = (commit: boolean) => {
             window.removeEventListener('pointermove', onMove);
             window.removeEventListener('pointerup', onUp);
             window.removeEventListener('pointercancel', onCancel);
             window.removeEventListener('keydown', onKey);
             if (frame) cancelAnimationFrame(frame);
-            ghost?.remove();
-            ghost = null;
             // A press that never became a drag is left alone: it is a tap, and
             // the click that follows it still belongs to the card.
-            if (!started) return;
+            if (!started) {
+                ghost?.remove();
+                ghost = null;
+                return;
+            }
             document.body.classList.remove('is-dragging');
             setDragging(false);
             setOverId(null);
             const zone = commit && over ? zones.current.get(over) : null;
+            const landed = Boolean(zone?.active);
+
+            if (ghost) {
+                if (landed) {
+                    // It arrived. The board is about to draw it in place, so
+                    // the carried copy just goes.
+                    ghost.remove();
+                } else {
+                    snapBack(ghost);
+                }
+                ghost = null;
+            }
+
             swallowNextClick();
+            if (landed) {
+                const id = source.dataset.cardId;
+                if (id) placed.set(id, performance.now());
+            }
             // The drop runs against the state the drag was read from; clearing
             // the carried card first would pull it out from under the handler.
             if (zone?.active) zone.onDrop();
