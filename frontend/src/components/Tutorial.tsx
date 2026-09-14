@@ -128,6 +128,18 @@ function TourHand({
     );
 }
 
+const same = (a: Rect[], b: Rect[]) =>
+    a.length === b.length &&
+    a.every((r, i) => {
+        const o = b[i];
+        return (
+            Math.abs(r.top - o.top) < 0.5 &&
+            Math.abs(r.left - o.left) < 0.5 &&
+            Math.abs(r.width - o.width) < 0.5 &&
+            Math.abs(r.height - o.height) < 0.5
+        );
+    });
+
 /** Tracks a region of the page as the table reflows under it. */
 function useRects(selector: string | undefined, limit: number): Rect[] {
     const [rects, setRects] = useState<Rect[]>([]);
@@ -138,12 +150,13 @@ function useRects(selector: string | undefined, limit: number): Rect[] {
         }
         const measure = () => {
             const found = Array.from(document.querySelectorAll<HTMLElement>(selector)).slice(0, limit);
-            setRects(
-                found.map(el => {
-                    const r = el.getBoundingClientRect();
-                    return { top: r.top, left: r.left, width: r.width, height: r.height };
-                }),
-            );
+            const next = found.map(el => {
+                const r = el.getBoundingClientRect();
+                return { top: r.top, left: r.left, width: r.width, height: r.height };
+            });
+            // A fresh array four times a second re-renders the whole overlay
+            // whether anything moved or not, which is its own source of jitter.
+            setRects(prev => (same(prev, next) ? prev : next));
         };
         measure();
         // The table reflows constantly — a hand re-fans itself whenever a card
@@ -242,24 +255,36 @@ export default function Tutorial({ room, narrow, compact, send, onClose }: Props
     const vw = window.innerWidth;
     const vh = window.innerHeight;
     const cardWidth = Math.min(340, vw - 24);
-    // Parked, not tracked: centred across, and in the slot chosen when the
-    // lesson opened. The highlight still follows what it is pointing at; the
-    // words do not have to.
+
+    // The hand is the one thing the coach must never cover, and on a desktop
+    // it is not always along the bottom: the hand-position setting can stand it
+    // up as a column down either side. Blocking off its vertical span in that
+    // case leaves no screen at all, which collapsed the coach to a hint strip
+    // for the whole tour.
+    const hand = handRects[0] ?? null;
+    const sideHand = Boolean(hand && hand.height > vh * 0.6);
+    const free = {
+        left: hand && sideHand && hand.left < vw / 2 ? hand.left + hand.width : 0,
+        right: hand && sideHand && hand.left >= vw / 2 ? hand.left : vw,
+        top: 0,
+        bottom: hand && !sideHand ? hand.top : vh,
+    };
+
+    // Parked, not tracked: centred in whatever the hand leaves, and in the slot
+    // chosen when the lesson opened. The highlight still follows what it is
+    // pointing at; the words do not have to.
     const cardStyle: React.CSSProperties = {
         width: cardWidth,
-        left: '50%',
+        left: (free.left + free.right) / 2,
         transform: 'translateX(-50%)',
     };
-    // The hand is the one thing the coach must never cover, and its top edge
-    // stays put even as the cards inside it move.
-    const handTop = handRects[0]?.top ?? vh;
-    if (slot === 'bottom') cardStyle.bottom = Math.max(vh - handTop + 8, 12);
-    else cardStyle.top = 12;
+    if (slot === 'bottom') cardStyle.bottom = Math.max(vh - free.bottom + 12, 12);
+    else cardStyle.top = free.top + 12;
 
     // On a phone there is often no room above the hand for a full card. Rather
     // than clamp it into the cards it is pointing at, the coach becomes a strip
     // and gets out of the way entirely.
-    const cramped = handTop - 24 < cardHeight;
+    const cramped = free.bottom - free.top - 24 < cardHeight;
 
     const titleKey = `lesson.${lesson.id}.title`;
     const bodyKey = `lesson.${lesson.id}.body`;
