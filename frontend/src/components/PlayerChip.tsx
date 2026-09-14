@@ -63,7 +63,7 @@ export default function PlayerChip({ player, isTurn, isTargeted, stream, inCall,
             {player.sets.length === 0 ? (
                 <p className="text-[0.65rem] italic text-white/30">{t('sets.empty_short')}</p>
             ) : (
-                <div className="flex h-1 gap-0.5">
+                <div className="chip-sets flex gap-0.5">
                     {player.sets.map(s => (
                         <span
                             key={s.color}

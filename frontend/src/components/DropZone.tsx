@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
-import { useState } from 'react';
+import { useEffect, useId, useRef } from 'react';
+import { useOptionalDragLayer } from '../game/dragLayer';
 
 interface Props {
     /** Whether the current drag can be dropped here. */
@@ -16,30 +17,37 @@ interface Props {
 /**
  * A mat area that accepts a dragged card. Inactive zones ignore drops entirely,
  * so an illegal card cannot be dropped by accident.
+ *
+ * The zone announces itself to the drag layer rather than listening for drag
+ * events of its own: the pointer that carries the card is hit-tested against
+ * the page, which is the only way a finger can drop anything at all.
  */
 export default function DropZone({ active, onDrop, children, className = '', hint, tour }: Props) {
-    const [over, setOver] = useState(false);
+    const id = useId();
+    const layer = useOptionalDragLayer();
+    const setZone = layer?.setZone;
+    const over = layer?.overId === id;
+
+    // The handler changes on every render; the registration must not, or the
+    // zone would deregister itself out from under an in-flight drag.
+    const drop = useRef(onDrop);
+    drop.current = onDrop;
+
+    useEffect(() => {
+        if (!setZone) return;
+        setZone(id, { active, onDrop: () => drop.current() });
+        return () => setZone(id, null);
+    }, [id, active, setZone]);
 
     return (
         <div
             data-tour={tour}
-            onDragOver={e => {
-                if (!active) return;
-                e.preventDefault();
-                e.dataTransfer.dropEffect = 'move';
-                if (!over) setOver(true);
-            }}
-            onDragLeave={() => setOver(false)}
-            onDrop={e => {
-                if (!active) return;
-                e.preventDefault();
-                setOver(false);
-                onDrop();
-            }}
+            data-drop-id={id}
+            data-active={active || undefined}
             className={[
                 'relative transition-all duration-150',
                 active ? 'outline-2 outline-offset-2 outline-dashed outline-brass/60' : '',
-                over ? 'scale-[1.02] outline-solid outline-brass shadow-[0_0_30px_-6px_rgba(242,193,78,0.8)]' : '',
+                over ? 'drop-zone-over scale-[1.02] outline-solid outline-brass shadow-[0_0_30px_-6px_rgba(242,193,78,0.8)]' : '',
                 className,
             ].join(' ')}
         >

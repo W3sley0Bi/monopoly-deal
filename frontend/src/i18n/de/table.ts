@@ -88,10 +88,16 @@ const table: Catalog = {
 
     // ── Properties ───────────────────────────────────────────────────────
     'table.your_properties': 'Deine Immobilien',
+    'table.board_fold': 'Eigenes Board einklappen',
+    'table.hand_position': 'Handkarten',
+    'table.hand_left': 'Links',
+    'table.hand_right': 'Rechts',
+    'table.hand_bottom': 'Unten',
+    'table.board_unfold': 'Eigenes Board zeigen',
     'table.sets_progress': '{done}/3 Sätze',
     'table.empty_hand_to_win': ' · leere deine Hand zum Sieg',
     'table.new_set': 'neu',
-    'table.properties_tap': 'Tipp eine Immobilienkarte an, um sie in einen Satz zu legen',
+    'table.properties_tap': 'Tipp eine Immobilienkarte an oder zieh sie in einen Satz',
     'table.properties_drag': 'Zieh eine Immobilienkarte hierher, um einen Satz zu beginnen',
     // The wildcard rule changed: a card already on the table is no longer free
     // to shuffle around, so the mat says what a move now costs.
@@ -100,7 +106,7 @@ const table: Catalog = {
     // ── Hand ─────────────────────────────────────────────────────────────
     'table.hand': 'Hand · {count}',
     'table.over_limit': 'Über 7 — leg {count} ab',
-    'table.hand_tap': 'Tipp eine Karte für Optionen an',
+    'table.hand_tap': 'Tipp eine Karte für Optionen an oder zieh sie nach oben',
     'table.hand_drag': 'Zieh eine Karte auf den Tisch oder tipp sie für Optionen an',
     'table.hand_empty': 'Keine Karten — zu Beginn deiner nächsten Runde ziehst du 5.',
 

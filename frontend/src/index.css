@@ -1320,8 +1320,8 @@ select:focus-visible {
         max-width: 150px;
     }
     .table-field {
-        overflow-y: auto;
-        overflow-x: hidden;
+        overflow: hidden;
+        min-height: 0;
     }
     .arena-top {
         flex: none;
@@ -1960,14 +1960,6 @@ select:focus-visible {
     .seats-4 .opponent-seat:first-child { left: 18.5%; }
     .seats-4 .opponent-seat:nth-child(2) { right: 18.5%; }
 }
-@media (min-width: 900px) {
-    .seats-1 .opponent-seat > .seat-cards,
-    .seats-3 .opponent-seat:first-child > .seat-cards {
-        justify-content: flex-start;
-        padding-left: 0;
-        transform: translateX(-44px);
-    }
-}
 
 /* Video belongs to the table, while call audio stays mounted independently. */
 .call-toolbar { display: flex; align-items: center; gap: 4px; }
@@ -2117,17 +2109,55 @@ select:focus-visible {
 .opponent-properties-dense .opponent-property-card + .opponent-property-card { margin-left: -15px; }
 .opponent-properties-dense .opponent-set-label { padding: 2px 0; font-size: 7px; }
 .opponent-properties-dense .opponent-set-label > span { font-size: 6px; letter-spacing: 0; }
-.property-groups { display: flex; flex-wrap: wrap; align-content: flex-start; overflow: visible; }
-.my-board { max-height: none; }
-.property-zone { flex-shrink: 0; }
-.table-field { overflow-y: auto; scrollbar-width: thin; }
-.arena-top { flex-shrink: 0; }
-.call-enable-audio { top: 66px; bottom: auto; right: 50%; transform: translateX(50%); font-size: 12px; z-index: 45; }
+/* The table itself never scrolls. A board that slides out from under a card
+   already in the air takes the drop zone with it, and the player is left
+   holding a card over nothing. So the two parts that grow without limit — a
+   rival's property groups and your own sets — absorb that growth inside their
+   own panel, and the arena, the drop zones and the hand all stay put. */
+.table-field { overflow: hidden; min-height: 0; scrollbar-width: thin; }
 @media (min-width: 900px) {
-    .table-field:has(.opponent-properties[data-rows="2"]) .arena-top { min-height: 430px; }
-    .table-field:has(.opponent-properties[data-rows="3"]) .arena-top { min-height: 540px; }
-    .table-field:has(.seat-with-camera .opponent-properties[data-rows="2"]) .arena-top { min-height: 530px; }
-    .table-field:has(.seat-with-camera .opponent-properties[data-rows="3"]) .arena-top { min-height: 650px; }
+    .arena-top { flex: 1 1 auto; min-height: 230px; }
+    .my-board { flex: 0 1 auto; min-height: 150px; max-height: min(264px, 32vh); }
+}
+.opponent-seat .opponent-properties {
+    max-height: 132px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: oklch(100% 0 0 / 0.18) transparent;
+}
+/* The class sets `display: flex`, which would otherwise beat the user agent's
+   rule for `hidden` and leave a folded board on screen. */
+.property-groups[hidden] {
+    display: none;
+}
+.property-groups {
+    display: flex;
+    flex-wrap: wrap;
+    align-content: flex-start;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: oklch(100% 0 0 / 0.18) transparent;
+}
+.property-zone { min-height: 0; }
+.call-enable-audio { top: 66px; bottom: auto; right: 50%; transform: translateX(50%); font-size: 12px; z-index: 45; }
+/* A seat at the head of the table is a two-column grid, so its properties are
+   bounded by the profile beside them rather than by the stack above. */
+@media (min-width: 900px) {
+    .seats-1 .opponent-properties,
+    .seats-3 .opponent-seat:first-child .opponent-properties { max-height: 152px; }
+    .seats-1 .seat-with-camera .opponent-properties,
+    .seats-3 .seat-with-camera:first-child .opponent-properties { max-height: 204px; }
+}
+@media (min-width: 900px) and (max-height: 780px) {
+    .arena-top { min-height: 190px; }
+    .my-board { min-height: 119px; max-height: 152px; }
+    .opponent-seat .opponent-properties { max-height: 104px; }
+}
+@media (max-width: 899px) {
+    .property-zone { flex: 1 1 auto; min-height: 0; }
 }
 .room-invite-button { border: 1px solid #e9cf8230; border-radius: 6px; padding: 3px 6px; background: #071e23aa; color: #eddf70; font-size: 11px; font-weight: 800; letter-spacing: .14em; white-space: nowrap; }
 .room-invite-button:hover { background: #ffffff12; border-color: #eed38b; }
@@ -2167,3 +2197,721 @@ select:focus-visible {
 @keyframes choose-starter { from { transform: rotate(0deg); } to { transform: rotate(var(--wheel-end)); } }
 @media (prefers-reduced-motion: reduce) { .start-wheel-disc { animation: none; transform: rotate(var(--wheel-end)); } }
 @media (max-height: 500px) and (orientation: landscape) { .start-wheel-panel { grid-template-columns: 1fr 1fr; gap: 8px 24px; } .start-wheel-frame { grid-column: 1; grid-row: 1 / 4; width: min(265px, 70vh); } .start-wheel-copy { grid-column: 2; } .start-wheel-result, .start-wheel-order { grid-column: 2; } .start-wheel-copy h2 { font-size: 26px; } .start-wheel-result strong { font-size: 18px; } }
+
+/* ── Carrying a card ──────────────────────────────────────────────────────
+   The browser's own drag-and-drop never fires under a finger, so a card is
+   carried by a clone of itself that rides the pointer. One pipeline serves
+   mouse, pen and touch, which is why nothing here is behind a media query. */
+.drag-ghost {
+    position: fixed;
+    left: 0;
+    top: 0;
+    z-index: 200;
+    margin: 0 !important;
+    pointer-events: none;
+    transform-origin: 50% 50%;
+    transition: none !important;
+    animation: none !important;
+    opacity: 0.97;
+    filter: drop-shadow(0 18px 24px oklch(8% 0.02 220 / 0.55));
+}
+.drag-ghost::after,
+.drag-ghost::before {
+    display: none;
+}
+body.is-dragging {
+    cursor: grabbing;
+    user-select: none;
+    -webkit-user-select: none;
+}
+/* The zone under the card answers, so a finger that hides the target still
+   gets an unambiguous yes. */
+.drop-zone-over {
+    animation: drop-zone-breathe 1s ease-in-out infinite;
+}
+@keyframes drop-zone-breathe {
+    50% {
+        filter: brightness(1.14);
+    }
+}
+
+/* ── Phone drop targets ───────────────────────────────────────────────────
+   A phone never draws the shared centre of the table, so the targets it holds
+   stand permanently beside the bank. Showing them only mid-drag left no way to
+   tell "play this hotel" from "bank it" before the gesture was committed. */
+.board-targets {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+    min-width: 0;
+}
+.board-targets > .bank-zone {
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
+}
+.board-target {
+    flex: 0 0 5.5rem;
+}
+.board-target-slot {
+    display: flex;
+    height: 100%;
+    min-height: 52px;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    padding: 4px;
+    text-align: center;
+    border-radius: 12px;
+    border: 1px dashed oklch(85% 0.06 180 / 0.3);
+    background: oklch(17% 0.03 210 / 0.85);
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    line-height: 1.15;
+    color: oklch(84% 0.03 190 / 0.65);
+}
+.board-target-slot > span {
+    font-size: 15px;
+    line-height: 1;
+}
+/* Lit only for a card that can actually land here. */
+.board-target[data-active] .board-target-slot {
+    border-color: oklch(85% 0.09 90 / 0.75);
+    color: oklch(89% 0.1 90);
+}
+
+/* ── The folding board ────────────────────────────────────────────────────
+   Upright, your own properties are the tallest thing on the screen and, while
+   somebody else is playing, the least urgent. Folded, the seats above get the
+   height and the colour bar keeps the shape of your board. */
+.property-fold {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    margin-bottom: 8px;
+    padding: 2px 0;
+    min-height: 34px;
+    text-align: left;
+    cursor: pointer;
+}
+.property-fold > p:last-of-type {
+    margin-left: auto;
+}
+.property-chevron {
+    flex-shrink: 0;
+    font-size: 13px;
+    line-height: 1;
+    color: oklch(85% 0.04 185 / 0.65);
+    transition: transform 0.2s;
+}
+.is-folded .property-fold {
+    margin-bottom: 0;
+}
+.is-folded .property-chevron {
+    transform: rotate(-90deg);
+}
+.board-swatches {
+    display: flex;
+    gap: 2px;
+    flex: 1 1 auto;
+    min-width: 40px;
+    max-width: 130px;
+    height: 7px;
+}
+.board-swatches > span {
+    border-radius: 99px;
+}
+@media (max-width: 899px) and (orientation: portrait) {
+    .board-folded .property-zone {
+        flex: 0 0 auto;
+        min-height: 0;
+    }
+    .board-folded .my-board {
+        flex: 0 0 auto;
+    }
+    /* The height the board gave up goes to whoever is playing now. */
+    .board-folded .arena-top {
+        flex: 1 1 auto;
+        min-height: 150px;
+    }
+    .board-folded .opponent-seats {
+        flex-wrap: wrap;
+        align-content: flex-start;
+        overflow-x: hidden;
+        overflow-y: auto;
+    }
+    .board-folded .opponent-seats > .panel {
+        flex: 1 1 9.5rem;
+        width: auto;
+    }
+    .board-folded .chip-sets {
+        height: 10px;
+    }
+}
+.chip-sets {
+    height: 4px;
+}
+/* Laid flat the board sits beside the targets, so they stack instead. */
+@media (max-width: 899px) and (orientation: landscape) and (max-height: 600px) {
+    .board-targets {
+        flex-direction: column;
+        flex: 0 0 8.5rem;
+        gap: 4px;
+    }
+    .board-target {
+        flex: 0 0 auto;
+    }
+    .board-target-slot {
+        flex-direction: row;
+        gap: 5px;
+        min-height: 30px;
+    }
+    .board-target-slot > span {
+        font-size: 12px;
+    }
+}
+
+/* The running commentary is the phone's only view of the shared centre, which
+   it has no room to draw. Upright it sits under the seats; laid flat there is
+   no height to spare for it, and the talk sheet carries the same log. */
+@media (max-width: 899px) and (orientation: portrait) {
+    .arena-top {
+        display: flex;
+        flex-direction: column;
+        min-height: 134px;
+    }
+    .arena-top > .opponent-seats {
+        flex: 0 1 auto;
+        min-height: 0;
+    }
+    .table-event {
+        position: static;
+        flex: none;
+        left: auto;
+        right: auto;
+        width: 100%;
+        margin-top: 4px;
+        padding: 0 6px;
+        font-size: 10px;
+    }
+}
+@media (max-width: 899px) and (orientation: landscape) {
+    .table-event {
+        display: none;
+    }
+}
+
+/* ── Phone comfort ────────────────────────────────────────────────────────
+   Notches, home indicators and the pull-to-refresh bounce all eat into a
+   board that is supposed to hold still. */
+@media (max-width: 899px) {
+    .game-room {
+        padding-left: max(8px, env(safe-area-inset-left));
+        padding-right: max(8px, env(safe-area-inset-right));
+        padding-top: max(6px, env(safe-area-inset-top));
+        overscroll-behavior: none;
+    }
+    /* Controls sit where a thumb can reach them without a second hand. */
+    .mobile-controls .btn {
+        min-height: 40px;
+    }
+    .compact-room .opponent-seats > .panel {
+        min-height: 44px;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .drop-zone-over {
+        animation: none;
+    }
+}
+
+/* ── The hand beside the table ────────────────────────────────────────────
+   Laid across the bottom of a wide screen the hand costs the table a quarter
+   of its height, for cards that read just as well standing on end. Stood in a
+   column it gives that height back to the board — which is what was running
+   out of room in the first place. Which side suits is the player's call. */
+@media (min-width: 900px) {
+    .hand-column .table-stage {
+        display: grid;
+        grid-template-rows: minmax(0, 1fr);
+        gap: 10px;
+        /* Clear the log rail, which floats over the right edge either way. */
+        padding-right: 48px;
+    }
+    .hand-right .table-stage {
+        grid-template-columns: minmax(0, 1fr) 13rem;
+    }
+    .hand-left .table-stage {
+        grid-template-columns: 13rem minmax(0, 1fr);
+    }
+    .hand-left .table-field {
+        grid-column: 2;
+        grid-row: 1;
+    }
+    .hand-left .hand-zone {
+        grid-column: 1;
+        grid-row: 1;
+    }
+    .hand-column .table-field {
+        min-height: 0;
+    }
+    .hand-column .my-board {
+        margin: 0;
+        max-height: min(420px, 46vh);
+    }
+    .hand-column .hand-zone,
+    .hand-column.desktop-room .hand-zone {
+        height: auto;
+        min-height: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+    }
+    .hand-column .hand-fan {
+        flex: 1 1 auto;
+        flex-direction: column;
+        align-items: center;
+        justify-content: safe center;
+        min-height: 0;
+        padding: 8px 0;
+        overflow-y: auto;
+        overflow-x: hidden;
+        overscroll-behavior: contain;
+        perspective: none;
+        scrollbar-width: none;
+    }
+    .hand-column .hand-fan::-webkit-scrollbar {
+        display: none;
+    }
+    .hand-column .hand-card {
+        width: 8rem;
+        height: 11.25rem;
+        font-size: 11px;
+        margin-left: 0;
+        /* Each card shows its colour band and title; the rest is covered by
+           the card in front of it, exactly as a held fan behaves. */
+        margin-top: -6.5rem;
+        transform-origin: 50% 50%;
+        transform: rotate(var(--fan-angle));
+    }
+    .hand-column .hand-many .hand-card {
+        margin-top: -7.6rem;
+    }
+    .hand-column .hand-card:first-child {
+        margin-top: 0;
+    }
+    /* The lift travels sideways here, away from the table it sits beside. */
+    .hand-right .hand-card::after {
+        inset: -3px -30px -3px -14px;
+    }
+    .hand-left .hand-card::after {
+        inset: -3px -14px -3px -30px;
+    }
+    .hand-column .hand-card:hover,
+    .hand-column .hand-card:focus-visible,
+    .hand-column .hand-card[data-selected] {
+        z-index: 6;
+    }
+    .hand-right .hand-card:hover,
+    .hand-right .hand-card:focus-visible,
+    .hand-right .hand-card[data-selected] {
+        transform: translateX(-1.1rem) rotate(0deg) scale(1.04);
+    }
+    .hand-left .hand-card:hover,
+    .hand-left .hand-card:focus-visible,
+    .hand-left .hand-card[data-selected] {
+        transform: translateX(1.1rem) rotate(0deg) scale(1.04);
+    }
+    .hand-column .hand-zone > div:first-child {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 2px;
+        padding: 6px 8px 0;
+    }
+    .hand-column .hand-zone > div:first-child > p {
+        font-size: 9px;
+        white-space: normal;
+        line-height: 1.25;
+    }
+    .hand-column .hand-player {
+        gap: 7px;
+        min-width: 0;
+        font-size: 11px;
+    }
+    .hand-column .hand-player > strong {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .hand-column .hand-end-turn {
+        position: static;
+        flex-shrink: 0;
+        justify-content: center;
+        padding-bottom: 8px;
+    }
+    /* Nothing is parked at the bottom of the screen any more. */
+    .hand-column.desktop-room .card-action-tray {
+        bottom: 14px;
+    }
+    .hand-column .social-panel {
+        bottom: 8px;
+    }
+}
+
+/* ── A board that says when there is more of it ───────────────────────────
+   Sets used to be cut off mid-card by the panel edge, with nothing to say a
+   second row existed. They shrink as they multiply, and what still does not
+   fit fades out instead of ending in a straight cut. */
+.property-zone[data-density='dense'] .card-face {
+    width: 46px;
+    height: 65px;
+    font-size: 7px;
+}
+.property-zone[data-density='tight'] .card-face {
+    width: 38px;
+    height: 54px;
+    font-size: 6px;
+}
+/* Rows snap, so scrolling never parks the panel edge through a card. */
+.property-groups {
+    scroll-snap-type: y proximity;
+}
+.property-groups > * {
+    scroll-snap-align: start;
+}
+/* Only a board with enough sets to overflow gets the fade that says so. */
+.property-zone[data-density] .property-groups {
+    mask-image: linear-gradient(to bottom, #000 calc(100% - 20px), transparent);
+}
+
+/* ── Whose turn it is ─────────────────────────────────────────────────────
+   Announced once, large, then out of the way. */
+.turn-banner {
+    position: fixed;
+    z-index: 60;
+    top: 22%;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    max-width: min(92vw, 640px);
+    padding: 12px 26px 12px 14px;
+    border-radius: 999px;
+    pointer-events: none;
+    border: 1px solid oklch(90% 0.02 211 / 0.18);
+    background: oklch(14% 0.03 211 / 0.92);
+    backdrop-filter: blur(8px);
+    box-shadow: 0 24px 60px oklch(6% 0.02 220 / 0.6);
+    animation: turn-banner-life 2.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+.turn-banner > strong {
+    font-family: var(--font-display, inherit);
+    font-size: clamp(22px, 4.4vw, 40px);
+    line-height: 1;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: oklch(94% 0.03 190);
+}
+.turn-banner-you {
+    border-color: var(--color-brass);
+}
+.turn-banner-you > strong {
+    color: var(--color-brass);
+}
+@keyframes turn-banner-life {
+    0% {
+        opacity: 0;
+        transform: translateX(-50%) translateY(-12px) scale(0.94);
+    }
+    9% {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0) scale(1);
+    }
+    72% {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0) scale(1);
+    }
+    100% {
+        opacity: 0;
+        transform: translateX(-50%) translateY(-8px) scale(0.98);
+    }
+}
+@media (max-width: 899px) {
+    .turn-banner {
+        top: 30%;
+        gap: 10px;
+        padding: 9px 18px 9px 10px;
+    }
+    .turn-banner > span[role='img'] {
+        width: 38px !important;
+        height: 38px !important;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .turn-banner {
+        animation: none;
+    }
+}
+
+/* ── The hand fan belongs beside the name ─────────────────────────────────
+   Stacked under the profile it cost every seat a third row, and rows are the
+   thing seats do not have to spare: they are what pushed a seat down over the
+   shared centre. Beside the name it reads as a badge and costs nothing. */
+@media (min-width: 900px) {
+    .opponent-seat {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        column-gap: 6px;
+        align-items: center;
+    }
+    .opponent-seat > .seat-profile {
+        grid-column: 1;
+        grid-row: 1;
+    }
+    .opponent-seat > .seat-cards {
+        grid-column: 2;
+        grid-row: 1;
+        height: auto;
+        padding: 0;
+    }
+    .opponent-seat > .seat-assets,
+    .opponent-seat > .opponent-properties,
+    .opponent-seat > .opponent-properties-empty {
+        grid-column: 1 / -1;
+    }
+    .opponent-seat > .seat-cards .card-back {
+        width: 21px;
+        height: 30px;
+        border-width: 1px;
+        border-radius: 3px;
+        margin-left: -12px;
+    }
+    .opponent-seat > .seat-cards .card-back-mark b {
+        font-size: 6px;
+    }
+
+    /* The seat at the head of the table already runs two columns wide, so the
+       fan takes the top of the right one and the properties start below it. */
+    .seats-1 .opponent-seat > .seat-cards,
+    .seats-3 .opponent-seat:first-child > .seat-cards {
+        grid-column: 2;
+        grid-row: 1;
+        justify-content: flex-end;
+        transform: none;
+    }
+    .seats-1 .opponent-properties,
+    .seats-3 .opponent-seat:first-child .opponent-properties,
+    .seats-1 .opponent-properties-empty,
+    .seats-3 .opponent-seat:first-child .opponent-properties-empty {
+        grid-column: 2;
+        grid-row: 2 / 5;
+        align-self: start;
+    }
+    .seats-1 .opponent-seat > .seat-assets,
+    .seats-3 .opponent-seat:first-child > .seat-assets {
+        grid-column: 1;
+    }
+}
+
+/* ── The board of whoever is playing ──────────────────────────────────────
+   A phone reduces every rival to a chip, and the middle of the table sits
+   empty while somebody else takes their turn. That space belongs to them. */
+.active-board {
+    position: relative;
+    z-index: 3;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    min-height: 0;
+    margin: 5px 2px 0;
+    padding: 5px 6px 6px;
+    border-radius: 14px;
+    border: 1px solid oklch(88% 0.06 175 / 0.2);
+    background: oklch(16% 0.03 205 / 0.62);
+    backdrop-filter: blur(2px);
+}
+.active-board-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+    min-width: 0;
+    font-size: 12px;
+}
+.active-board-who {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    min-height: 38px;
+    padding: 0 6px 0 2px;
+    border-radius: 10px;
+    text-align: left;
+    cursor: pointer;
+}
+.active-board-who:hover,
+.active-board-who:focus-visible {
+    background: oklch(100% 0 0 / 0.07);
+    outline: none;
+}
+.active-board-who > strong {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--font-display);
+    font-size: 15px;
+    letter-spacing: 0.02em;
+}
+.active-board-bank {
+    flex-shrink: 0;
+    color: oklch(89% 0.15 150);
+    font-weight: 800;
+    font-size: 11px;
+}
+.active-board-chevron {
+    flex-shrink: 0;
+    font-size: 16px;
+    line-height: 1;
+    color: oklch(84% 0.04 190 / 0.55);
+}
+.active-hand {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex-shrink: 0;
+    min-height: 38px;
+    padding: 0 7px;
+    border-radius: 10px;
+    border: 1px solid oklch(100% 0 0 / 0.1);
+    cursor: pointer;
+}
+.active-hand[aria-expanded='true'] {
+    border-color: oklch(85% 0.06 180 / 0.4);
+    background: oklch(100% 0 0 / 0.07);
+}
+.active-hand > b {
+    font-size: 11px;
+    color: oklch(88% 0.02 190);
+}
+.active-hand-pile {
+    display: flex;
+    align-items: center;
+}
+.active-hand-pile .card-back {
+    width: 19px;
+    height: 27px;
+    border-width: 1px;
+    border-radius: 3px;
+    margin-left: -16px;
+    transition:
+        margin 0.24s cubic-bezier(0.16, 1, 0.3, 1),
+        transform 0.24s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.active-hand-pile .card-back:first-child {
+    margin-left: 0;
+}
+.active-hand-pile.is-fanned .card-back {
+    margin-left: -7px;
+    transform: rotate(calc(var(--i) * 7deg));
+}
+.active-hand-pile .card-back-mark {
+    display: none;
+}
+.active-board-sets {
+    flex: 0 1 auto;
+    min-height: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+}
+.active-board-sets > div {
+    flex-wrap: nowrap;
+    gap: 6px;
+    align-items: stretch;
+}
+.active-board-sets::-webkit-scrollbar {
+    display: none;
+}
+.active-board-sets .card-face {
+    width: 60px;
+    height: 86px;
+    font-size: 8px;
+}
+/* PropertySets overlaps its cards by a fixed 2rem, which buries a card this
+   size; the stack is re-spaced so each one still shows its colour and name. */
+.active-board-sets .card-face + .card-face {
+    margin-left: -38px;
+}
+.active-board-sets .card-symbol {
+    display: none;
+}
+@media (max-width: 899px) and (orientation: portrait) {
+    /* Your board belongs at the bottom, in reach of the thumb that holds the
+       phone, with the shared table above it taking whatever is left over.
+       It used to stretch and leave its slack underneath itself instead. */
+    .arena-top {
+        flex: 1 1 auto;
+        min-height: 134px;
+    }
+    .arena-top > .opponent-seats {
+        min-height: 0;
+    }
+    .my-board {
+        flex: 0 0 auto;
+        /* The narrow layout floors this at 170px, which a folded board cannot
+           fill — that unfilled remainder was the empty green band above the
+           hand. It sizes to what it holds now. */
+        min-height: 0;
+        max-height: 46vh;
+    }
+}
+/* Laid flat there is no centre to give away; the chips carry it. */
+@media (max-width: 899px) and (orientation: landscape) {
+    .active-board {
+        display: none;
+    }
+}
+
+/* ── The table menu, on a phone ───────────────────────────────────────────
+   Squeezed into 16rem the menu cut its own controls off at the edge, and its
+   rows were mouse-sized. It takes the width of the screen instead. */
+@media (max-width: 899px) {
+    .game-menu {
+        left: 8px;
+        right: 8px;
+        width: auto;
+        max-width: none;
+        max-height: min(78vh, calc(100dvh - 5rem));
+        border-radius: 16px;
+    }
+    .game-menu > button[role='menuitem'],
+    .game-menu > button[role='menuitemcheckbox'],
+    .game-menu > button[role='menuitemradio'] {
+        /* The rows are `display: block`, so height alone would leave the label
+           pinned to the top of a 48px target. */
+        display: flex;
+        align-items: center;
+        min-height: 48px;
+        padding: 6px 14px;
+        font-size: 14px;
+    }
+    .game-menu > p {
+        padding: 10px 14px;
+        font-size: 12px;
+    }
+    /* Language and hand position are rows of pills; each one is a target. */
+    .game-menu .btn {
+        min-height: 40px;
+        padding-inline: 12px;
+    }
+}

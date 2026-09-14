@@ -2,6 +2,8 @@ import type { CSSProperties } from 'react';
 import type { Card, Color, SetView } from '../types';
 import type { I18n } from '../i18n';
 import { ACTION_BLURB_KEY, colorMeta } from '../game/meta';
+import { useOptionalDragLayer } from '../game/dragLayer';
+import type { DragAxis } from '../game/dragLayer';
 import { useI18n } from '../i18n';
 import HoverDetails from './HoverDetails';
 import DualWildcard from './DualWildcard';
@@ -31,8 +33,10 @@ interface Props {
     className?: string;
     style?: CSSProperties;
     title?: string;
-    /** Enables HTML5 dragging for play-by-drag. */
+    /** Lets the card be picked up and carried to a drop zone. */
     draggable?: boolean;
+    /** Which pull starts the drag. The hand needs `vertical`; see `dragLayer`. */
+    dragAxis?: DragAxis;
     onDragStart?: () => void;
     onDragEnd?: () => void;
     /** Dimmed and lifted while this card is the one being dragged. */
@@ -76,6 +80,7 @@ export default function PlayingCard({
     style,
     title,
     draggable,
+    dragAxis = 'free',
     onDragStart,
     onDragEnd,
     dragging,
@@ -85,6 +90,8 @@ export default function PlayingCard({
     inspectable = true,
 }: Props) {
     const { t, tCard, tColor } = useI18n();
+    const dragLayer = useOptionalDragLayer();
+    const pickUp = draggable && dragLayer ? dragLayer.begin : null;
     const interactive = Boolean(onClick);
     const cols = stripeColors(card);
     const isProp =
@@ -183,14 +190,16 @@ export default function PlayingCard({
                 aria-pressed={interactive ? Boolean(selected) : undefined}
                 aria-label={`${tCard(card)}, ${money(t, card.value)}${activeColor ? `, ${t('inspect.played_as')} ${tColor(activeColor)}` : ''}`}
                 disabled={!inspectable && !interactive && !draggable}
-                draggable={draggable}
-                onDragStart={(e) => {
-                    // Some browsers cancel the drag without any payload.
-                    e.dataTransfer.setData('text/plain', card.id);
-                    e.dataTransfer.effectAllowed = 'move';
-                    onDragStart?.();
-                }}
-                onDragEnd={onDragEnd}
+                onPointerDown={
+                    pickUp
+                        ? (e) =>
+                              pickUp(e, {
+                                  axis: dragAxis,
+                                  onStart: () => onDragStart?.(),
+                                  onEnd: () => onDragEnd?.(),
+                              })
+                        : undefined
+                }
                 onClick={onClick}
                 style={
                     {
@@ -199,6 +208,13 @@ export default function PlayingCard({
                             : card.type === 'money'
                               ? '#42bd97'
                               : '#f5b643',
+                        // A finger that pulls a card up must not also scroll
+                        // the rail the card is sitting in.
+                        touchAction: pickUp
+                            ? dragAxis === 'vertical'
+                                ? 'pan-x'
+                                : 'none'
+                            : undefined,
                         ...style,
                     } as CSSProperties
                 }
@@ -208,7 +224,7 @@ export default function PlayingCard({
                     interactive || draggable || inspectable
                         ? 'cursor-pointer transition-transform duration-150 hover:-translate-y-1.5 hover:shadow-[var(--shadow-lift)]'
                         : 'cursor-default',
-                    draggable ? 'active:cursor-grabbing' : '',
+                    pickUp ? 'cursor-grab active:cursor-grabbing' : '',
                     selected
                         ? '-translate-y-1.5 shadow-[var(--shadow-glow)]'
                         : '',

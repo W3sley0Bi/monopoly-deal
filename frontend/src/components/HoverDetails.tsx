@@ -155,6 +155,9 @@ export default function HoverDetails({
                     onPointerDown={(e) => {
                         anchor.current = e.currentTarget;
                         close();
+                        // The trigger may start a card drag here, so its own
+                        // handler has to survive being wrapped.
+                        children.props.onPointerDown?.(e);
                     }}
                 />
             ) : (

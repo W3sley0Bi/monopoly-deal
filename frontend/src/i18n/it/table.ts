@@ -88,10 +88,16 @@ const table: Catalog = {
 
     // ── Properties ───────────────────────────────────────────────────────
     'table.your_properties': 'Le tue proprietà',
+    'table.board_fold': 'Chiudi il tuo tabellone',
+    'table.hand_position': 'Mano',
+    'table.hand_left': 'Sinistra',
+    'table.hand_right': 'Destra',
+    'table.hand_bottom': 'In basso',
+    'table.board_unfold': 'Mostra il tuo tabellone',
     'table.sets_progress': '{done}/3 serie',
     'table.empty_hand_to_win': ' · svuota la mano per vincere',
     'table.new_set': 'nuova',
-    'table.properties_tap': 'Tocca una carta proprietà per giocarla in una serie',
+    'table.properties_tap': 'Tocca o trascina una carta proprietà in una serie',
     'table.properties_drag': 'Trascina qui una carta proprietà per iniziare una serie',
     // The wildcard rule changed: a card already on the table is no longer free
     // to shuffle around, so the mat says what a move now costs.
@@ -100,7 +106,7 @@ const table: Catalog = {
     // ── Hand ─────────────────────────────────────────────────────────────
     'table.hand': 'Mano · {count}',
     'table.over_limit': 'Più di 7 — scarta {count}',
-    'table.hand_tap': 'Tocca una carta per le opzioni',
+    'table.hand_tap': 'Tocca una carta per le opzioni o trascinala in alto',
     'table.hand_drag': 'Trascina una carta sul tavolo, oppure toccala per le opzioni',
     'table.hand_empty': 'Nessuna carta — ne peschi 5 all’inizio del tuo prossimo turno.',
 

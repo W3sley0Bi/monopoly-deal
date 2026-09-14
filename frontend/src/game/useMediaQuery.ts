@@ -20,3 +20,9 @@ export function useMediaQuery(query: string): boolean {
  * below this width. Chosen from where the board actually breaks, not a device.
  */
 export const NARROW = '(max-width: 899px)';
+
+/**
+ * A phone held upright. Height is the scarce dimension there, so the board
+ * folds away between turns rather than competing with the shared table.
+ */
+export const PORTRAIT = '(orientation: portrait)';

@@ -7,7 +7,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import type { Card, ClientMessage, Color, PlayerView, RoomView } from '../types';
 import type { Call } from '../game/useWebRTC';
-import { NARROW, useMediaQuery } from '../game/useMediaQuery';
+import { NARROW, PORTRAIT, useMediaQuery } from '../game/useMediaQuery';
+import { DragProvider } from '../game/dragLayer';
 import {
     colorMeta, dropTargets, isPlayableAction, needsTargeting, playableColors,
 } from '../game/meta';
@@ -20,6 +21,7 @@ import { REACTIONS } from '../game/reactions';
 import TableMotion from './TableMotion';
 import LanguagePicker from './LanguagePicker';
 import ActionDialog from './ActionDialog';
+import ActiveBoard from './ActiveBoard';
 import Avatar from './Avatar';
 import CallControls from './CallControls';
 import DropZone from './DropZone';
@@ -33,6 +35,7 @@ import Sheet from './Sheet';
 import SidePanel from './SidePanel';
 import TalkSheet from './TalkSheet';
 import Tutorial from './Tutorial';
+import TurnBanner from './TurnBanner';
 import TurnTimer from './TurnTimer';
 import WinOverlay from './WinOverlay';
 
@@ -55,6 +58,10 @@ interface Props {
 // game moving.
 const AUTO_END_MS = 2500;
 
+/** Where the player's own hand sits on a wide screen. */
+const HAND_POSITIONS = ['bottom', 'left', 'right'] as const;
+type HandPos = (typeof HAND_POSITIONS)[number];
+
 type Dialog = { card: Card; intent: 'property' | 'action' | 'move' };
 type Drag = { card: Card; from: 'hand' | 'board' };
 type SheetState =
@@ -69,6 +76,7 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
     const me = g.players.find(p => p.id === g.you);
     const spectating = !room.you_seated || !me;
     const narrow = useMediaQuery(NARROW);
+    const portrait = useMediaQuery(PORTRAIT);
     const seatCameras = useSeatCameras(call);
 
     const [selectedCard, setSelected] = useState<Card | null>(null);
@@ -77,7 +85,17 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
     const [drag, setDrag] = useState<Drag | null>(null);
     const [sheet, setSheet] = useState<SheetState>(null);
     const [panelOpen, setPanelOpen] = useState(false);
+    const [boardOpen, setBoardOpen] = useState(true);
     const [motion, setMotion] = useState(() => localStorage.getItem('md.motion') !== 'off');
+    // A hand laid across the bottom of a wide screen costs the table a quarter
+    // of its height for cards that are just as readable standing on end. Which
+    // side suits depends on the room and the player, so it is theirs to pick.
+    const [handPos, setHandPos] = useState<HandPos>(
+        () => (HAND_POSITIONS.find(p => p === localStorage.getItem('md.hand')) ?? 'bottom'));
+    const chooseHandPos = (pos: HandPos) => {
+        localStorage.setItem('md.hand', pos);
+        setHandPos(pos);
+    };
     const [menuOpen, setMenuOpen] = useState(false);
     const [confirmEnd, setConfirmEnd] = useState(false);
     const [chatSeen, setChatSeen] = useState(room.chat.length);
@@ -135,6 +153,18 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
     const handSize = me?.hand?.length ?? 0;
     const overLimit = handSize > 7;
     const canPlay = myTurn && !pending && g.plays_left > 0;
+
+    // On an upright phone your own board is the tallest thing on screen, and
+    // between your turns it is also the least urgent: folding it at the end of
+    // your turn hands the room back to whoever is playing now.
+    const accordion = narrow && portrait;
+    useEffect(() => {
+        if (!accordion) return;
+        setBoardOpen(myTurn);
+    }, [accordion, myTurn]);
+    // A card already in the air needs its targets, whatever the fold says.
+    const boardShown = !accordion || boardOpen || Boolean(drag);
+
 
     // The reveal wheel runs with the turn not yet live: plays are still zero
     // there, and ending the turn during it would skip the first player.
@@ -294,17 +324,59 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
         </DropZone>
     );
 
-    const propertyZone = (
-        <div data-tour="properties" className="property-zone panel flex min-h-0 min-w-0 flex-1 flex-col p-2 sm:p-3">
-            <div className="mb-2 flex items-center justify-between gap-2">
-                <p className="label-caps">{t('table.your_properties')}</p>
-                <p data-tour="sets-progress" className="truncate text-xs text-white/50">
-                    {t('table.sets_progress', { done: me?.complete_sets ?? 0 })}
-                    {g.mode === 'deathmatch' && t('table.empty_hand_to_win')}
-                </p>
-            </div>
+    const propertyHeading = (
+        <>
+            <p className="label-caps">{t('table.your_properties')}</p>
+            {/* Folded, the colour bar is all that is left of the board, so it
+                has to carry the shape of it. */}
+            {accordion && !boardShown && Boolean(me?.sets.length) && (
+                <span className="board-swatches" aria-hidden="true">
+                    {me?.sets.map(set => (
+                        <span
+                            key={set.color}
+                            style={{
+                                background: colorMeta(set.color).hex,
+                                flex: set.cards.length,
+                                opacity: set.complete ? 1 : 0.55,
+                            }}
+                        />
+                    ))}
+                </span>
+            )}
+            <p data-tour="sets-progress" className="truncate text-xs text-white/50">
+                {t('table.sets_progress', { done: me?.complete_sets ?? 0 })}
+                {g.mode === 'deathmatch' && t('table.empty_hand_to_win')}
+            </p>
+        </>
+    );
 
-            <div className={`property-groups min-w-0 flex-1 gap-3 pb-1 ${me?.sets.length ? 'items-start' : 'items-center justify-center'}`}>
+    const propertyZone = (
+        <div
+            data-tour="properties"
+            data-density={(me?.sets.length ?? 0) > 6 ? 'tight' : (me?.sets.length ?? 0) > 4 ? 'dense' : undefined}
+            className={`property-zone panel flex min-h-0 min-w-0 flex-1 flex-col p-2 sm:p-3 ${
+                accordion ? 'property-accordion' : ''
+            } ${accordion && !boardShown ? 'is-folded' : ''}`}
+        >
+            {accordion ? (
+                <button
+                    type="button"
+                    className="property-fold"
+                    aria-expanded={boardShown}
+                    onClick={() => setBoardOpen(open => !open)}
+                    title={t(boardShown ? 'table.board_fold' : 'table.board_unfold')}
+                >
+                    {propertyHeading}
+                    <span className="property-chevron" aria-hidden="true">▾</span>
+                </button>
+            ) : (
+                <div className="mb-2 flex items-center justify-between gap-2">{propertyHeading}</div>
+            )}
+
+            <div
+                hidden={!boardShown}
+                className={`property-groups min-w-0 flex-1 gap-3 pb-1 ${me?.sets.length ? 'items-start' : 'items-center justify-center'}`}
+            >
                 {me?.sets.map(set => {
                     const accepts = dragColors.includes(set.color);
                     return (
@@ -368,14 +440,49 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
 
             {/* Shuffling a wildcard between colours used to be free; it is not
                 any more, so the board says so where the move is made. */}
-            {myTurn && !pending && me?.sets.some(s => s.cards.some(c => c.type === 'property_wildcard')) && (
+            {boardShown && myTurn && !pending && me?.sets.some(s => s.cards.some(c => c.type === 'property_wildcard')) && (
                 <p className="mt-1 shrink-0 text-[0.65rem] text-white/35">{t('table.wildcard_move_cost')}</p>
             )}
         </div>
     );
 
+    // A phone has no room for the shared centre of the table, but hiding the
+    // action space until a drag begins leaves no way to tell "play this hotel"
+    // apart from "bank it" before committing to the gesture. So both targets
+    // stand beside the bank, lit only when the card in hand can land there.
+    const boardTargets = (
+        <div className="board-targets">
+            {bankZone}
+            <DropZone
+                active={Boolean(drag && drag.from === 'hand' && canPlay && isPlayableAction(drag.card))}
+                onDrop={() => drag && playActionCard(drag.card)}
+                className="board-target rounded-xl"
+            >
+                <div className="board-target-slot">
+                    <span aria-hidden="true">✦</span>
+                    {t('table.action_space')}
+                </div>
+            </DropZone>
+            <DropZone
+                active={dragDiscardable}
+                onDrop={() => drag && act({ type: 'discard', card_id: drag.card.id })}
+                className="board-target rounded-xl"
+            >
+                <div className="board-target-slot">
+                    <span aria-hidden="true">⌫</span>
+                    {t('table.discard')} <b>{g.discard_count}</b>
+                </div>
+            </DropZone>
+        </div>
+    );
+
     return (
-        <div className={`game-room ${narrow ? 'compact-room' : 'desktop-room'} ${motion ? '' : 'motion-off'}`}>
+        <DragProvider>
+        <div className={`game-room ${narrow ? 'compact-room' : 'desktop-room'} ${motion ? '' : 'motion-off'} ${drag ? 'is-carrying' : ''} ${
+            !narrow && handPos !== 'bottom' ? `hand-column hand-${handPos}` : ''
+        } ${
+            accordion && !boardShown ? 'board-folded' : ''
+        }`}>
             <Cityscape />
             {/* ── Top bar ─────────────────────────────────────────────── */}
             <header className="game-header relative flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5 px-2 py-2 sm:px-3">
@@ -430,7 +537,7 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
                         ref={menuRef}
                         role="menu"
                         aria-label={t('table.menu')}
-                        className="animate-pop absolute right-2 top-full z-50 mt-1 max-h-[min(70vh,calc(100vh-5rem))] w-64 max-w-[min(16rem,calc(100vw-1rem))] overflow-y-auto rounded-xl border border-white/15 bg-[#08281d] shadow-2xl"
+                        className="game-menu animate-pop absolute right-2 top-full z-50 mt-1 max-h-[min(70vh,calc(100vh-5rem))] w-64 max-w-[min(16rem,calc(100vw-1rem))] overflow-y-auto rounded-xl border border-white/15 bg-[#08281d] shadow-2xl"
                     >
                         <p className="border-b border-white/10 px-3 py-2 text-xs text-white/55">
                             {t('table.menu_summary', {
@@ -497,6 +604,25 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
                         >
                             {t('table.leave')}
                         </button>
+                        {!narrow && (
+                            <div className="border-t border-white/10 px-3 py-2">
+                                <p className="label-caps mb-1.5">{t('table.hand_position')}</p>
+                                <div className="flex gap-1.5">
+                                    {HAND_POSITIONS.map(pos => (
+                                        <button
+                                            key={pos}
+                                            type="button"
+                                            role="menuitemradio"
+                                            aria-checked={handPos === pos}
+                                            className={`btn !px-2 !py-1 !text-xs ${handPos === pos ? 'btn-gold' : 'btn-ghost'}`}
+                                            onClick={() => chooseHandPos(pos)}
+                                        >
+                                            {t(`table.hand_${pos}`)}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                         <button type="button" role="menuitemcheckbox" aria-checked={motion} className="block w-full px-3 py-2.5 text-left text-sm hover:bg-white/10" onClick={() => setMotion(value => { localStorage.setItem('md.motion', value ? 'off' : 'on'); return !value; })}>
                             {t('table.motion')}: {t(motion ? 'table.on' : 'table.off')}
                         </button>
@@ -601,20 +727,29 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
                                 </DropZone>
                             </section>
                             )}
+                            {/* A phone shows rivals as chips, so the centre of
+                                the table carries the board of whoever is using
+                                it right now. */}
+                            {narrow && turnPlayer && !myTurn && turnPlayer.id !== g.you && (
+                                <ActiveBoard
+                                    player={turnPlayer}
+                                    onOpen={() => setSheet({ kind: 'player', player: turnPlayer })}
+                                />
+                            )}
                             {!narrow && <div className="table-status" aria-live="polite"><span className={myTurn ? 'status-light active' : 'status-light'} />{myTurn ? t('table.your_turn') : t('table.turn_of', { name: turnPlayer?.name ?? '' })}</div>}
-                            {!narrow && <div className="table-event" aria-live="polite">{g.log.length > 0 ? tLog(g.log[g.log.length - 1]) : t('table.shared_space')}</div>}
+                            <div className="table-event" aria-live="polite">{g.log.length > 0 ? tLog(g.log[g.log.length - 1]) : t('table.shared_space')}</div>
                         </div>
 
                         {/* ── My board ────────────────────────────────── */}
                         {me && (
                             <section className="my-board flex min-w-0 gap-3">
                                 {propertyZone}
-                                {bankZone}
+                                {narrow ? boardTargets : bankZone}
                             </section>
                         )}
                     </div>
 
-                    {/* ── Hand: pinned below the scrolling table ──────── */}
+                    {/* ── Hand: pinned below the table ─────────────────── */}
                     {me && (
                         <section data-tour="hand" className="hand-zone relative min-w-0 shrink-0">
                             <div className="mb-1 flex min-w-0 items-center justify-between gap-2">
@@ -647,7 +782,8 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
                                         card={c}
                                         size={narrow ? 'sm' : 'md'}
                                         selected={selected?.id === c.id}
-                                        draggable={!narrow && myTurn && !pending}
+                                        draggable={myTurn && !pending}
+                                        dragAxis={narrow ? 'vertical' : 'free'}
                                         dragging={drag?.card.id === c.id}
                                         onDragStart={() => setDrag({ card: c, from: 'hand' })}
                                         onDragEnd={() => setDrag(null)}
@@ -784,6 +920,13 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
                 </div>
             )}
 
+            <TurnBanner
+                player={turnPlayer}
+                isYou={myTurn}
+                turn={g.current_turn}
+                enabled={g.state === 'playing' && !startPending}
+            />
+
             <TableMotion game={g} enabled={motion} />
 
             {/* ── Overlays ────────────────────────────────────────────── */}
@@ -868,5 +1011,6 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
                 </div>
             )}
         </div>
+        </DragProvider>
     );
 }

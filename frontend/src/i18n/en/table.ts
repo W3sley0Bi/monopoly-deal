@@ -88,10 +88,16 @@ const table: Catalog = {
 
     // ── Properties ───────────────────────────────────────────────────────
     'table.your_properties': 'Your properties',
+    'table.board_fold': 'Fold your board away',
+    'table.hand_position': 'Hand',
+    'table.hand_left': 'Left',
+    'table.hand_right': 'Right',
+    'table.hand_bottom': 'Bottom',
+    'table.board_unfold': 'Show your board',
     'table.sets_progress': '{done}/3 sets',
     'table.empty_hand_to_win': ' · empty your hand to win',
     'table.new_set': 'new',
-    'table.properties_tap': 'Tap a property card to play it into a set',
+    'table.properties_tap': 'Tap or drag a property card into a set',
     'table.properties_drag': 'Drag a property card here to start a set',
     // The wildcard rule changed: a card already on the table is no longer free
     // to shuffle around, so the mat says what a move now costs.
@@ -100,7 +106,7 @@ const table: Catalog = {
     // ── Hand ─────────────────────────────────────────────────────────────
     'table.hand': 'Hand · {count}',
     'table.over_limit': 'Over 7 — discard {count}',
-    'table.hand_tap': 'Tap a card for options',
+    'table.hand_tap': 'Tap a card for options, or drag it up to play',
     'table.hand_drag': 'Drag a card onto the mat, or tap it for options',
     'table.hand_empty': 'No cards — you draw 5 at the start of your next turn.',
 

@@ -14,6 +14,9 @@
 .game-audio-control {
     display: flex;
     min-width: 0;
+    /* Basis is 12rem of WIDTH. Once the group stacks into a column below
+       640px, that same basis becomes 12rem of HEIGHT, and each row grew into
+       a 192px slab with the slider stranded in the middle of it. */
     flex: 1 1 12rem;
     align-items: center;
     gap: 0.45rem;
@@ -22,11 +25,12 @@
 .game-audio-toggle {
     display: inline-flex;
     min-width: 5.7rem;
+    min-height: 2rem;
     align-items: center;
-    gap: 0.35rem;
-    border: 1px solid transparent;
+    gap: 0.4rem;
+    border: 1px solid rgb(255 255 255 / 0.12);
     border-radius: 0.55rem;
-    padding: 0.35rem 0.45rem;
+    padding: 0.4rem 0.55rem;
     color: inherit;
     cursor: pointer;
     font: inherit;
@@ -44,18 +48,34 @@
     outline: none;
 }
 
+/* Off used to differ from on by text colour alone, which is not a state you
+   can read at a glance on a phone. */
 .game-audio-toggle.is-on {
+    border-color: var(--color-brass, #f2c14e);
+    background: color-mix(in srgb, var(--color-brass, #f2c14e) 16%, transparent);
     color: var(--color-brass, #f2c14e);
 }
 
 .game-audio-control input[type='range'] {
+    /* `width: 100%` in a flex row asked for the full line and pushed the
+       readout off the edge of the menu. */
+    flex: 1 1 6rem;
+    width: auto;
     min-width: 0;
-    width: 100%;
+    height: 1.6rem;
     accent-color: var(--color-brass, #f2c14e);
+    cursor: pointer;
+}
+/* A finger needs a bigger rail than a mouse does. */
+@media (hover: none) {
+    .game-audio-control input[type='range'] {
+        height: 2.2rem;
+    }
 }
 
 .game-audio-control output {
-    min-width: 2.3rem;
+    flex: 0 0 auto;
+    min-width: 2.6rem;
     color: rgb(255 255 255 / 0.55);
     font-size: 0.7rem;
     font-variant-numeric: tabular-nums;
@@ -79,14 +99,40 @@
     padding: 0.4rem;
 }
 
+/* ── Stacked, on a phone ──────────────────────────────────────────────────
+   Name and reading share the top line; the slider gets a line of its own, at
+   full width, because a 60px rail squeezed between them is unusable. */
 @media (max-width: 640px) {
     .game-audio-controls:not(.game-audio-controls-compact) {
         align-items: stretch;
         flex-direction: column;
+        gap: 0.7rem;
     }
 
     .game-audio-control {
         min-width: 0;
+        flex: 0 0 auto;
+        flex-wrap: wrap;
+        row-gap: 0.15rem;
+    }
+
+    .game-audio-control > .game-audio-toggle {
+        flex: 1 1 auto;
+        min-height: 2.6rem;
+    }
+
+    .game-audio-control > input[type='range'] {
+        order: 3;
+        flex: 1 1 100%;
+    }
+
+    .game-audio-control > output {
+        font-size: 0.78rem;
+    }
+
+    .game-audio-radio .btn {
+        width: 100%;
+        min-height: 2.6rem;
     }
 }
 
