@@ -50,6 +50,11 @@ interface Props {
     onLeave: () => void;
 }
 
+// A turn with no plays left has nothing else to give, so it closes itself
+// after a short beat. Long enough to read the table, short enough to keep the
+// game moving.
+const AUTO_END_MS = 2500;
+
 type Dialog = { card: Card; intent: 'property' | 'action' | 'move' };
 type Drag = { card: Card; from: 'hand' | 'board' };
 type SheetState =
@@ -91,12 +96,20 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
     useEffect(() => {
         if (!menuOpen) return;
         const onPointerDown = (e: PointerEvent) => {
-            const target = e.target as Node;
-            if (menuRef.current?.contains(target) || menuButtonRef.current?.contains(target)) return;
+            const target = e.target as Element | null;
+            if (target && (menuRef.current?.contains(target) || menuButtonRef.current?.contains(target))) return;
+            // Dialogs the menu opens — the radio picker — render in a portal
+            // on document.body, so they count as "outside". Tearing the menu
+            // down there would unmount the dialog under the player's finger,
+            // before the click it belongs to ever arrives.
+            if (target?.closest?.('[role="dialog"],[data-dialog-overlay]')) return;
             closeMenu();
         };
         const onKey = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') closeMenu();
+            if (e.key !== 'Escape') return;
+            // Escape belongs to the dialog on top, not to the menu behind it.
+            if (document.querySelector('[role="dialog"]')) return;
+            closeMenu();
         };
         window.addEventListener('pointerdown', onPointerDown);
         window.addEventListener('keydown', onKey);
@@ -122,6 +135,30 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
     const handSize = me?.hand?.length ?? 0;
     const overLimit = handSize > 7;
     const canPlay = myTurn && !pending && g.plays_left > 0;
+
+    // The reveal wheel runs with the turn not yet live: plays are still zero
+    // there, and ending the turn during it would skip the first player.
+    const startPending = Boolean(g.starts_at_ms && Date.now() + skewMs < g.starts_at_ms);
+    const autoEnd = myTurn && !pending && !spectating && !startPending
+        && g.state === 'playing' && g.plays_left === 0 && !overLimit;
+    const sendRef = useRef(send);
+    sendRef.current = send;
+    const [autoEndLeft, setAutoEndLeft] = useState(0);
+    useEffect(() => {
+        if (!autoEnd) {
+            setAutoEndLeft(0);
+            return;
+        }
+        const until = Date.now() + AUTO_END_MS;
+        setAutoEndLeft(Math.ceil(AUTO_END_MS / 1000));
+        const tick = window.setInterval(
+            () => setAutoEndLeft(Math.max(0, Math.ceil((until - Date.now()) / 1000))), 250);
+        const timer = window.setTimeout(() => sendRef.current({ type: 'end_turn' }), AUTO_END_MS);
+        return () => {
+            window.clearInterval(tick);
+            window.clearTimeout(timer);
+        };
+    }, [autoEnd, g.current_turn]);
 
     /** An "any colour" joker, which may only join a colour you already own. */
     const isAnyColorWild = (card: Card) =>
@@ -374,7 +411,6 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
                 <div className="ml-auto flex shrink-0 items-center gap-2">
                     <Reactions onSend={text => send({ type: 'chat', text })} />
                     <CallControls call={call} memberCount={room.call_members.length} />
-                    {!narrow && myTurn && !pending && endTurnButton}
                     <button
                         ref={menuButtonRef}
                         type="button"
@@ -464,7 +500,7 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
                         <button type="button" role="menuitemcheckbox" aria-checked={motion} className="block w-full px-3 py-2.5 text-left text-sm hover:bg-white/10" onClick={() => setMotion(value => { localStorage.setItem('md.motion', value ? 'off' : 'on'); return !value; })}>
                             {t('table.motion')}: {t(motion ? 'table.on' : 'table.off')}
                         </button>
-                        <div className="border-t border-white/10 p-3"><GameAudioControls audio={audio} /></div>
+                        <div className="border-t border-white/10 p-3"><GameAudioControls audio={audio} radio={room.radio} canManage={room.is_owner} ownerName={room.owner_name} send={send} /></div>
                         <LanguagePicker variant="menu" />
                     </div>
                 )}
@@ -582,7 +618,7 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
                     {me && (
                         <section data-tour="hand" className="hand-zone relative min-w-0 shrink-0">
                             <div className="mb-1 flex min-w-0 items-center justify-between gap-2">
-                                <div className="hand-player"><Avatar id={me.id} name={me.name} size={32} active={myTurn} /><strong>{me.name}</strong>{recentReaction(me.id) && <ReactionBubble key={recentReaction(me.id)!.id} message={recentReaction(me.id)!} />}<span className="label-caps">{t('table.hand', { count: handSize })}</span></div>
+                                <div className="hand-player"><Avatar id={me.id} name={me.name} size={32} active={myTurn} inCall={room.call_members.includes(me.id)} inCallLabel={t('call.in_call')} /><strong>{me.name}</strong>{recentReaction(me.id) && <ReactionBubble key={recentReaction(me.id)!.id} message={recentReaction(me.id)!} />}<span className="label-caps">{t('table.hand', { count: handSize })}</span></div>
                                 {overLimit ? (
                                     <p className="animate-shake truncate rounded-md bg-rose-600/25 px-2 py-1 text-xs font-bold text-rose-200">
                                         {t('table.over_limit', { count: handSize - 7 })}
@@ -621,6 +657,18 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
                                     />
                                 ))}
                             </div>
+                            {/* Next to the cards, where the hand already has
+                                the player's attention. */}
+                            {!narrow && !spectating && myTurn && !pending && (
+                                <div className="hand-end-turn">
+                                    {autoEndLeft > 0 && (
+                                        <span className="hand-end-turn-hint" aria-live="polite">
+                                            {t('table.auto_end', { seconds: autoEndLeft })}
+                                        </span>
+                                    )}
+                                    {endTurnButton}
+                                </div>
+                            )}
                         </section>
                     )}
                 </main>
@@ -719,7 +767,20 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
                         )}
                     </button>
 
-                    {!spectating && myTurn && !pending && endTurnButton}
+                    {!spectating && myTurn && !pending && (
+                        <>
+                            {autoEndLeft > 0 && (
+                                <span
+                                    className="hand-end-turn-hint"
+                                    aria-live="polite"
+                                    title={t('table.auto_end', { seconds: autoEndLeft })}
+                                >
+                                    {t('table.auto_end_short', { seconds: autoEndLeft })}
+                                </span>
+                            )}
+                            {endTurnButton}
+                        </>
+                    )}
                 </div>
             )}
 

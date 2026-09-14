@@ -40,6 +40,8 @@ const table: Catalog = {
     'table.plays_hint': 'Giocate rimaste in questo turno',
     'table.end_turn': 'Fine turno',
     'table.end_turn_hint': 'Concludi il tuo turno',
+    'table.auto_end': 'Turno chiuso tra {seconds}s',
+    'table.auto_end_short': '⏱ {seconds}s',
     'table.discard_first': 'Prima scarta fino a 7 carte',
     'table.deck_hint': 'Carte rimaste nel mazzo',
     'table.discard_hint': 'Scarti',

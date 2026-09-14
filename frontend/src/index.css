@@ -860,6 +860,21 @@ select:focus-visible {
     padding: 9px 5% 0;
     height: 211px;
 }
+.hand-end-turn {
+    position: absolute;
+    right: 5%;
+    bottom: 16px;
+    z-index: 12;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+}
+.hand-end-turn-hint {
+    font-size: 11px;
+    font-weight: 700;
+    color: #ffd98a;
+    white-space: nowrap;
+}
 .hand-player {
     display: flex;
     align-items: center;
@@ -886,9 +901,19 @@ select:focus-visible {
     transform-origin: 50% 110%;
     transform: translateY(var(--fan-y)) rotate(var(--fan-angle));
     transition:
-        transform 0.22s cubic-bezier(0.16, 1, 0.3, 1),
-        box-shadow 0.22s;
+        transform 0.26s cubic-bezier(0.16, 1, 0.3, 1),
+        box-shadow 0.26s cubic-bezier(0.16, 1, 0.3, 1);
     margin-left: -15px;
+    backface-visibility: hidden;
+    scroll-snap-align: center;
+}
+/* The lift moves the card out from under the pointer, which would drop the
+   hover and start a shudder between lifted and resting. This pad keeps the
+   hit area still while the card itself travels. */
+.hand-card::after {
+    content: '';
+    position: absolute;
+    inset: -34px -3px -12px;
 }
 .hand-card:first-child {
     margin-left: 0;
@@ -907,10 +932,17 @@ select:focus-visible {
     outline-offset: 3px;
 }
 .hand-many .hand-card {
-    margin-left: -42px;
+    margin-left: -34px;
 }
 .hand-many .hand-card:first-child {
     margin-left: 0;
+}
+/* A crowded hand scrolls. The lift has to stay inside the scroll box there,
+   so it is shorter than the one a small fan can afford. */
+.hand-many .hand-card:hover,
+.hand-many .hand-card:focus-visible,
+.hand-many .hand-card[data-selected] {
+    transform: translateY(-17px) rotate(0) scale(1.07);
 }
 .card-face {
     border: 3px solid oklch(97% 0.025 95);
@@ -1351,7 +1383,16 @@ select:focus-visible {
         padding: 22px 8px 24px;
         justify-content: safe center;
         overflow-x: auto;
+        overflow-y: hidden;
         min-height: 135px;
+        scroll-snap-type: x proximity;
+        scroll-padding-inline: 20px;
+        overscroll-behavior-x: contain;
+        scrollbar-width: none;
+        -webkit-overflow-scrolling: touch;
+    }
+    .hand-fan::-webkit-scrollbar {
+        display: none;
     }
     .hand-card {
         width: 76px;
@@ -1777,7 +1818,35 @@ select:focus-visible {
 }
 .hand-many {
     overflow-x: auto;
+    overflow-y: hidden;
     justify-content: safe center;
+    scroll-snap-type: x proximity;
+    scroll-padding-inline: 28px;
+    scroll-behavior: smooth;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    /* Fade the edges instead of showing a scrollbar over the felt: it reads as
+       "there is more here" without a rail cutting through the cards. */
+    mask-image: linear-gradient(90deg, transparent, #000 22px, #000 calc(100% - 22px), transparent);
+}
+.hand-many::-webkit-scrollbar {
+    display: none;
+}
+@media (hover: none) {
+    .hand-card:hover {
+        transform: translateY(var(--fan-y)) rotate(var(--fan-angle));
+    }
+    .hand-card[data-selected]:hover {
+        transform: translateY(-31px) rotate(0) scale(1.14);
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .hand-card {
+        transition: none;
+    }
+    .hand-many {
+        scroll-behavior: auto;
+    }
 }
 @media (max-width: 360px) {
     .compact-room .game-header h1 {
@@ -1906,6 +1975,54 @@ select:focus-visible {
 .call-toolbar .call-icon { width: 36px; padding: 4px; }
 .call-live > span:first-child { color: #71e6b5; font-size: 10px; }
 .call-count { border-radius: 50%; background: #ffffff16; min-width: 19px; text-align: center; }
+.call-waiting .call-count { background: oklch(72% .16 165 / .3); color: oklch(92% .09 165); box-shadow: 0 0 0 1px oklch(72% .16 165 / .55); animation: call-invite 2.6s ease-in-out infinite; }
+@keyframes call-invite {
+    0%, 62%, 100% { box-shadow: 0 0 0 1px oklch(72% .16 165 / .55); }
+    78% { box-shadow: 0 0 0 1px oklch(72% .16 165 / .55), 0 0 12px 2px oklch(72% .16 165 / .45); }
+}
+/* Who can hear you: one dot on the avatar, everywhere a player is drawn. */
+.avatar-in-call::after {
+    content: '';
+    position: absolute;
+    right: -1px;
+    bottom: -1px;
+    width: 34%;
+    height: 34%;
+    min-width: 8px;
+    min-height: 8px;
+    border-radius: 50%;
+    background: oklch(78% .16 165);
+    box-shadow: 0 0 0 2px oklch(22% .035 211), 0 0 9px oklch(78% .16 165 / .75);
+    animation: call-dot 2.4s ease-in-out infinite;
+}
+@keyframes call-dot {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.16); }
+}
+.call-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    border-radius: 999px;
+    background: oklch(72% .16 165 / .18);
+    padding: 1px 7px;
+    color: oklch(88% .1 165);
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+.call-tag::before {
+    content: '';
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: oklch(78% .16 165);
+}
+@media (prefers-reduced-motion: reduce) {
+    .avatar-in-call::after, .call-waiting .call-count { animation: none; }
+}
 .call-disabled { background: #89383d80 !important; border-color: #e9939270 !important; }
 .call-video { position: relative; aspect-ratio: 16 / 9; min-width: 0; overflow: hidden; border-radius: 12px; background: radial-gradient(ellipse at 50% 20%, #365b62, #142b35); border: 1px solid #ffffff29; box-shadow: 0 5px 14px #0004; }
 .call-video video { display: block; width: 100%; height: 100%; object-fit: cover; }

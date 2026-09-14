@@ -40,6 +40,8 @@ const table: Catalog = {
     'table.plays_hint': 'Verbleibende Züge in dieser Runde',
     'table.end_turn': 'Runde beenden',
     'table.end_turn_hint': 'Deine Runde beenden',
+    'table.auto_end': 'Runde endet in {seconds}s',
+    'table.auto_end_short': '⏱ {seconds}s',
     'table.discard_first': 'Leg zuerst auf 7 Karten ab',
     'table.deck_hint': 'Karten im Nachziehstapel',
     'table.discard_hint': 'Ablagestapel',

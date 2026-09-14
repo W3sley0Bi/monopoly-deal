@@ -146,6 +146,7 @@ export default function ChatBox({ chat, you, onSend, className = '' }: Props) {
                 {gifOpen && (
                     <Modal title={t('gif.aria_picker')} onClose={() => setGifOpen(false)}>
                     <GifPicker
+                        embedded
                         onClose={() => setGifOpen(false)}
                         onSelect={(gif: GifResult) => {
                             // Send the original GIF URL; tracking parameters were

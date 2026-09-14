@@ -117,6 +117,7 @@ const misc: Catalog = {
     'call.enable_audio': "Anrufton aktivieren",
     'call.review_error': "Anrufproblem prüfen",
     'call.people': "Personen im Anruf",
+    'call.in_call': 'Im Call',
     'call.participant': "Teilnehmer",
     'call.move_panel': "In die andere Ecke verschieben",
     'call.show_video': "Videos anzeigen",

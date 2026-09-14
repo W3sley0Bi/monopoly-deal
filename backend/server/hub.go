@@ -468,6 +468,28 @@ func (h *Hub) handleRoomLocked(c *Client, msg ClientMessage) error {
 		}
 		return g.Configure(mode, msg.TurnSeconds)
 
+	case MsgSetRadio:
+		// One radio per table keeps everyone on the same station; the owner
+		// owns the dial, every listener keeps their own volume.
+		if !owner {
+			return errNotOwner
+		}
+		next, err := tuneRadio(msg.Radio, c.name)
+		if err != nil {
+			return err
+		}
+		playingNow := next.Playing && next.URL != ""
+		changed := playingNow != (r.radio.Playing && r.radio.URL != "") || next.URL != r.radio.URL
+		r.radio = next
+		if changed {
+			if playingNow {
+				r.announce(c.playerID, c.name, "chat.radio_on", map[string]any{"name": c.name, "station": next.Name})
+			} else {
+				r.announce(c.playerID, c.name, "chat.radio_off", map[string]any{"name": c.name})
+			}
+		}
+		return nil
+
 	case MsgStartGame:
 		if !owner {
 			return errNotOwner

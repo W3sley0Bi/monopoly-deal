@@ -13,6 +13,8 @@ export interface GifResult {
 interface Props {
     onSelect: (gif: GifResult) => void;
     onClose: () => void;
+    /** Inside a dialog that already draws its own frame and close button. */
+    embedded?: boolean;
 }
 
 interface CommonsPage {
@@ -98,7 +100,7 @@ async function searchCommons(
  * Searchable, no-key GIF picker. Wikimedia Commons is used because it has a
  * public CORS-enabled API and does not require us to ship a shared API key.
  */
-export default function GifPicker({ onSelect, onClose }: Props) {
+export default function GifPicker({ onSelect, onClose, embedded = false }: Props) {
     const { t } = useI18n();
     const [query, setQuery] = useState('cat');
     const [results, setResults] = useState<GifResult[]>([]);
@@ -192,14 +194,16 @@ export default function GifPicker({ onSelect, onClose }: Props) {
                         {loading ? t('gif.searching') : t('gif.search')}
                     </button>
                 </form>
-                <button
-                    type="button"
-                    className="gif-picker-close"
-                    onClick={onClose}
-                    aria-label={t('gif.close')}
-                >
-                    ✕
-                </button>
+                {!embedded && (
+                    <button
+                        type="button"
+                        className="gif-picker-close"
+                        onClick={onClose}
+                        aria-label={t('gif.close')}
+                    >
+                        ✕
+                    </button>
+                )}
             </div>
 
             <div className="gif-picker-results" aria-live="polite">

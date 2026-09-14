@@ -1,0 +1,9 @@
+**/node_modules
+**/dist
+backend/server_bin
+backend/cert.pem
+backend/key.pem
+.git
+.idea
+docs
+*.md

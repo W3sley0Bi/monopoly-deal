@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { GameView, LogEntry } from '../types';
+import type { GameView, LogEntry, RadioState } from '../types';
 
 /** A deliberately small, original sound palette for the table. */
 export type GameAudioCue =
@@ -17,30 +17,38 @@ export interface GameAudio {
     /** Audio is created only after one of the user's controls calls unlock. */
     unlocked: boolean;
     sfxEnabled: boolean;
-    musicEnabled: boolean;
+    /** This listener wants to hear the table radio. */
+    radioEnabled: boolean;
     sfxVolume: number;
-    musicVolume: number;
+    radioVolume: number;
+    /** The station the table is tuned to is loading its first bytes. */
+    radioLoading: boolean;
+    /** The browser refused to start the stream without a gesture. */
+    radioBlocked: boolean;
+    /** The stream itself failed: dead station, geo block, bad URL. */
+    radioFailed: boolean;
     unlock: () => Promise<void>;
     play: (cue: GameAudioCue) => void;
     setSfxEnabled: (enabled: boolean) => void;
-    setMusicEnabled: (enabled: boolean) => void;
+    setRadioEnabled: (enabled: boolean) => void;
     setSfxVolume: (volume: number) => void;
-    setMusicVolume: (volume: number) => void;
+    setRadioVolume: (volume: number) => void;
 }
 
 interface SavedAudio {
     sfxEnabled: boolean;
-    musicEnabled: boolean;
+    radioEnabled: boolean;
     sfxVolume: number;
-    musicVolume: number;
+    radioVolume: number;
 }
 
 const DEFAULTS: SavedAudio = {
     sfxEnabled: true,
-    // Music is opt-in. Browsers also reject music that starts without a gesture.
-    musicEnabled: false,
+    // The radio is opt-in per listener. Browsers also reject audio that starts
+    // without a gesture, so nothing plays until a control is pressed.
+    radioEnabled: false,
     sfxVolume: 0.58,
-    musicVolume: 0.65,
+    radioVolume: 0.5,
 };
 
 const STORAGE_KEY = 'md.game.audio';
@@ -50,9 +58,9 @@ function readSaved(): SavedAudio {
         const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') as Partial<SavedAudio>;
         return {
             sfxEnabled: saved.sfxEnabled !== false,
-            musicEnabled: saved.musicEnabled === true,
+            radioEnabled: saved.radioEnabled === true,
             sfxVolume: clamp(typeof saved.sfxVolume === 'number' ? saved.sfxVolume : DEFAULTS.sfxVolume),
-            musicVolume: clamp(typeof saved.musicVolume === 'number' ? saved.musicVolume : DEFAULTS.musicVolume),
+            radioVolume: clamp(typeof saved.radioVolume === 'number' ? saved.radioVolume : DEFAULTS.radioVolume),
         };
     } catch {
         return DEFAULTS;
@@ -77,54 +85,30 @@ function frequency(note: number): number {
 
 /**
  * Owns one AudioContext. Keeping this outside React effects means a render,
- * reconnect, or table layout change cannot create a second music loop.
+ * reconnect, or table layout change cannot create a second audio graph.
  */
 class AudioEngine {
     readonly context: AudioContext;
     private readonly sfx: GainNode;
-    private readonly music: GainNode;
     private readonly compressor: DynamicsCompressorNode;
-    private musicTimer: number | undefined;
-    private musicStep = 0;
     private noiseBuffer: AudioBuffer | undefined;
 
     constructor(Ctor: AudioContextWithWebkit) {
         this.context = new Ctor();
         this.sfx = this.context.createGain();
-        this.music = this.context.createGain();
         this.compressor = this.context.createDynamicsCompressor();
         this.sfx.connect(this.compressor);
-        this.music.connect(this.compressor);
         this.compressor.connect(this.context.destination);
         this.sfx.gain.value = DEFAULTS.sfxVolume;
-        this.music.gain.value = 0;
     }
 
     setSfxVolume(value: number) { this.sfx.gain.value = clamp(value); }
-    setMusicVolume(value: number) { this.music.gain.value = clamp(value) * 0.12; }
 
     async resume(): Promise<void> {
         if (this.context.state === 'suspended') await this.context.resume();
     }
 
-    startMusic(volume: number): void {
-        this.music.gain.setTargetAtTime(clamp(volume) * 0.12, this.context.currentTime, 0.12);
-        if (this.musicTimer !== undefined) return;
-        this.musicStep = 0;
-        this.scheduleMusicStep();
-        this.musicTimer = window.setInterval(() => this.scheduleMusicStep(), 1450);
-    }
-
-    stopMusic(): void {
-        this.music.gain.setTargetAtTime(0, this.context.currentTime, 0.08);
-        if (this.musicTimer !== undefined) {
-            window.clearInterval(this.musicTimer);
-            this.musicTimer = undefined;
-        }
-    }
-
     dispose(): void {
-        this.stopMusic();
         void this.context.close();
     }
 
@@ -211,31 +195,6 @@ class AudioEngine {
         source.start(at);
         source.stop(at + duration + 0.02);
     }
-
-    private scheduleMusicStep(): void {
-        const now = this.context.currentTime + 0.02;
-        // A slow, almost board-game-like loop: warm root notes with a small
-        // pluck on every second bar. It stays under voice chat and game cues.
-        const roots = [48, 48, 53, 53, 55, 55, 43, 43];
-        const root = roots[this.musicStep % roots.length];
-        this.musicTone(root, 1.25, 0.08, now);
-        if (this.musicStep % 2 === 0) this.musicTone(root + 12, 0.4, 0.045, now + 0.25);
-        if (this.musicStep % 4 === 3) this.musicTone(root + 19, 0.55, 0.035, now + 0.55);
-        this.musicStep += 1;
-    }
-
-    private musicTone(note: number, duration: number, gainAmount: number, at: number): void {
-        const oscillator = this.context.createOscillator();
-        const gain = this.context.createGain();
-        oscillator.type = 'sine';
-        oscillator.frequency.setValueAtTime(frequency(note), at);
-        gain.gain.setValueAtTime(0.0001, at);
-        gain.gain.exponentialRampToValueAtTime(gainAmount, at + 0.18);
-        gain.gain.exponentialRampToValueAtTime(0.0001, at + duration);
-        oscillator.connect(gain).connect(this.music);
-        oscillator.start(at);
-        oscillator.stop(at + duration + 0.04);
-    }
 }
 
 function logSignature(entry: LogEntry): string {
@@ -261,17 +220,25 @@ function cueForLog(key: string): GameAudioCue | undefined {
  * Creates game audio once per mounted app and translates newly appended server
  * log entries into cues. The first snapshot is intentionally silent, so
  * reconnecting to a lively table does not replay sixty old moves.
+ *
+ * `radio` is the table's shared station. The stream plays from one plain
+ * media element per client: the table agrees on what is on, every listener
+ * keeps their own volume, and nothing is mixed through the AudioContext, which
+ * would need CORS headers the stations do not send.
  */
-export function useGameAudio(game: GameView | null): GameAudio {
+export function useGameAudio(game: GameView | null, radio?: RadioState | null): GameAudio {
     const [saved, setSaved] = useState<SavedAudio>(readSaved);
     const [unlocked, setUnlocked] = useState(false);
     const engine = useRef<AudioEngine | null>(null);
     const previousGameId = useRef<string | null>(null);
     const previousLog = useRef<string[] | null>(null);
     const sfxEnabled = saved.sfxEnabled;
-    const musicEnabled = saved.musicEnabled;
-    const musicEnabledRef = useRef(musicEnabled);
-    const musicVolumeRef = useRef(saved.musicVolume);
+    const radioEnabled = saved.radioEnabled;
+    const stream = useRef<HTMLAudioElement | null>(null);
+    const [radioLoading, setRadioLoading] = useState(false);
+    const [radioBlocked, setRadioBlocked] = useState(false);
+    const [radioFailed, setRadioFailed] = useState(false);
+    const stationUrl = radio?.playing ? radio.url : '';
 
     const persist = useCallback((patch: Partial<SavedAudio>) => {
         setSaved(previous => {
@@ -287,12 +254,16 @@ export function useGameAudio(game: GameView | null): GameAudio {
             if (!Ctor) return;
             engine.current = new AudioEngine(Ctor);
             engine.current.setSfxVolume(saved.sfxVolume);
-            engine.current.setMusicVolume(saved.musicVolume);
         }
         await engine.current.resume();
         setUnlocked(true);
-        if (musicEnabledRef.current) engine.current.startMusic(musicVolumeRef.current);
-    }, [saved.musicVolume, saved.sfxVolume]);
+        // A gesture reached us, so a stream the browser refused earlier may
+        // start now.
+        const element = stream.current;
+        if (element && element.paused && element.src) {
+            element.play().then(() => setRadioBlocked(false)).catch(() => setRadioBlocked(true));
+        }
+    }, [saved.sfxVolume]);
 
     const play = useCallback((cue: GameAudioCue) => {
         if (!sfxEnabled || !engine.current || !unlocked) return;
@@ -303,26 +274,83 @@ export function useGameAudio(game: GameView | null): GameAudio {
         persist({ sfxEnabled: enabled });
         if (enabled) void unlock();
     }, [persist, unlock]);
-    const setMusicEnabled = useCallback((enabled: boolean) => {
-        // Update this synchronously so a quick on → off toggle cannot let a
-        // pending browser resume promise restart the music after it is muted.
-        musicEnabledRef.current = enabled;
-        persist({ musicEnabled: enabled });
-        if (enabled) {
-            void unlock();
-        } else engine.current?.stopMusic();
+    const setRadioEnabled = useCallback((enabled: boolean) => {
+        persist({ radioEnabled: enabled });
+        if (enabled) void unlock();
     }, [persist, unlock]);
     const setSfxVolume = useCallback((volume: number) => {
         const next = clamp(volume);
         persist({ sfxVolume: next });
         engine.current?.setSfxVolume(next);
     }, [persist]);
-    const setMusicVolume = useCallback((volume: number) => {
+    const setRadioVolume = useCallback((volume: number) => {
         const next = clamp(volume);
-        musicVolumeRef.current = next;
-        persist({ musicVolume: next });
-        if (engine.current) engine.current.setMusicVolume(next);
+        persist({ radioVolume: next });
+        if (stream.current) stream.current.volume = next;
     }, [persist]);
+
+    // One element for the life of the app: re-creating it on every render
+    // would restart the stream, and two of them would play the station twice.
+    useEffect(() => {
+        const element = new Audio();
+        element.preload = 'none';
+        element.volume = clamp(readSaved().radioVolume);
+        stream.current = element;
+        const onPlaying = () => {
+            setRadioLoading(false);
+            setRadioBlocked(false);
+            setRadioFailed(false);
+        };
+        const onWaiting = () => setRadioLoading(true);
+        const onError = () => {
+            setRadioLoading(false);
+            setRadioFailed(true);
+        };
+        element.addEventListener('playing', onPlaying);
+        element.addEventListener('waiting', onWaiting);
+        element.addEventListener('error', onError);
+        return () => {
+            element.removeEventListener('playing', onPlaying);
+            element.removeEventListener('waiting', onWaiting);
+            element.removeEventListener('error', onError);
+            element.pause();
+            element.removeAttribute('src');
+            element.load();
+            stream.current = null;
+        };
+    }, []);
+
+    // The table decides the station; this listener decides whether to hear it.
+    useEffect(() => {
+        const element = stream.current;
+        if (!element) return;
+        const wanted = radioEnabled ? stationUrl : '';
+        if (!wanted) {
+            element.pause();
+            if (element.src) {
+                element.removeAttribute('src');
+                element.load();
+            }
+            setRadioLoading(false);
+            setRadioFailed(false);
+            return;
+        }
+        if (element.src !== wanted) {
+            element.src = wanted;
+            element.load();
+            setRadioFailed(false);
+        }
+        setRadioLoading(true);
+        element.play()
+            .then(() => setRadioBlocked(false))
+            .catch((reason: DOMException) => {
+                setRadioLoading(false);
+                // Autoplay policy, not a dead station: a press on any control
+                // starts it.
+                if (reason?.name === 'NotAllowedError') setRadioBlocked(true);
+                else setRadioFailed(true);
+            });
+    }, [radioEnabled, stationUrl]);
 
     useEffect(() => {
         if (!game) {
@@ -359,14 +387,17 @@ export function useGameAudio(game: GameView | null): GameAudio {
     return {
         unlocked,
         sfxEnabled,
-        musicEnabled,
+        radioEnabled,
         sfxVolume: saved.sfxVolume,
-        musicVolume: saved.musicVolume,
+        radioVolume: saved.radioVolume,
+        radioLoading,
+        radioBlocked,
+        radioFailed,
         unlock,
         play,
         setSfxEnabled,
-        setMusicEnabled,
+        setRadioEnabled,
         setSfxVolume,
-        setMusicVolume,
+        setRadioVolume,
     };
 }

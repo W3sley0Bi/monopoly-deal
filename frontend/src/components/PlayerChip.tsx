@@ -39,11 +39,11 @@ export default function PlayerChip({ player, isTurn, isTargeted, stream, inCall,
         >
             {reaction && <ReactionBubble key={reaction.id} message={reaction} />}
             <div className="flex min-w-0 items-center gap-1.5">
-                <Avatar id={player.id} name={player.name} size={28} active={isTurn} away={!player.connected} />
+                <Avatar id={player.id} name={player.name} size={28} active={isTurn} away={!player.connected} inCall={Boolean(stream || inCall)} inCallLabel={t('call.in_call')} />
                 <span className="min-w-0 flex-1 truncate font-display text-base leading-none tracking-wide">
                     {player.name}
                 </span>
-                {(stream || inCall) && <span title={t('call.people')} aria-label={t('call.people')}>◉</span>}
+                {(stream || inCall) && <span className="call-tag" title={t('call.in_call')}>{t('call.in_call')}</span>}
             </div>
 
             <div className="flex items-center gap-2 text-[0.7rem] text-white/70">

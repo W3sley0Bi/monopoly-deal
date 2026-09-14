@@ -31,7 +31,7 @@ export default function Modal({ title, subtitle, onClose, children, footer, wide
     }, [onClose]);
 
     return createPortal(
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-3 backdrop-blur-sm">
+        <div data-dialog-overlay className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-3 backdrop-blur-sm">
             <div ref={focusRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} className={`game-modal panel animate-pop flex max-h-[92vh] w-full flex-col overflow-hidden ${wide ? 'max-w-4xl' : 'max-w-2xl'}`}>
                 <div className="flex items-start justify-between gap-4 border-b border-white/10 bg-black/25 px-5 py-3">
                     <div>

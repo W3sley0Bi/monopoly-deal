@@ -11,9 +11,14 @@ export default function CallControls({ call, memberCount }: { call: Call; member
     const active = call.status === 'on';
     const starting = call.status === 'starting';
     const prefs = call.preferences;
+    const label = memberCount > 0
+        ? `${t(active ? 'call.settings' : 'call.join')} · ${t('call.members', { count: memberCount })}`
+        : t(active ? 'call.settings' : 'call.join');
     return <>
         <div className="call-toolbar">
-            <button className={`btn btn-ghost call-main-button ${active ? 'call-live' : ''}`} onClick={() => setOpen(true)} aria-label={t(active ? 'call.settings' : 'call.join')} title={t(active ? 'call.settings' : 'call.join')}>
+            {/* Someone is already talking and you are not: the count pulses
+                rather than sitting there as another grey chip. */}
+            <button className={`btn btn-ghost call-main-button ${active ? 'call-live' : ''} ${!active && memberCount > 0 ? 'call-waiting' : ''}`} onClick={() => setOpen(true)} aria-label={label} title={label}>
                 <span aria-hidden="true">{active ? '●' : '◉'}</span><span className="call-join-label">{t(active ? 'call.settings' : 'call.join')}</span>{memberCount > 0 && <span className="call-count">{memberCount}</span>}
             </button>
             {active && <>

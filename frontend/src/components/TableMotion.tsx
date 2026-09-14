@@ -3,6 +3,18 @@ import { useI18n } from '../i18n';
 import type { GameView } from '../types';
 
 type Position = { x: number; y: number; width: number; height: number };
+
+/**
+ * A card thrown across a table travels on a bow, not a ruler line. The bow is
+ * perpendicular to the path and capped, so a short hop stays a hop while a
+ * cross-table steal arcs. `side` flips it, which is what makes two cards in a
+ * swap pass around each other instead of through each other.
+ */
+function bow(dx: number, dy: number, side: number): { x: number; y: number } {
+    const distance = Math.hypot(dx, dy) || 1;
+    const lift = Math.min(90, distance * 0.18);
+    return { x: (-dy / distance) * lift * side, y: (dx / distance) * lift * side };
+}
 function position(el: Element): Position {
     const r = el.getBoundingClientRect();
     return { x: r.x, y: r.y, width: r.width, height: r.height };
@@ -63,6 +75,11 @@ export default function TableMotion({
                 document.querySelectorAll('[data-player-id]'),
             ).find((el) => el.getAttribute('data-player-id') === actor?.id);
             const actorPosition = seat ? position(seat) : deckPosition;
+            // Cards arriving in the same beat deal out one after another,
+            // the way a dealer's hand works, instead of landing as one block.
+            let arrivals = 0;
+            // Alternating bow direction makes a two-card swap cross.
+            let side = 1;
             elements.forEach((el) => {
                 const id = el.dataset.cardId!;
                 const to = next.get(id)!;
@@ -75,6 +92,10 @@ export default function TableMotion({
                 const dx = from.x - to.x,
                     dy = from.y - to.y;
                 if (Math.abs(dx) + Math.abs(dy) < 10) return;
+                const curve = bow(-dx, -dy, side);
+                side = -side;
+                const delay = Math.min(4, arrivals) * 75;
+                arrivals += 1;
                 // Fly an inert copy above scrolling rails; animating the actual
                 // destination would clip its travel inside the property strip.
                 const ghost = el.cloneNode(true) as HTMLElement;
@@ -101,25 +122,37 @@ export default function TableMotion({
                             opacity: old ? 1 : 0.2,
                         },
                         {
+                            transform: `translate(${dx / 2 + curve.x}px, ${dy / 2 + curve.y}px) rotate(${-5 * side}deg) scale(1.06)`,
+                            opacity: 1,
+                            offset: 0.55,
+                        },
+                        {
                             transform: 'translate(0, 0) rotate(0) scale(1)',
                             opacity: 1,
                         },
                     ],
-                    { duration: 540, easing: 'cubic-bezier(.16,1,.3,1)' },
+                    {
+                        duration: 560,
+                        delay,
+                        fill: 'both',
+                        easing: 'cubic-bezier(.16,1,.3,1)',
+                    },
                 );
                 flight.onfinish = () => ghost.remove();
                 animations.push(
                     flight,
+                    // The real card stays invisible until its copy lands on it.
                     el.animate(
                         [
                             { opacity: 0 },
-                            { opacity: 0, offset: 0.8 },
+                            { opacity: 0, offset: 0.82 },
                             { opacity: 1 },
                         ],
-                        { duration: 540 },
+                        { duration: 560, delay, fill: 'both' },
                     ),
                 );
             });
+            let publicSide = 1;
             const assets = (p: GameView['players'][number]) => [
                 ...p.bank,
                 ...p.sets.flatMap((set) => [...set.cards, ...set.buildings]),
@@ -168,24 +201,36 @@ export default function TableMotion({
                             });
                             document.body.append(ghost);
                             ghosts.push(ghost);
+                            // Straight from the old owner to the new one, on a
+                            // bow. A swap animates as two of these with
+                            // opposite bows, so the cards pass side by side.
+                            const travelX = to.x - from.x;
+                            const travelY = to.y + to.height - from.y;
+                            const curve = bow(travelX, travelY, publicSide);
+                            publicSide = -publicSide;
                             const flight = ghost.animate(
                                 [
                                     {
-                                        transform: 'scale(.45) rotate(-12deg)',
+                                        transform: 'scale(.5) rotate(-12deg)',
                                         opacity: 0,
                                     },
                                     {
-                                        transform: `translate(${deckPosition.x - from.x}px, ${deckPosition.y - from.y}px) scale(1.1) rotate(5deg)`,
+                                        transform: `translate(${travelX * 0.18}px, ${travelY * 0.18}px) scale(1.12) rotate(4deg)`,
                                         opacity: 1,
-                                        offset: 0.45,
+                                        offset: 0.22,
                                     },
                                     {
-                                        transform: `translate(${to.x - from.x}px, ${to.y + to.height - from.y}px) scale(.4) rotate(0)`,
+                                        transform: `translate(${travelX * 0.55 + curve.x}px, ${travelY * 0.55 + curve.y}px) scale(1) rotate(${-7 * publicSide}deg)`,
+                                        opacity: 1,
+                                        offset: 0.62,
+                                    },
+                                    {
+                                        transform: `translate(${travelX}px, ${travelY}px) scale(.45) rotate(0)`,
                                         opacity: 0,
                                     },
                                 ],
                                 {
-                                    duration: 900,
+                                    duration: 880,
                                     easing: 'cubic-bezier(.25,.7,.3,1)',
                                 },
                             );

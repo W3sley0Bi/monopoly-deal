@@ -6,6 +6,10 @@ import type {
     ReactNode,
 } from 'react';
 import { createPortal } from 'react-dom';
+import {
+    CLOSE_DELAY, SETTLE_POLL, SWEEP_SPEED,
+    hoverOpenDelay, markHoverClosed, markHoverOpen, pointerSpeed,
+} from '../game/hoverIntent';
 
 interface Props {
     children: ReactElement<HTMLAttributes<HTMLElement>>;
@@ -36,7 +40,19 @@ export default function HoverDetails({
     };
     const leave = () => {
         clear();
-        timer.current = setTimeout(() => setOpen(false), 140);
+        timer.current = setTimeout(() => setOpen(false), CLOSE_DELAY);
+    };
+    // A popup queued behind a moving pointer waits for the hand to settle
+    // rather than firing into a sweep across the fan.
+    const queue = (delay: number) => {
+        clear();
+        timer.current = setTimeout(() => {
+            if (pointerSpeed() > SWEEP_SPEED) {
+                queue(SETTLE_POLL);
+                return;
+            }
+            setOpen(true);
+        }, delay);
     };
     useEffect(
         () => () => {
@@ -44,6 +60,13 @@ export default function HoverDetails({
         },
         [],
     );
+    // Reading one card and moving to the next is one gesture: while a popup is
+    // open, and briefly after it closes, the next one skips the full wait.
+    useEffect(() => {
+        if (!open || !enabled) return;
+        markHoverOpen();
+        return markHoverClosed;
+    }, [open, enabled]);
     useEffect(() => {
         if (!open || !enabled) return;
         const el = panel.current,
@@ -115,8 +138,7 @@ export default function HoverDetails({
                     onPointerEnter={(e) => {
                         anchor.current = e.currentTarget;
                         if (e.pointerType === 'touch') return;
-                        clear();
-                        timer.current = setTimeout(() => setOpen(true), 320);
+                        queue(hoverOpenDelay());
                     }}
                     onPointerLeave={leave}
                     onFocus={(e) => {

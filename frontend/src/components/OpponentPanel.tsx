@@ -12,6 +12,8 @@ interface Props {
     player: PlayerView;
     isTurn: boolean;
     isTargeted?: boolean;
+    /** Connected to the table's call. */
+    inCall?: boolean;
     video?: ReactNode;
     onOpen: () => void;
     reaction?: ChatMessage;
@@ -21,6 +23,7 @@ export default function OpponentPanel({
     player,
     isTurn,
     isTargeted,
+    inCall,
     video,
     onOpen,
     reaction,
@@ -78,6 +81,8 @@ export default function OpponentPanel({
                             size={52}
                             active={isTurn}
                             away={!player.connected}
+                            inCall={inCall}
+                            inCallLabel={t('call.in_call')}
                         />
                         {isTurn && (
                             <span className="seat-turn">

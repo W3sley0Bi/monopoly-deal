@@ -55,9 +55,17 @@ func spaHandler(dir string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := filepath.Join(dir, filepath.Clean("/"+strings.TrimPrefix(r.URL.Path, "/")))
 		if info, err := os.Stat(path); err == nil && !info.IsDir() {
+			// Asset names carry a content hash, so they can be cached hard.
+			if strings.HasPrefix(r.URL.Path, "/assets/") {
+				w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+			}
 			fs.ServeHTTP(w, r)
 			return
 		}
+		// index.html names the current bundle. Without this a browser is free
+		// to reuse yesterday's copy, which points at a bundle that is gone —
+		// a deploy nobody sees until they clear their cache.
+		w.Header().Set("Cache-Control", "no-cache")
 		http.ServeFile(w, r, index)
 	})
 }

@@ -132,7 +132,7 @@ export default function App() {
         announce: announceCall,
     });
 
-    const audio = useGameAudio(room?.game ?? null);
+    const audio = useGameAudio(room?.game ?? null, room?.radio ?? null);
     const { unlocked: audioUnlocked, unlock: unlockAudio } = audio;
     useEffect(() => {
         if (audioUnlocked) return;

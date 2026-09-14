@@ -148,6 +148,17 @@ export type RTCSignal =
     | { kind: 'offer' | 'answer'; sdp: RTCSessionDescriptionInit }
     | { kind: 'candidate'; candidate: RTCIceCandidateInit };
 
+/** The table's shared station. The owner tunes it; everyone plays it locally. */
+export interface RadioState {
+    name: string;
+    url: string;
+    home?: string;
+    playing: boolean;
+    /** Who tuned it. */
+    by_name?: string;
+    at_ms?: number;
+}
+
 export interface RoomView {
     private: boolean;
     id: string;
@@ -165,6 +176,7 @@ export interface RoomView {
     turn_options: number[];
     difficulties: Difficulty[];
     game: GameView;
+    radio: RadioState;
     chat: ChatMessage[];
     /** Player ids currently in the voice/video call. */
     call_members: string[];
@@ -209,7 +221,7 @@ export interface ClientMessage {
         | 'hello' | 'create_room' | 'join_room' | 'leave_room' | 'close_room'
         | 'set_options' | 'start_game' | 'new_game' | 'terminate_game'
         | 'kick' | 'take_seat' | 'request_seat' | 'cancel_seat' | 'chat'
-        | 'add_bot' | 'remove_bot'
+        | 'add_bot' | 'remove_bot' | 'set_radio'
         | 'rtc_join' | 'rtc_leave' | 'rtc_signal'
         | 'play_bank' | 'play_property' | 'play_action' | 'move_wildcard'
         | 'discard' | 'end_turn' | 'respond';
@@ -235,6 +247,8 @@ export interface ClientMessage {
     say_no?: boolean;
     card_ids?: string[];
     text?: string;
+    /** Station for `set_radio`; an empty url switches the radio off. */
+    radio?: Pick<RadioState, 'name' | 'url' | 'home' | 'playing'>;
     signal?: RTCSignal;
 }
 

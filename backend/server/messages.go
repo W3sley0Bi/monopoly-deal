@@ -25,6 +25,7 @@ const (
 	MsgTakeSeat    = "take_seat"
 	MsgRequestSeat = "request_seat"
 	MsgCancelSeat  = "cancel_seat"
+	MsgSetRadio    = "set_radio"
 	MsgAddBot      = "add_bot"
 	MsgRemoveBot   = "remove_bot"
 	MsgChat        = "chat"
@@ -75,6 +76,10 @@ type ClientMessage struct {
 	DoubleCardIDs  []string   `json:"double_card_ids,omitempty"`
 	SayNo          bool       `json:"say_no,omitempty"`
 	CardIDs        []string   `json:"card_ids,omitempty"`
+
+	// Radio is the station the table owner tuned to. A nil radio, or one with
+	// an empty URL, switches the table radio off.
+	Radio *RadioState `json:"radio,omitempty"`
 
 	// Chat.
 	Text string `json:"text,omitempty"`
@@ -233,9 +238,23 @@ type RoomView struct {
 	Difficulties []game.Difficulty `json:"difficulties"`
 	Game         GameView          `json:"game"`
 
+	Radio RadioState `json:"radio"`
+
 	Chat []ChatMessage `json:"chat"`
 	// CallMembers are the player ids currently in the voice/video call.
 	CallMembers []string `json:"call_members"`
+}
+
+// RadioState is the table's shared station. Every client plays the same
+// stream at its own volume; nothing is mixed or relayed by the server.
+type RadioState struct {
+	Name    string `json:"name"`
+	URL     string `json:"url"`
+	Home    string `json:"home,omitempty"`
+	Playing bool   `json:"playing"`
+	// ByName is who tuned it, for the "playing on X's radio" line.
+	ByName string `json:"by_name,omitempty"`
+	AtMS   int64  `json:"at_ms,omitempty"`
 }
 
 // RoomSummary is one row in the home screen's table browser.

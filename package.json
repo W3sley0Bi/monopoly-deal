@@ -1,0 +1,8 @@
+{
+  "name": "monopoly-deal",
+  "private": true,
+  "version": "0.0.0",
+  "dependencies": {
+    "railway": "^3.11.0"
+  }
+}

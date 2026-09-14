@@ -26,6 +26,8 @@ type Room struct {
 	// nothing is pending, so the pause starts fresh on the next decision.
 	botAt time.Time
 
+	// radio is the station the owner tuned for the whole table.
+	radio RadioState
 	// chat is the table's group chat, newest last.
 	chat []ChatMessage
 	// call holds the player ids currently in the voice/video call.
@@ -224,6 +226,7 @@ func (r *Room) view(playerID string) RoomView {
 		TurnOptions:  game.TurnSecondOptions,
 		Difficulties: game.Difficulties,
 		Game:         gameView(r.Game, playerID),
+		Radio:        r.radio,
 		Chat:         r.chat,
 		CallMembers:  r.callMembers(),
 	}
