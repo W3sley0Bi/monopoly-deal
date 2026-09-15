@@ -3433,10 +3433,17 @@ body.is-dragging .board-targets > .bank-zone:not(.drop-zone-live) {
         min-height: 0;
     }
     .my-board {
-        flex: 0 0 auto;
-        /* The narrow layout floors this at 170px, which a folded board cannot
-           fill — that unfilled remainder was the empty green band above the
-           hand. It sizes to what it holds now. */
+        /* Sizes to what it holds and never stretches — growing is what left an
+           empty green band above the hand when the board was folded. But it
+           must be able to give way: with three or more colour sets and a full
+           hand the board wanted more room than there was, and being unable to
+           shrink it simply overran the table and took the bank and the action
+           space off the bottom of the screen with it. There was no way left to
+           bank a card or play an action.
+           It yields instead, and the board scrolls inside itself — the drop
+           row is stuck to its bottom edge, so whatever the board's height, the
+           row is the part that stays on screen. */
+        flex: 0 1 auto;
         min-height: 0;
         max-height: 46vh;
     }
