@@ -108,6 +108,17 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
     // Only the discard event gets a bubble over your own hand — every other
     // move already shows itself on the board you are looking at.
     const myDiscardPlay = me && plays[me.name]?.entry.key === 'log.discarded_excess' ? plays[me.name] : undefined;
+    // The last thing that happened, for the phone's inline recap — never the
+    // turn changing itself, since the status line right above it already
+    // says whose turn this is. Without this filter the two lines repeated
+    // each other the instant a turn passed. A tutorial lesson opening is
+    // bookkeeping rather than a move, and reads as noise in the same place.
+    const NOT_A_MOVE = new Set(['log.turn', 'log.tutorial_lesson']);
+    let lastMoveIndex = -1;
+    for (let i = g.log.length - 1; i >= 0; i -= 1) {
+        if (!NOT_A_MOVE.has(g.log[i].key)) { lastMoveIndex = i; break; }
+    }
+    const lastMove = lastMoveIndex >= 0 ? g.log[lastMoveIndex] : undefined;
 
     const [selectedCard, setSelected] = useState<Card | null>(null);
     const selected = me?.hand?.find(card => card.id === selectedCard?.id) ?? null;
@@ -133,6 +144,9 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
     // The one exception is the lesson that teaches it: a tutorial step about
     // tapping a card has to let the card be tapped.
     const [tapTray, setTapTray] = useState(() => localStorage.getItem('md.taptray') === 'on');
+    // Off by default: a face reacting to your own discard is a lot for some
+    // players, so it is something you turn on rather than have to turn off.
+    const [cryReaction, setCryReaction] = useState(() => localStorage.getItem('md.cryreaction') === 'on');
     const tapOpens = tapTray || g.tutorial?.id === 'tapping';
     // Turning the tray off with a card already chosen would leave the panel on
     // screen with no way to dismiss it.
@@ -331,6 +345,22 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
     const dragColors = drag && canPlay ? dragColorsAll : [];
     const dragBankable = Boolean(drag && canPlay && dragTargets.bankable);
 
+    // A joker that joins any colour cannot be aimed at a panel that means
+    // "the board". Every colour is a legal answer, so the whole-panel
+    // resolver below has nothing to resolve by and the card lands wherever
+    // its list of candidates happened to start — which from the other side
+    // of the screen looks like the board refusing the card and then putting
+    // it somewhere nobody asked for. On a phone it has to be told which
+    // colour first, by tapping it; until then the board does not take it.
+    // A mouse aims at one colour's own stack and never had the question.
+    const unaimedJoker = (card: Card, from: 'hand' | 'board') =>
+        narrow
+        && isAnyColorWild(card)
+        && !wildColor[card.id]
+        && (from === 'board' ? moveColors(card) : dropTargets(card, g.colors).colors).length > 1;
+    const carryingUnaimedJoker = Boolean(drag && unaimedJoker(drag.card, drag.from));
+    const propertyDropActive = dragColors.length > 0 && !carryingUnaimedJoker;
+
     const playCard = (card: Card, color: Color, from: 'hand' | 'board') => {
         if (from === 'board') {
             setPendingMove({ type: 'move_wildcard', cardId: card.id, color });
@@ -523,7 +553,7 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
             data-density={(me?.sets.length ?? 0) > 6 ? 'tight' : (me?.sets.length ?? 0) > 4 ? 'dense' : undefined}
             className={`property-zone panel flex min-h-0 min-w-0 flex-1 flex-col p-2 sm:p-3 ${
                 accordion ? 'property-accordion' : ''
-            } ${accordion && !boardShown ? 'is-folded' : ''} ${dragColors.length > 0 ? 'property-zone-live' : ''}`}
+            } ${accordion && !boardShown ? 'is-folded' : ''} ${propertyDropActive ? 'property-zone-live' : ''}`}
         >
             {accordion ? (
                 <button
@@ -548,7 +578,7 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
             {narrow ? (
                 <DropZone
                     hidden={!boardShown}
-                    active={dragColors.length > 0}
+                    active={propertyDropActive}
                     onDrop={() => drag && dropProperty(drag.card, drag.from)}
                     className={`property-groups min-w-0 flex-1 gap-3 pb-1 ${me?.sets.length ? 'items-start' : 'items-center justify-center'}`}
                 >
@@ -669,6 +699,12 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
                 </div>
             )}
 
+            {/* A refusal with no reason reads as a bug. */}
+            {carryingUnaimedJoker && (
+                <p className="mt-1 shrink-0 text-[0.65rem] font-semibold text-amber-300">
+                    {t('table.joker_pick_colour')}
+                </p>
+            )}
             {/* Shuffling a wildcard between colours used to be free; it is not
                 any more, so the board says so where the move is made. */}
             {boardShown && myTurn && !pending && me?.sets.some(s => s.cards.some(c => c.type === 'property_wildcard')) && (
@@ -863,6 +899,9 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
                         <button type="button" role="menuitemcheckbox" aria-checked={motion} className="block w-full px-3 py-2.5 text-left text-sm hover:bg-white/10" onClick={() => setMotion(value => { localStorage.setItem('md.motion', value ? 'off' : 'on'); return !value; })}>
                             {t('table.motion')}: {t(motion ? 'table.on' : 'table.off')}
                         </button>
+                        <button type="button" role="menuitemcheckbox" aria-checked={cryReaction} className="block w-full px-3 py-2.5 text-left text-sm hover:bg-white/10" onClick={() => setCryReaction(value => { localStorage.setItem('md.cryreaction', value ? 'off' : 'on'); return !value; })}>
+                            {t('table.cry_reaction')}: {t(cryReaction ? 'table.on' : 'table.off')}
+                        </button>
                         <div className="border-t border-white/10 p-3"><GameAudioControls audio={audio} radio={room.radio} canManage={room.is_owner} ownerName={room.owner_name} send={send} /></div>
                         <LanguagePicker variant="menu" />
                     </div>
@@ -982,7 +1021,13 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
                                     onOpen={() => setSheet({ kind: 'player', player: turnPlayer })}
                                 />
                             )}
-                            {!narrow && <div className="table-status" aria-live="polite"><span className={myTurn ? 'status-light active' : 'status-light'} />{myTurn ? t('table.your_turn') : t('table.turn_of', { name: turnPlayer?.name ?? '' })}</div>}
+                            {/* A phone has no side log to read the last move from,
+                                so it still gets this inline. */}
+                            {narrow && (
+                                <div key={lastMoveIndex} className="table-event" aria-live="polite">
+                                    {lastMove ? tLog(lastMove) : t('table.shared_space')}
+                                </div>
+                            )}
                         </div>
 
                         {/* ── My board ────────────────────────────────── */}
@@ -1223,10 +1268,11 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
                 </div>
             )}
 
-            {/* A phone has no side log and no header turn-chip in easy view,
-                so it still gets the big announcement; a desktop already has
-                both, and the popup on top of them was one notice too many. */}
-            {narrow && (
+            {/* A phone already carries the turn inline, right where the
+                cards are — the popup on top of that was one notice too
+                many. A desktop's version of that inline text is a side
+                panel out of the eye's way, so it keeps the announcement. */}
+            {!narrow && (
                 <TurnBanner
                     player={turnPlayer}
                     isYou={myTurn}
@@ -1236,7 +1282,7 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
             )}
 
             <TableMotion game={g} enabled={motion} />
-            <DiscardBurst plays={plays} you={g.you} players={g.players} />
+            <DiscardBurst plays={plays} you={g.you} players={g.players} myHand={me?.hand} cryEnabled={cryReaction} />
 
             {/* ── Overlays ────────────────────────────────────────────── */}
             {sheet?.kind === 'player' && (

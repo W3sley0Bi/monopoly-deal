@@ -23,6 +23,7 @@ const table: Catalog = {
     'table.reaction_3': "Unglaublich",
 
     'table.motion': "Kartenanimation",
+    'table.cry_reaction': "Reaktions-GIF beim Ablegen",
     'table.on': "An",
     'table.off': "Aus",
     'table.turn_of': "{name} ist dran",
@@ -101,6 +102,7 @@ const table: Catalog = {
     'table.properties_drag': 'Zieh eine Immobilienkarte hierher, um einen Satz zu beginnen',
     // The wildcard rule changed: a card already on the table is no longer free
     // to shuffle around, so the mat says what a move now costs.
+    'table.joker_pick_colour': 'Tipp den Joker an und wähl zuerst seine Farbe.',
     'table.wildcard_move_cost': 'Einen Joker zu bewegen, der schon auf dem Tisch liegt, kostet einen Zug.',
 
     // ── Hand ─────────────────────────────────────────────────────────────

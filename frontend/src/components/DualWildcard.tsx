@@ -14,6 +14,10 @@ export default function DualWildcard({
 }) {
     const { t, tColor } = useI18n();
     const flipped = activeColor === card.colors?.[1];
+    // Which colour is in play, and which is only on offer. The card turns to
+    // put the one in play upright on top; the other keeps a strip along the
+    // bottom, so what this card could also be is never off the card.
+    const lead = flipped ? 1 : 0;
     return (
         <div
             className={`dual-wildcard ${flipped ? 'wildcard-flipped' : ''}`}
@@ -25,7 +29,9 @@ export default function DualWildcard({
                     return (
                         <div
                             key={color}
-                            className={`wildcard-half wildcard-half-${i}`}
+                            className={`wildcard-half wildcard-half-${i} ${
+                                i === lead ? 'wildcard-lead' : 'wildcard-trail'
+                            }`}
                             style={
                                 {
                                     '--card-color': meta.hex,

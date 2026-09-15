@@ -55,6 +55,13 @@ func play(t *testing.T, g *Game, you, coach *Player, id string) {
 		if err := g.PlayProperty(you.ID, c.ID, c.Colors[0]); err != nil {
 			t.Fatal(err)
 		}
+	case "wildcard_any":
+		// The joker has no colour of its own, so the colour has to come from
+		// the set it is joining rather than from the card.
+		c := inHand(t, you, func(c Card) bool { return c.Type == CardTypePropertyWildcard })
+		if err := g.PlayProperty(you.ID, c.ID, ColorRed); err != nil {
+			t.Fatal(err)
+		}
 	case "tapping":
 		// The server cannot tell a tap from a drag, and should not: the lesson
 		// is about the route, the rule is the same either way.

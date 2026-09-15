@@ -163,6 +163,17 @@ var lessons = []lesson{
 		},
 	},
 	{
+		// The other joker, and the one the deck only has two of: no colour of
+		// its own, so there is nothing to choose between — it joins whatever
+		// you have already started.
+		id: "wildcard_any",
+		setup: func(g *Game, you, coach *Player) {
+			you.Hand = cards("wild.any_colour", "money.2")
+			propertySet(you, ColorRed, "prop.kentucky_avenue")
+		},
+		done: func(g *Game, you, coach *Player) bool { return ownsColor(you, ColorRed) >= 2 },
+	},
+	{
 		// Dragging is not the only way to play a card. Tapping it opens a
 		// menu of everything that card can do, which is how you play on a
 		// phone and how you resolve a card whose destination is ambiguous.

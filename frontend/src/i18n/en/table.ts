@@ -23,6 +23,7 @@ const table: Catalog = {
     'table.reaction_3': "Mind blown",
 
     'table.motion': "Card animation",
+    'table.cry_reaction': "Discard reaction gif",
     'table.on': "On",
     'table.off': "Off",
     'table.turn_of': "{name}’s turn",
@@ -101,6 +102,7 @@ const table: Catalog = {
     'table.properties_drag': 'Drag a property card here to start a set',
     // The wildcard rule changed: a card already on the table is no longer free
     // to shuffle around, so the mat says what a move now costs.
+    'table.joker_pick_colour': 'Tap the joker to choose its colour first.',
     'table.wildcard_move_cost': 'Moving a wildcard already on the table costs one play.',
 
     // ── Hand ─────────────────────────────────────────────────────────────

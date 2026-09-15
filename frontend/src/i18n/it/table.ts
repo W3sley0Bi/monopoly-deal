@@ -23,6 +23,7 @@ const table: Catalog = {
     'table.reaction_3': "Incredibile",
 
     'table.motion': "Animazione carte",
+    'table.cry_reaction': "Gif di reazione allo scarto",
     'table.on': "Attiva",
     'table.off': "Disattiva",
     'table.turn_of': "Turno di {name}",
@@ -101,6 +102,7 @@ const table: Catalog = {
     'table.properties_drag': 'Trascina qui una carta proprietà per iniziare una serie',
     // The wildcard rule changed: a card already on the table is no longer free
     // to shuffle around, so the mat says what a move now costs.
+    'table.joker_pick_colour': 'Tocca la jolly e scegli prima il suo colore.',
     'table.wildcard_move_cost': 'Spostare un jolly già sul tavolo costa una giocata.',
 
     // ── Hand ─────────────────────────────────────────────────────────────

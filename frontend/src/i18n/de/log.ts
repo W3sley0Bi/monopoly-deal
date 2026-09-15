@@ -22,6 +22,8 @@ const log: Catalog = {
 
     // Turn flow. The em dash marks the turn line, which LogList styles.
     'log.turn': '— {name} ist dran —',
+    // The scripted table rebuilds itself for each lesson; this marks where.
+    'log.tutorial_lesson': '— Lektion: {lesson} —',
     'log.timeout_respond': '{name} hatte keine Zeit mehr zu antworten.',
     'log.timeout_turn': 'Die Runde von {name} ist abgelaufen.',
 

@@ -171,9 +171,17 @@ export function DragProvider({ children }: { children: ReactNode }) {
             }
             const step = scroller ? edgeStep(scroller, y) : 0;
             if (step !== 0 && scroller) scroller.scrollTop += step;
-            // A still finger over a still panel is looking at the same zone it
-            // was looking at last frame.
-            if (moved || step !== 0) hitTest();
+            // Every frame, whether the finger moved or not. The page moves
+            // under a still finger too: zones grow as they light up, the hand
+            // gives up its height when a card leaves it, panels settle. This
+            // used to run only on movement, so a card carried straight to a
+            // zone and held there was judged against where that zone had been
+            // mid-animation — and the only way to get an answer out of it was
+            // to jiggle the card until a frame happened to land. One
+            // `elementFromPoint` is what the browser does for `:hover`
+            // anyway, and `hitTest` re-renders nothing unless the answer
+            // actually changed.
+            hitTest();
         };
 
         const hitTest = () => {
@@ -194,7 +202,7 @@ export function DragProvider({ children }: { children: ReactNode }) {
             // The carried copy is scenery. Anything that made the original
             // answer to a pointer has to come off it, or the ghost sits
             // between the finger and the drop zone it is being carried to.
-            ghost.classList.remove('tour-live');
+            ghost.removeAttribute('data-tour-live');
             ghost.removeAttribute('data-drop-id');
             ghost.style.width = `${rect.width}px`;
             ghost.style.height = `${rect.height}px`;

@@ -749,28 +749,17 @@ select:focus-visible {
     place-items: center;
     padding: 8px;
 }
-.table-status {
+.table-event {
     position: absolute;
-    bottom: 35px;
-    left: 50%;
-    transform: translateX(-50%);
-    display: flex;
-    gap: 8px;
-    align-items: center;
+    bottom: 12px;
+    left: 24%;
+    right: 24%;
+    text-align: center;
+    font-size: 10px;
+    color: oklch(92% 0.025 185 / 0.8);
+    overflow: hidden;
     white-space: nowrap;
-    font-size: 12px;
-    font-weight: 800;
-    text-shadow: 0 2px 6px oklch(10% 0.02 211 / 0.5);
-}
-.status-light {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: oklch(85% 0.04 180);
-}
-.status-light.active {
-    background: var(--color-brass);
-    box-shadow: 0 0 12px var(--color-brass);
+    text-overflow: ellipsis;
 }
 .my-board {
     /* Above the hand (z-index: 10), which sits right below it — a lit bank
@@ -1927,6 +1916,43 @@ select:focus-visible {
 .inspection-set-cards { display: flex; padding: 3px 0 7px; }.inspection-set-cards .card-face + .card-face { margin-left: -12px; }
 .bank-inspection ul { max-height: 230px; overflow-y: auto; }
 
+/* ── The two ends of a joker are not equal ────────────────────────────────
+   A real wildcard prints its two colours as equal halves, and the card is
+   turned to say which is in play. Split down the middle, though, the card
+   asks to be read twice before it says what it is — worst of all in a hand,
+   at a glance, on a phone.
+
+   So the colour in play takes the card, and the other keeps a strip along
+   the bottom: enough to say what this card could also be, without competing
+   to be what it is. Turning it over swaps which is which, and because the
+   proportions belong to the roles rather than to the halves, the one you
+   turn to is always the big one. Every place a wildcard is drawn uses this
+   — the hand, your own board, and the thumbnail stacks on the table — so a
+   joker reads as a joker wherever it turns up. */
+.wildcard-lead {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+.wildcard-trail {
+    flex: 0 0 26%;
+    min-height: 0;
+}
+/* A strip has room for the colour and nothing else. */
+.wildcard-trail .wildcard-art {
+    display: none;
+}
+.wildcard-lead,
+.wildcard-trail {
+    transition: flex-basis 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* The hinge belongs on the seam, which is no longer the middle of the card.
+   Given in the card's own coordinates: turning the card over carries the
+   badge with it, and the seam lands back under it either way. */
+.wildcard-flipped .wildcard-pivot {
+    top: 26%;
+}
+
 /* A two-ended wildcard reads upright at whichever end is currently in play. */
 .card-face[data-dual] { padding: 0; }
 .card-face > .dual-wildcard:first-child { height: 100%; width: 100%; flex: 1; min-height: 0; font-size: 1em; }
@@ -1956,13 +1982,13 @@ select:focus-visible {
     transform: rotate(180deg);
 }
 .wildcard-rotator { position: absolute; inset: 0; display: flex; flex-direction: column; }
-.wildcard-half { height: 50%; display: flex; flex-direction: column; overflow: hidden; background: color-mix(in srgb, var(--card-color) 16%, oklch(96% .025 95)); }
+.wildcard-half { display: flex; flex-direction: column; overflow: hidden; background: color-mix(in srgb, var(--card-color) 16%, oklch(96% .025 95)); }
 .wildcard-half-1 { transform: rotate(180deg); }
 .wildcard-color { display: flex; align-items: center; justify-content: space-between; gap: 3px; padding: 4px; background: var(--card-color); color: var(--wild-ink); text-transform: uppercase; font-size: .76em; font-weight: 950; min-height: 22px; }
 .wildcard-color > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.wildcard-color > b { flex-shrink: 0; }
 .wildcard-art { display: flex; flex: 1; justify-content: center; align-items: center; gap: 2px; padding: 3px; }
 .wildcard-art .property-artwork { width: 3.6em; height: 3em; }.wildcard-art > span { font-size: .7em; font-weight: 800; }
-.wildcard-pivot { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); border-radius: 50%; background: oklch(96% .025 95); border: 1px solid oklch(30% .03 211 / .2); width: 20px; height: 20px; display: grid; place-items: center; font-size: 13px; font-weight: 900; box-shadow: 0 2px 5px oklch(10% .02 211 / .2); }
+.wildcard-pivot { position: absolute; top: 74%; left: 50%; transform: translate(-50%, -50%); border-radius: 50%; background: oklch(96% .025 95); border: 1px solid oklch(30% .03 211 / .2); width: 20px; height: 20px; display: grid; place-items: center; font-size: 13px; font-weight: 900; box-shadow: 0 2px 5px oklch(10% .02 211 / .2); }
 .property-zone .wildcard-color, .opponent-properties .wildcard-color { min-height: 12px; padding: 2px; font-size: .7em; }
 .property-zone .wildcard-art .property-artwork { display: block; width: 2.4em; height: 1.8em; }
 .property-zone .wildcard-art > span, .opponent-properties .wildcard-art > span { display: none; }
@@ -1994,7 +2020,7 @@ select:focus-visible {
     .opponent-property-card + .opponent-property-card { margin-left: -17px; }
 }
 @media (max-width: 899px) { .hover-details { width: 300px; }.card-inspection { grid-template-columns: 80px minmax(0, 1fr); gap: 10px; }.inspection-art .card-face { width: 80px; height: 118px; font-size: 9px; } }
-@media (prefers-reduced-motion: reduce) { .dual-wildcard { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .dual-wildcard, .wildcard-lead, .wildcard-trail { transition: none; } }
 /* Keep public hands separate from property labels and leave the center unobstructed. */
 .seat-cards { height: 43px; }
 /* The seat at the head of the table used to run a second column for its
@@ -2225,6 +2251,57 @@ select:focus-visible {
         padding-top: 4px;
         background: linear-gradient(oklch(24% 0.035 211 / 0), oklch(24% 0.035 211) 18%);
     }
+
+    /* ── A card in the air rearranges the phone ───────────────────────────
+       Holding a card, the hand is the one thing on screen with nothing left
+       to say: the choice has been made, and the other cards are only in the
+       way of the place this one has to reach. So it gives up its height for
+       as long as the card is up, and the board — which is where the card is
+       going — takes it.
+
+       The row is never lifted out of the document to do this. Positioning it
+       over the hand is what hid it: `position: fixed` measures against the
+       layout viewport, which on iOS runs behind the browser's own toolbar,
+       and the row was posted below the visible screen. Held in flow, the
+       only way for it to move down the screen is for the hand above it to
+       get shorter — which is the same gesture, and cannot miss. */
+    /* Half again as tall the moment a card is up. The row is pinned to the
+       bottom of the board, so this grows it upward: every pixel that was the
+       bank a moment ago still is, and there is simply more of it.
+       The hand used to shrink here too, to hand its height over. It looked
+       generous and aimed terribly — the whole row slid thirty-odd pixels
+       down the screen at the instant the card left the hand, so the player
+       was aiming at where the bank had been. A target may grow under a
+       thumb. It may not move. */
+    .compact-room.is-carrying .board-target-slot {
+        min-height: 74px;
+        font-size: 10px;
+    }
+    .compact-room.is-carrying .board-targets > .bank-zone > .panel {
+        min-height: 74px;
+        max-height: none;
+    }
+    /* The panel's heading is part of the board as far as a thumb is
+       concerned. The drop zone is only the shelf of sets under it, so a card
+       held over "Your properties" landed on nothing — a dead strip exactly
+       where the board begins, and the card had to be walked further up to
+       find an answer. This adds the heading to what the zone answers to; the
+       zone's own box, and everything drawn in it, is untouched. */
+    .compact-room.is-carrying .property-zone > .drop-zone-live::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: -46px;
+        height: 46px;
+    }
+}
+/* A lesson that has locked the bank and the action space out has made them
+   scenery: nothing can land there, and a thumb that tries gets silence. They
+   stand down rather than sit between the hand and the one place the lesson
+   is actually asking for — seventy pixels of road that leads nowhere. */
+body.tour-locked .board-targets:not(:has([data-tour-live])) {
+    display: none;
 }
 .room-invite-button { border: 1px solid #e9cf8230; border-radius: 6px; padding: 3px 6px; background: #071e23aa; color: #eddf70; font-size: 11px; font-weight: 800; letter-spacing: .14em; white-space: nowrap; }
 .room-invite-button:hover { background: #ffffff12; border-color: #eed38b; }
@@ -2373,6 +2450,51 @@ body.is-dragging {
     transform: translate(-50%, -50%);
     will-change: transform, opacity;
 }
+/* The reaction at the centre of a discard burst — background stripped so it
+ * reads as a face floating over the table, not a sticker on a white card. */
+.discard-cry {
+    position: fixed;
+    left: 0;
+    top: 0;
+    z-index: 86;
+    width: 64px;
+    height: 64px;
+    object-fit: contain;
+    pointer-events: none;
+    filter: drop-shadow(0 4px 10px oklch(5% 0.02 220 / 0.45));
+    will-change: transform, opacity;
+}
+/* The card itself, thrown clear of the hand before it comes apart — a
+ * simplified stand-in (tint + name), not the full card face, since it only
+ * has to read for the half-second before it dissolves. */
+.discard-ghost {
+    position: fixed;
+    left: 0;
+    top: 0;
+    z-index: 84;
+    display: grid;
+    place-items: center;
+    width: 46px;
+    height: 64px;
+    padding: 3px;
+    border-radius: 7px;
+    border: 2px solid oklch(97% 0.02 95 / 0.9);
+    background: color-mix(in srgb, var(--ghost-tint, #8a8f98) 55%, oklch(20% 0.02 220));
+    box-shadow: 0 6px 16px oklch(5% 0.02 220 / 0.4);
+    color: oklch(98% 0.01 95);
+    font-size: 9px;
+    font-weight: 800;
+    text-align: center;
+    line-height: 1.15;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    pointer-events: none;
+    will-change: transform, opacity, filter;
+}
+.discard-ghost-blank {
+    font-size: 20px;
+    background: oklch(30% 0.03 205);
+}
 /* The whole property panel is one drop target now (see `.property-groups`
  * as a DropZone in Table.tsx), so a set that would accept the card in hand
  * only needs a quiet marker, not a target of its own to hit. */
@@ -2417,14 +2539,20 @@ body.is-dragging {
     flex-shrink: 0;
     min-width: 0;
 }
+/* Bank and action space split the row evenly — a fixed narrow action target
+   beside a bank that could grow as wide as it liked read as two different
+   sizes of target for two equally common moves. */
 .board-targets > .bank-zone {
-    flex: 1 1 auto;
+    flex: 1 1 0;
     width: auto;
     min-width: 0;
     transform-origin: center bottom;
+    transition: flex-grow 120ms ease;
 }
 .board-target {
-    flex: 0 0 5.5rem;
+    flex: 1 1 0;
+    min-width: 0;
+    transition: flex-grow 120ms ease;
     /* Growing from the bottom edge lifts a lit zone up, away from the hand
        right below it, instead of bulging down over it from the centre. */
     transform-origin: center bottom;
@@ -2478,6 +2606,20 @@ body.is-dragging .board-target:not(.drop-zone-live),
 body.is-dragging .board-targets > .bank-zone:not(.drop-zone-live) {
     opacity: 0.55;
     transform: scale(0.95);
+}
+/* When only one of the two can take the card — money, which only banks;
+   a hotel, which only plays — that one gets the row and the other stands
+   aside as a strip. Which it is depends on the card, so it is settled the
+   moment the card leaves the hand and does not move again.
+   An earlier version widened whichever half the finger was nearest, which
+   sounds like the same idea and is the opposite of it: the target moved
+   while it was being aimed at, and a card held over a zone that had just
+   slid out from under it registered nothing until the player shook it. */
+.board-targets:has(> [data-active]) > :not([data-active]) {
+    flex-grow: 0.28;
+}
+.board-targets:has(> [data-active]) > [data-active] {
+    flex-grow: 1.72;
 }
 /* The whole board, not just one colour, once a property card is what is
    being carried — a colour a player does not have yet is easy to miss among
@@ -2597,6 +2739,46 @@ body.is-dragging .board-targets > .bank-zone:not(.drop-zone-live) {
     .arena-top > .opponent-seats {
         flex: 0 1 auto;
         min-height: 0;
+    }
+    /* This line is the phone's whole record of what just happened — there is
+       no log column beside the table to fall back on — so it is a banner
+       rather than a caption. */
+    .table-event {
+        position: static;
+        flex: none;
+        left: auto;
+        right: auto;
+        width: auto;
+        margin: 5px 2px 0;
+        padding: 6px 10px;
+        border-radius: 10px;
+        border: 1px solid oklch(88% 0.06 175 / 0.22);
+        background: oklch(14% 0.03 208 / 0.72);
+        backdrop-filter: blur(2px);
+        color: oklch(97% 0.02 185);
+        font-size: 12px;
+        font-weight: 600;
+        line-height: 1.3;
+        text-align: center;
+        /* Two lines, because a rent line naming a colour and an amount does
+           not fit one at this width, and an ellipsis loses the amount. */
+        white-space: normal;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        animation: table-event-in 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    @keyframes table-event-in {
+        from {
+            opacity: 0;
+            transform: translateY(-4px);
+        }
+    }
+}
+@media (max-width: 899px) and (orientation: landscape) {
+    .table-event {
+        display: none;
     }
 }
 
@@ -3879,7 +4061,7 @@ body.playing .drop-zone {
 body.tour-locked .game-room {
     pointer-events: none;
 }
-body.tour-locked .tour-live,
+body.tour-locked [data-tour-live],
 body.tour-locked .card-action-tray {
     pointer-events: auto;
 }

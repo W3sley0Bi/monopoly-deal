@@ -5,6 +5,7 @@ import { ACTION_BLURB_KEY, colorMeta, moneyMeta } from '../game/meta';
 import { useOptionalDragLayer } from '../game/dragLayer';
 import type { DragAxis } from '../game/dragLayer';
 import { useI18n } from '../i18n';
+import { NARROW, useMediaQuery } from '../game/useMediaQuery';
 import HoverDetails from './HoverDetails';
 import DualWildcard from './DualWildcard';
 import PropertyArtwork from './PropertyArtwork';
@@ -48,15 +49,17 @@ interface Props {
  * card, so render them from the short colour labels with spaces around the
  * slash. That also translates them without a catalog entry per combination.
  */
-function cardTitle(card: Card, t: I18n['t'], tCard: I18n['tCard']): string {
+function cardTitle(
+    card: Card,
+    t: I18n['t'],
+    tCard: I18n['tCard'],
+): string {
     const cols = card.colors ?? [];
     const short = (c: Color) => t(`color.short.${c}`);
-    if (
-        (card.type === 'property_wildcard' || card.type === 'rent') &&
-        cols.length === 2
-    ) {
+    if (card.type === 'property_wildcard' && cols.length === 2) {
         return `${short(cols[0])} / ${short(cols[1])}`;
     }
+    if (card.type === 'rent' && cols.length === 2) return `${short(cols[0])} / ${short(cols[1])}`;
     if (card.type === 'rent' && cols.length === 1) return short(cols[0]);
     return tCard(card);
 }
@@ -64,7 +67,7 @@ function cardTitle(card: Card, t: I18n['t'], tCard: I18n['tCard']): string {
 /** Colours drawn in the header stripe. An any-colour joker shows the
  *  rainbow only until it has been committed to one — tapped in hand, or
  *  already played — at which point the stripe is that colour, plainly. */
-function stripeColors(card: Card, activeColor?: Color): Color[] {
+function stripeColors(card: Card, activeColor: Color | undefined): Color[] {
     const cols = card.colors ?? [];
     if (!cols.length) return [];
     if (cols.length === 1 && cols[0] === 'all') return [activeColor ?? 'all'];
@@ -92,6 +95,10 @@ export default function PlayingCard({
     inspectable = true,
 }: Props) {
     const { t, tCard, tColor } = useI18n();
+    // A phone already prints everything this panel would say straight onto
+    // the card face — name, value, rent — so the popup has nothing a tap
+    // would be reading for. Left as a plain tap-to-select there instead.
+    const narrow = useMediaQuery(NARROW);
     const note = card.type === 'money' ? moneyMeta(card.value) : null;
     const dragLayer = useOptionalDragLayer();
     const pickUp = draggable && dragLayer ? dragLayer.begin : null;
@@ -100,7 +107,7 @@ export default function PlayingCard({
     const isProp =
         card.type === 'property' || card.type === 'property_wildcard';
 
-    const dual = card.type === 'property_wildcard' && cols.length === 2;
+    const dual = card.type === 'property_wildcard' && (card.colors?.length ?? 0) === 2;
     const description = card.action
         ? t(ACTION_BLURB_KEY[card.action])
         : card.type === 'rent'
@@ -179,7 +186,7 @@ export default function PlayingCard({
     );
     return (
         <HoverDetails
-            enabled={inspectable}
+            enabled={inspectable && !narrow}
             openOnClick={!onClick}
             content={details}
         >
