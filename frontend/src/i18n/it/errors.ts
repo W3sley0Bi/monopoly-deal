@@ -47,8 +47,6 @@ const errors: Catalog = {
     'err.no_plays_left': 'Nessuna giocata rimasta in questo turno.',
     'err.card_not_in_hand': 'Quella carta non è nella tua mano.',
     'err.card_not_in_play': 'Quella carta non è in gioco.',
-    'err.discard_first': 'Prima scarta fino a {limit} carte (ne hai {have}).',
-    'err.discard_only_over_limit': 'Puoi scartare solo quando superi le {limit} carte.',
 
     // Playing cards
     'err.no_action': 'Quella carta non ha nessuna azione.',

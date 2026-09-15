@@ -146,36 +146,9 @@ func (g *Game) botTurn(p *Player) bool {
 	if g.PlaysLeft > 0 && !dawdles && g.botPlay(p) {
 		return true
 	}
-	if len(p.Hand) > HandLimit {
-		return g.Discard(p.ID, g.botDiscardID(p)) == nil
-	}
+	// A hand still over the limit is EndTurn's problem now, not the robot's:
+	// it discards down to size itself, the same as it would for a human.
 	return g.EndTurn(p.ID) == nil
-}
-
-// botDiscardID picks the least useful card in hand.
-func (g *Game) botDiscardID(p *Player) string {
-	best := p.Hand[0]
-	score := botKeepScore(best)
-	for _, c := range p.Hand[1:] {
-		if s := botKeepScore(c); s < score {
-			best, score = c, s
-		}
-	}
-	return best.ID
-}
-
-// botKeepScore ranks how much a robot wants to keep a card in hand.
-func botKeepScore(c Card) int {
-	switch {
-	case c.Action == ActionJustSayNo:
-		return 100
-	case c.IsProperty():
-		return 50 + c.Value
-	case c.Type == CardTypeAction, c.Type == CardTypeRent:
-		return 20 + c.Value
-	default:
-		return c.Value
-	}
 }
 
 // botPlay tries the robot's move list in priority order and stops at the first

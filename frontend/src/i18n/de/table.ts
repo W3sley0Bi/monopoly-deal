@@ -40,9 +40,9 @@ const table: Catalog = {
     'table.plays_hint': 'Verbleibende Züge in dieser Runde',
     'table.end_turn': 'Runde beenden',
     'table.end_turn_hint': 'Deine Runde beenden',
+    'table.end_turn_over_limit': 'Beenden legt jetzt {count} Karte(n) zu viel ab',
     'table.auto_end': 'Runde endet in {seconds}s',
     'table.auto_end_short': '⏱ {seconds}s',
-    'table.discard_first': 'Leg zuerst auf 7 Karten ab',
     'table.deck_hint': 'Karten im Nachziehstapel',
     'table.discard_hint': 'Ablagestapel',
     'table.bank_hint': 'Deine Bank',
@@ -105,7 +105,7 @@ const table: Catalog = {
 
     // ── Hand ─────────────────────────────────────────────────────────────
     'table.hand': 'Hand · {count}',
-    'table.over_limit': 'Über 7 — leg {count} ab',
+    'table.over_limit': 'Über 7 um {count} — Extrakarten fallen beim Rundenende weg',
     'table.hand_tap': 'Tipp eine Karte für Optionen an oder zieh sie nach oben',
     'table.hand_drag': 'Zieh eine Karte auf den Tisch oder tipp sie für Optionen an',
     'table.hand_empty': 'Keine Karten — zu Beginn deiner nächsten Runde ziehst du 5.',
@@ -117,9 +117,6 @@ const table: Catalog = {
     'table.charge_rent': 'Miete kassieren',
     'table.play_action': 'Aktion spielen',
     'table.bank_card': 'Bank {amount}',
-    'table.discard_card': 'Ablegen',
-    'table.discard_this': 'Diese Karte ablegen',
-    'table.discard_locked': 'Ablegen geht nur, solange du über dem Limit von 7 Karten liegst',
     'table.just_say_no_hint': 'Behalt sie auf der Hand, um Aktionen gegen dich zu blocken.',
     'table.double_rent_hint': 'Wähl sie im Mietdialog, um eine Forderung zu verdoppeln.',
 

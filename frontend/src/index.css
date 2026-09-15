@@ -1351,9 +1351,15 @@ select:focus-visible {
         max-height: none;
         margin: 6px 0;
         gap: 6px;
+        /* However many sets a player owns, the bank/action/discard row below
+           has to stay reachable. The board itself scrolls, rather than the
+           row being squeezed off the bottom of a screen with no way back. */
+        overflow-y: auto;
+        overscroll-behavior: contain;
     }
     .property-zone {
         min-height: 125px;
+        flex: 0 0 auto;
     }
     .bank-zone {
         width: 100%;
@@ -1412,7 +1418,7 @@ select:focus-visible {
     .mobile-controls {
         z-index: 20;
         background: oklch(20% 0.035 211);
-        padding-bottom: max(6px, env(safe-area-inset-bottom));
+        margin-bottom: max(6px, env(safe-area-inset-bottom));
     }
     .card-action-tray {
         bottom: 212px;
@@ -2164,6 +2170,23 @@ select:focus-visible {
 @media (max-width: 899px) {
     .property-zone { flex: 1 1 auto; min-height: 0; }
 }
+@media (max-width: 899px) and (orientation: portrait) {
+    /* Upright, `.my-board` itself is the scrolling surface (see the general
+       mobile block above), so the board draws at its full natural height
+       here rather than being squeezed to fit — that squeeze is what pushed
+       the drop zones below it clean off the screen with three or more sets. */
+    .property-zone { flex: 0 0 auto; min-height: 0; }
+    /* Pinned to the bottom of that scroll, not scrolled away with the sets
+       above it — reachable with a card in hand no matter how the board has
+       grown. The backdrop keeps a scrolled-up card from showing through. */
+    .board-targets {
+        position: sticky;
+        bottom: 0;
+        z-index: 3;
+        padding-top: 4px;
+        background: linear-gradient(oklch(24% 0.035 211 / 0), oklch(24% 0.035 211) 18%);
+    }
+}
 .room-invite-button { border: 1px solid #e9cf8230; border-radius: 6px; padding: 3px 6px; background: #071e23aa; color: #eddf70; font-size: 11px; font-weight: 800; letter-spacing: .14em; white-space: nowrap; }
 .room-invite-button:hover { background: #ffffff12; border-color: #eed38b; }
 .invite-content { display: flex; flex-direction: column; gap: 16px; align-items: flex-start; font-size: 14px; }
@@ -2298,6 +2321,19 @@ body.is-dragging {
     background: oklch(24% 0.06 150 / 0.92);
     color: oklch(96% 0.05 95);
 }
+/* A puff of the excess, not chosen by anyone, drifting off from wherever the
+ * over-limit hand was — spawned straight onto `body` so it travels above
+ * every panel and scroll region it passes over. */
+.discard-dust {
+    position: fixed;
+    left: 0;
+    top: 0;
+    z-index: 85;
+    pointer-events: none;
+    font-size: 22px;
+    transform: translate(-50%, -50%);
+    will-change: transform, opacity;
+}
 .drop-zone-hint {
     background: oklch(8% 0.02 220 / 0.42);
     color: oklch(88% 0.11 92 / 0.85);
@@ -2361,6 +2397,35 @@ body.is-dragging {
 .board-target[data-active] .board-target-slot {
     border-color: oklch(85% 0.09 90 / 0.75);
     color: oklch(89% 0.1 90);
+}
+/* The bank and the action space are each a single, generously sized target,
+   so growing the one that fits the card in hand reads clearly on its own —
+   unlike a property colour, there is no row of neighbours it could crowd. */
+.board-target.drop-zone-live,
+.bank-zone.drop-zone-live {
+    transform: scale(1.08);
+    z-index: 4;
+}
+@media (max-width: 899px) {
+    .board-target.drop-zone-live,
+    .bank-zone.drop-zone-live {
+        transform: scale(1.12);
+    }
+}
+/* Whichever zone the card cannot land in steps back rather than competing
+   for attention with the one that is actually lit. */
+body.is-dragging .board-target:not(.drop-zone-live),
+body.is-dragging .board-targets > .bank-zone:not(.drop-zone-live) {
+    opacity: 0.55;
+    transform: scale(0.95);
+}
+/* The whole board, not just one colour, once a property card is what is
+   being carried — a colour a player does not have yet is easy to miss among
+   sets already in play. */
+.property-zone-live {
+    box-shadow:
+        0 0 0 2px oklch(85% 0.09 90 / 0.55),
+        0 5px 0 oklch(12% 0.02 211 / 0.4);
 }
 
 /* ── The folding board ────────────────────────────────────────────────────

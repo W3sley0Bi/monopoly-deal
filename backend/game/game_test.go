@@ -323,25 +323,21 @@ func TestPayWithEverythingWhenShort(t *testing.T) {
 	}
 }
 
-func TestHandLimitBlocksEndTurn(t *testing.T) {
+func TestEndTurnAutoDiscardsExcess(t *testing.T) {
 	g := newTwoPlayer(t)
 	p := g.Player("a")
 	p.Hand = nil
 	for i := 0; i < 9; i++ {
 		p.Hand = append(p.Hand, Card{ID: generateID(), Type: CardTypeMoney, Name: "$1M", Value: 1})
 	}
-	if err := g.EndTurn("a"); err == nil {
-		t.Fatal("should require discarding to 7")
-	}
-	g.PlaysLeft = 3
-	if err := g.Discard("a", p.Hand[0].ID); err != nil {
-		t.Fatalf("discard above the limit should be allowed: %v", err)
-	}
-	if err := g.Discard("a", p.Hand[0].ID); err != nil {
-		t.Fatal(err)
-	}
 	if err := g.EndTurn("a"); err != nil {
-		t.Fatalf("end turn at 7 cards: %v", err)
+		t.Fatalf("end turn should auto-discard down to the limit: %v", err)
+	}
+	if len(p.Hand) != HandLimit {
+		t.Fatalf("hand = %d cards, want %d", len(p.Hand), HandLimit)
+	}
+	if len(g.DiscardPile) != 2 {
+		t.Fatalf("discard pile = %d, want 2", len(g.DiscardPile))
 	}
 }
 

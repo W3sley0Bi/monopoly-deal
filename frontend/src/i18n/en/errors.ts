@@ -47,8 +47,6 @@ const errors: Catalog = {
     'err.no_plays_left': 'No plays left this turn.',
     'err.card_not_in_hand': 'That card is not in your hand.',
     'err.card_not_in_play': 'That card is not in play.',
-    'err.discard_first': 'Discard down to {limit} cards first (you have {have}).',
-    'err.discard_only_over_limit': 'You may only discard while over {limit} cards.',
 
     // Playing cards
     'err.no_action': 'That card has no action.',

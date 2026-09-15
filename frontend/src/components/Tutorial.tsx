@@ -212,6 +212,14 @@ export default function Tutorial({ room, narrow, compact, send, onClose }: Props
     const cardRef = useRef<HTMLDivElement | null>(null);
 
     const lesson = room.game.tutorial;
+    // Set the moment Next is pressed, cleared the moment the server's answer
+    // moves the lesson on — so it only ever covers the round trip itself, and
+    // never lingers if the reply is quick.
+    const [pending, setPending] = useState(false);
+    const lessonStep = lesson?.step;
+    useEffect(() => {
+        setPending(false);
+    }, [lessonStep]);
     const hint = lesson ? (HINTS[lesson.id] ?? {}) : {};
 
     // A card in the air has already been chosen. Ringing it, and miming the
@@ -311,11 +319,15 @@ export default function Tutorial({ room, narrow, compact, send, onClose }: Props
         markTutorialSeen(true);
         onClose();
     };
+    // The next step only exists once the server answers, so there is nothing
+    // to show early — but the tap that asked for it still deserves an instant
+    // answer, or a slow network reads as a button that did not hear you.
     const advance = () => {
         if (lesson.step >= lesson.total) {
             finish();
             return;
         }
+        setPending(true);
         send({ type: 'tutorial_next' });
     };
 
@@ -537,14 +549,17 @@ export default function Tutorial({ room, narrow, compact, send, onClose }: Props
                         type="button"
                         className={`btn ml-auto !py-1.5 !text-sm ${
                             ready ? 'btn-gold tour-next-ready' : 'btn-ghost'
-                        }`}
+                        } ${pending ? 'opacity-60' : ''}`}
+                        disabled={pending}
                         onClick={advance}
                     >
-                        {lesson.step >= lesson.total
-                            ? t('tutorial.finish')
-                            : lesson.task && !lesson.done
-                              ? t('tutorial.skipStep')
-                              : `${t('common.next')} →`}
+                        {pending
+                            ? '…'
+                            : lesson.step >= lesson.total
+                              ? t('tutorial.finish')
+                              : lesson.task && !lesson.done
+                                ? t('tutorial.skipStep')
+                                : `${t('common.next')} →`}
                     </button>
                 </div>
             </div>

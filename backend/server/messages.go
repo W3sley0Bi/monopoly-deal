@@ -40,7 +40,6 @@ const (
 	MsgPlayProperty = "play_property"
 	MsgPlayAction   = "play_action"
 	MsgMoveWildcard = "move_wildcard"
-	MsgDiscard      = "discard"
 	MsgEndTurn      = "end_turn"
 	MsgRespond      = "respond"
 	// MsgTutorialNext moves a scripted table on to the next lesson.

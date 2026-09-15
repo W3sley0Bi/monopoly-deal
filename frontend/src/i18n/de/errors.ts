@@ -47,8 +47,6 @@ const errors: Catalog = {
     'err.no_plays_left': 'Keine Züge mehr in dieser Runde.',
     'err.card_not_in_hand': 'Diese Karte ist nicht auf deiner Hand.',
     'err.card_not_in_play': 'Diese Karte ist nicht im Spiel.',
-    'err.discard_first': 'Leg zuerst auf {limit} Karten ab (du hast {have}).',
-    'err.discard_only_over_limit': 'Ablegen geht nur, solange du über {limit} Karten hast.',
 
     // Playing cards
     'err.no_action': 'Diese Karte hat keine Aktion.',

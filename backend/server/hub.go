@@ -617,8 +617,6 @@ func (h *Hub) handleRoomLocked(c *Client, msg ClientMessage) error {
 		})
 	case MsgMoveWildcard:
 		return g.ReassignWildcard(id, msg.CardID, msg.Color)
-	case MsgDiscard:
-		return g.Discard(id, msg.CardID)
 	case MsgEndTurn:
 		return g.EndTurn(id)
 	case MsgRespond:

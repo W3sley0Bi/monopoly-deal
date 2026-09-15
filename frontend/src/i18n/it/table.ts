@@ -40,9 +40,9 @@ const table: Catalog = {
     'table.plays_hint': 'Giocate rimaste in questo turno',
     'table.end_turn': 'Fine turno',
     'table.end_turn_hint': 'Concludi il tuo turno',
+    'table.end_turn_over_limit': 'Concludendo ora scarti {count} carta/e in più',
     'table.auto_end': 'Turno chiuso tra {seconds}s',
     'table.auto_end_short': '⏱ {seconds}s',
-    'table.discard_first': 'Prima scarta fino a 7 carte',
     'table.deck_hint': 'Carte rimaste nel mazzo',
     'table.discard_hint': 'Scarti',
     'table.bank_hint': 'La tua banca',
@@ -105,7 +105,7 @@ const table: Catalog = {
 
     // ── Hand ─────────────────────────────────────────────────────────────
     'table.hand': 'Mano · {count}',
-    'table.over_limit': 'Più di 7 — scarta {count}',
+    'table.over_limit': 'Più di 7 di {count} — le carte in più cadranno a fine turno',
     'table.hand_tap': 'Tocca una carta per le opzioni o trascinala in alto',
     'table.hand_drag': 'Trascina una carta sul tavolo, oppure toccala per le opzioni',
     'table.hand_empty': 'Nessuna carta — ne peschi 5 all’inizio del tuo prossimo turno.',
@@ -117,9 +117,6 @@ const table: Catalog = {
     'table.charge_rent': 'Chiedi l’affitto',
     'table.play_action': 'Gioca l’azione',
     'table.bank_card': 'In banca {amount}',
-    'table.discard_card': 'Scarta',
-    'table.discard_this': 'Scarta questa carta',
-    'table.discard_locked': 'Puoi scartare solo quando superi il limite di 7 carte',
     'table.just_say_no_hint': 'Tienila in mano per bloccare le azioni contro di te.',
     'table.double_rent_hint': 'Sceglila dalla finestra dell’affitto per raddoppiare la richiesta.',
 

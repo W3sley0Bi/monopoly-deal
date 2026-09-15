@@ -255,7 +255,7 @@ function cueForLog(key: string): GameAudioCue | undefined {
     if (key === 'log.game_started') return 'turn';
     if (key === 'log.turn') return 'turn';
     if (key === 'log.banked' || key === 'log.banked_money') return 'bank';
-    if (key === 'log.played_property' || key === 'log.moved_wildcard' || key === 'log.building' || key === 'log.discarded') return 'card_play';
+    if (key === 'log.played_property' || key === 'log.moved_wildcard' || key === 'log.building' || key === 'log.discarded_excess') return 'card_play';
     if (key === 'log.pass_go') return 'card_play';
     if (key === 'log.reshuffled') return 'shuffle';
     if (key === 'log.charge' || key === 'log.charge_everyone' || key === 'log.sly_deal' || key === 'log.forced_deal' || key === 'log.deal_breaker') return 'action';

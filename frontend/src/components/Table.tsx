@@ -9,6 +9,7 @@ import type { Card, ClientMessage, Color, PlayerView, RoomView } from '../types'
 import type { Call } from '../game/useWebRTC';
 import { NARROW, PORTRAIT, useMediaQuery } from '../game/useMediaQuery';
 import { DragProvider } from '../game/dragLayer';
+import { applyOptimistic, moveSettled, type PendingMove } from '../game/optimistic';
 import { usePlayBubbles } from '../game/usePlayBubbles';
 import {
     colorMeta, dropTargets, isPlayableAction, needsTargeting, playableColors,
@@ -17,7 +18,8 @@ import { useI18n } from '../i18n';
 import { formatTurn, money } from '../i18n/format';
 import HoverDetails from './HoverDetails';
 import GameBrand, { Cityscape } from './GameBrand';
-import Reactions, { ReactionBubble } from './Reactions';
+import Reactions, { PlayBubble, ReactionBubble } from './Reactions';
+import DiscardBurst from './DiscardBurst';
 import { REACTIONS } from '../game/reactions';
 import TableMotion from './TableMotion';
 import LanguagePicker from './LanguagePicker';
@@ -75,7 +77,26 @@ type SheetState =
 
 export default function Table({ audio, room, error, skewMs, call, tutorial, onTutorial, send, onLeave }: Props) {
     const { t, tCard, tLog } = useI18n();
-    const g = room.game;
+
+    // A move whose result only depends on cards already on screen — placing a
+    // property, moving a wildcard, banking, discarding — is drawn right away
+    // rather than waiting on the round trip that confirms it. `effectiveRoom`
+    // is what every read below sees; `room` itself never changes underneath.
+    const [pendingMove, setPendingMove] = useState<PendingMove | null>(null);
+    useEffect(() => {
+        if (pendingMove && moveSettled(room, pendingMove)) setPendingMove(null);
+    }, [room, pendingMove]);
+    useEffect(() => {
+        if (!pendingMove) return undefined;
+        // A move the server refused never satisfies moveSettled, so this is
+        // what lets the guess retire and the real (unchanged) state show
+        // through instead of holding a prediction that never came true.
+        const timer = window.setTimeout(() => setPendingMove(null), 4000);
+        return () => window.clearTimeout(timer);
+    }, [pendingMove]);
+    const effectiveRoom = pendingMove ? applyOptimistic(room, pendingMove) : room;
+
+    const g = effectiveRoom.game;
     const me = g.players.find(p => p.id === g.you);
     const spectating = !room.you_seated || !me;
     const narrow = useMediaQuery(NARROW);
@@ -84,6 +105,9 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
     // The log already records every move; this lifts the newest one back onto
     // the player who made it, where you would hear it at a real table.
     const plays = usePlayBubbles(g.log);
+    // Only the discard event gets a bubble over your own hand — every other
+    // move already shows itself on the board you are looking at.
+    const myDiscardPlay = me && plays[me.name]?.entry.key === 'log.discarded_excess' ? plays[me.name] : undefined;
 
     const [selectedCard, setSelected] = useState<Card | null>(null);
     const selected = me?.hand?.find(card => card.id === selectedCard?.id) ?? null;
@@ -216,9 +240,11 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
 
     // The reveal wheel runs with the turn not yet live: plays are still zero
     // there, and ending the turn during it would skip the first player.
+    // Being over the hand limit no longer holds this back — ending the turn
+    // now drops the extra cards itself instead of waiting on the player.
     const startPending = Boolean(g.starts_at_ms && Date.now() + skewMs < g.starts_at_ms);
     const autoEnd = myTurn && !pending && !spectating && !startPending
-        && g.state === 'playing' && g.plays_left === 0 && !overLimit;
+        && g.state === 'playing' && g.plays_left === 0;
     const sendRef = useRef(send);
     sendRef.current = send;
     const [autoEndLeft, setAutoEndLeft] = useState(0);
@@ -257,16 +283,25 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
         : { colors: drag ? moveColors(drag.card) : [], bankable: false };
     const dragColors = drag && canPlay ? dragTargets.colors : [];
     const dragBankable = Boolean(drag && canPlay && dragTargets.bankable);
-    const dragDiscardable = Boolean(drag && drag.from === 'hand' && myTurn && !pending && overLimit);
 
     const playCard = (card: Card, color: Color, from: 'hand' | 'board') => {
-        if (from === 'board') act({ type: 'move_wildcard', card_id: card.id, color });
-        else act({ type: 'play_property', card_id: card.id, color });
+        if (from === 'board') {
+            setPendingMove({ type: 'move_wildcard', cardId: card.id, color });
+            act({ type: 'move_wildcard', card_id: card.id, color });
+        } else {
+            setPendingMove({ type: 'play_property', cardId: card.id, color });
+            act({ type: 'play_property', card_id: card.id, color });
+        }
     };
 
     const playActionCard = (card: Card) => {
         if (needsTargeting(card)) setDialog({ card, intent: 'action' });
         else act({ type: 'play_action', card_id: card.id });
+    };
+
+    const playBank = (card: Card) => {
+        setPendingMove({ type: 'play_bank', cardId: card.id });
+        act({ type: 'play_bank', card_id: card.id });
     };
 
     const wildcardIds = (cards: Card[]) =>
@@ -316,8 +351,7 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
             data-tour="end-turn"
             className="btn btn-red !py-1.5"
             onClick={() => act({ type: 'end_turn' })}
-            disabled={overLimit}
-            title={t(overLimit ? 'table.discard_first' : 'table.end_turn_hint')}
+            title={t(overLimit ? 'table.end_turn_over_limit' : 'table.end_turn_hint', { count: handSize - 7 })}
         >
             {t('table.end_turn')}
         </button>
@@ -341,7 +375,7 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
         <DropZone
             active={dragBankable}
             hint={drag ? t('table.bank_drop', { amount: money(t, drag.card.value) }) : ''}
-            onDrop={() => drag && act({ type: 'play_bank', card_id: drag.card.id })}
+            onDrop={() => drag && playBank(drag.card)}
             tour="bank"
             className="bank-zone min-w-0 rounded-2xl"
         >
@@ -404,7 +438,7 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
             data-density={(me?.sets.length ?? 0) > 6 ? 'tight' : (me?.sets.length ?? 0) > 4 ? 'dense' : undefined}
             className={`property-zone panel flex min-h-0 min-w-0 flex-1 flex-col p-2 sm:p-3 ${
                 accordion ? 'property-accordion' : ''
-            } ${accordion && !boardShown ? 'is-folded' : ''}`}
+            } ${accordion && !boardShown ? 'is-folded' : ''} ${dragColors.length > 0 ? 'property-zone-live' : ''}`}
         >
             {accordion ? (
                 <button
@@ -498,11 +532,12 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
     // action space until a drag begins leaves no way to tell "play this hotel"
     // apart from "bank it" before committing to the gesture. So both targets
     // stand beside the bank, lit only when the card in hand can land there.
+    const actionActive = Boolean(drag && drag.from === 'hand' && canPlay && isPlayableAction(drag.card));
     const boardTargets = (
         <div className="board-targets">
             {bankZone}
             <DropZone
-                active={Boolean(drag && drag.from === 'hand' && canPlay && isPlayableAction(drag.card))}
+                active={actionActive}
                 onDrop={() => drag && playActionCard(drag.card)}
                 tour="action-space"
                 className="board-target rounded-xl"
@@ -510,16 +545,6 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
                 <div className="board-target-slot">
                     <span aria-hidden="true">✦</span>
                     {t('table.action_space')}
-                </div>
-            </DropZone>
-            <DropZone
-                active={dragDiscardable}
-                onDrop={() => drag && act({ type: 'discard', card_id: drag.card.id })}
-                className="board-target rounded-xl"
-            >
-                <div className="board-target-slot">
-                    <span aria-hidden="true">⌫</span>
-                    {t('table.discard')} <b>{g.discard_count}</b>
                 </div>
             </DropZone>
         </div>
@@ -772,24 +797,20 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
                                     <span className="label-caps">{t('table.deck_count', { count: g.deck_count })}</span>
                                 </div>
 
-                                <DropZone
-                                    active={dragDiscardable}
-                                    hint={t('table.discard')}
-                                    onDrop={() => drag && act({ type: 'discard', card_id: drag.card.id })}
-                                    className="rounded-xl"
-                                >
-                                    <div className="flex flex-col items-center gap-1 p-1">
-                                        {g.discard_top
-                                            ? <PlayingCard key={g.discard_top.id} card={g.discard_top} size="sm" className="discard-arrival" />
-                                            : <div className="grid h-[6.5rem] w-[4.5rem] place-items-center rounded-lg border-2 border-dashed border-white/20 text-xs text-white/35">
-                                                {t('table.discard_empty')}
-                                            </div>}
-                                        <span className="label-caps">{t('table.discard_count', { count: g.discard_count })}</span>
-                                    </div>
-                                </DropZone>
+                                {/* The pile itself, not a drop target any more — nobody
+                                    chooses what lands here; the server discards the
+                                    excess itself when a turn over the limit ends. */}
+                                <div className="flex flex-col items-center gap-1 p-1">
+                                    {g.discard_top
+                                        ? <PlayingCard key={g.discard_top.id} card={g.discard_top} size="sm" className="discard-arrival" />
+                                        : <div className="grid h-[6.5rem] w-[4.5rem] place-items-center rounded-lg border-2 border-dashed border-white/20 text-xs text-white/35">
+                                            {t('table.discard_empty')}
+                                        </div>}
+                                    <span className="label-caps">{t('table.discard_count', { count: g.discard_count })}</span>
+                                </div>
 
                                 <DropZone
-                                    active={Boolean(drag && drag.from === 'hand' && canPlay && isPlayableAction(drag.card))}
+                                    active={actionActive}
                                     hint={t('table.play_it')}
                                     onDrop={() => drag && playActionCard(drag.card)}
                                     tour="action-space"
@@ -830,9 +851,9 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
                     {me && (
                         <section data-tour="hand" className="hand-zone relative min-w-0 shrink-0">
                             <div className="mb-1 flex min-w-0 items-center justify-between gap-2">
-                                <div className="hand-player"><Avatar id={me.id} name={me.name} size={32} active={myTurn} inCall={room.call_members.includes(me.id)} inCallLabel={t('call.in_call')} /><strong>{me.name}</strong>{recentReaction(me.id) && <ReactionBubble key={recentReaction(me.id)!.id} message={recentReaction(me.id)!} />}<span className="label-caps">{t('table.hand', { count: handSize })}</span></div>
+                                <div className="hand-player"><Avatar id={me.id} name={me.name} size={32} active={myTurn} inCall={room.call_members.includes(me.id)} inCallLabel={t('call.in_call')} /><strong>{me.name}</strong>{recentReaction(me.id) && <ReactionBubble key={recentReaction(me.id)!.id} message={recentReaction(me.id)!} />}{!recentReaction(me.id) && myDiscardPlay && <PlayBubble key={myDiscardPlay.id} text={tLog(myDiscardPlay.entry)} />}<span className="label-caps">{t('table.hand', { count: handSize })}</span></div>
                                 {overLimit ? (
-                                    <p className="animate-shake truncate rounded-md bg-rose-600/25 px-2 py-1 text-xs font-bold text-rose-200">
+                                    <p className="truncate rounded-md bg-amber-600/25 px-2 py-1 text-xs font-bold text-amber-200">
                                         {t('table.over_limit', { count: handSize - 7 })}
                                     </p>
                                 ) : (
@@ -927,19 +948,10 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
                             )}
                             {selected.type !== 'property' && selected.type !== 'property_wildcard' && (
                                 <button type="button" className="btn btn-green" disabled={g.plays_left === 0}
-                                    onClick={() => act({ type: 'play_bank', card_id: selected.id })}>
+                                    onClick={() => playBank(selected)}>
                                     {t('table.bank_card', { amount: money(t, selected.value) })}
                                 </button>
                             )}
-                            <button
-                                type="button"
-                                className="btn btn-red"
-                                disabled={!overLimit}
-                                title={t(overLimit ? 'table.discard_this' : 'table.discard_locked')}
-                                onClick={() => act({ type: 'discard', card_id: selected.id })}
-                            >
-                                {t('table.discard_card')}
-                            </button>
                             {selected.action === 'just_say_no' && (
                                 <span className="text-xs text-white/55">{t('table.just_say_no_hint')}</span>
                             )}
@@ -1009,6 +1021,7 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
             />
 
             <TableMotion game={g} enabled={motion} />
+            <DiscardBurst plays={plays} you={g.you} players={g.players} />
 
             {/* ── Overlays ────────────────────────────────────────────── */}
             {sheet?.kind === 'player' && (

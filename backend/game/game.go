@@ -961,9 +961,6 @@ func (g *Game) Tick(now time.Time) bool {
 
 	p := g.current()
 	g.log("log.timeout_turn", "name", p.Name)
-	for len(p.Hand) > HandLimit {
-		g.Discard(p.ID, p.Hand[len(p.Hand)-1].ID)
-	}
 	g.EndTurn(p.ID)
 	g.PostAction()
 	return true
@@ -1058,18 +1055,36 @@ func peekHand(p *Player, cardID string) (Card, error) {
 	return Card{}, fault("err.card_not_in_hand", "card not in your hand")
 }
 
-// EndTurn passes play to the next player.
+// EndTurn passes play to the next player. A hand still over the limit is not
+// the player's to fix any more — the choice of what to keep already happened
+// in the plays they made, so what is left over is dropped for them.
 func (g *Game) EndTurn(playerID string) error {
 	p, err := g.requireTurn(playerID)
 	if err != nil {
 		return err
 	}
-	if len(p.Hand) > HandLimit {
-		return fault("err.discard_first", fmt.Sprintf("discard down to %d cards first (you have %d)", HandLimit, len(p.Hand)), "limit", HandLimit, "have", len(p.Hand))
-	}
+	g.discardExcess(p)
 	g.CurrentTurn = (g.CurrentTurn + 1) % len(g.Players)
 	g.startTurn()
 	return nil
+}
+
+// discardExcess drops random cards from p's hand until it is back at
+// HandLimit, logging one line naming the player and how many went. Random
+// rather than chosen: nothing is left for the player to decide once their
+// turn is over.
+func (g *Game) discardExcess(p *Player) {
+	over := len(p.Hand) - HandLimit
+	if over <= 0 {
+		return
+	}
+	for i := 0; i < over; i++ {
+		idx := rand.IntN(len(p.Hand))
+		c := p.Hand[idx]
+		p.Hand = append(p.Hand[:idx], p.Hand[idx+1:]...)
+		g.DiscardPile = append(g.DiscardPile, c)
+	}
+	g.log("log.discarded_excess", "name", p.Name, "count", over)
 }
 
 // PlayToBank banks a money or action card as cash.
@@ -1168,26 +1183,6 @@ func (g *Game) ReassignWildcard(playerID, cardID string, color Color) error {
 		}
 	}
 	return fault("err.wildcard_not_in_play", "wildcard not found in your sets")
-}
-
-// Discard puts a card from hand onto the discard pile. Only to get back down
-// to the hand limit, so a player cannot dump their hand to redraw five.
-func (g *Game) Discard(playerID, cardID string) error {
-	p, err := g.requireTurn(playerID)
-	if err != nil {
-		return err
-	}
-	if len(p.Hand) <= HandLimit {
-		return fault("err.discard_only_over_limit", fmt.Sprintf("you may only discard while over %d cards", HandLimit), "limit", HandLimit)
-	}
-	c, err := takeFromHand(p, cardID)
-	if err != nil {
-		return err
-	}
-	g.DiscardPile = append(g.DiscardPile, c)
-	g.log("log.discarded", "name", p.Name, "card", c.Key)
-	g.evaluateWin()
-	return nil
 }
 
 // hasWon applies the current mode's win condition.

@@ -40,9 +40,9 @@ const table: Catalog = {
     'table.plays_hint': 'Plays left this turn',
     'table.end_turn': 'End turn',
     'table.end_turn_hint': 'End your turn',
+    'table.end_turn_over_limit': 'Ending now drops {count} extra card(s)',
     'table.auto_end': 'Auto-ending in {seconds}s',
     'table.auto_end_short': '⏱ {seconds}s',
-    'table.discard_first': 'Discard down to 7 cards first',
     'table.deck_hint': 'Cards left in the deck',
     'table.discard_hint': 'Discard pile',
     'table.bank_hint': 'Your bank',
@@ -105,7 +105,7 @@ const table: Catalog = {
 
     // ── Hand ─────────────────────────────────────────────────────────────
     'table.hand': 'Hand · {count}',
-    'table.over_limit': 'Over 7 — discard {count}',
+    'table.over_limit': 'Over 7 by {count} — extra cards drop when you end your turn',
     'table.hand_tap': 'Tap a card for options, or drag it up to play',
     'table.hand_drag': 'Drag a card onto the mat, or tap it for options',
     'table.hand_empty': 'No cards — you draw 5 at the start of your next turn.',
@@ -117,9 +117,6 @@ const table: Catalog = {
     'table.charge_rent': 'Charge rent',
     'table.play_action': 'Play action',
     'table.bank_card': 'Bank {amount}',
-    'table.discard_card': 'Discard',
-    'table.discard_this': 'Discard this card',
-    'table.discard_locked': 'You may only discard while over the 7-card limit',
     'table.just_say_no_hint': 'Keep this in hand to block actions against you.',
     'table.double_rent_hint': 'Pick this from the rent dialog to double a charge.',
 

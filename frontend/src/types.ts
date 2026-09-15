@@ -243,7 +243,7 @@ export interface ClientMessage {
         | 'add_bot' | 'remove_bot' | 'set_radio'
         | 'rtc_join' | 'rtc_leave' | 'rtc_signal'
         | 'play_bank' | 'play_property' | 'play_action' | 'move_wildcard'
-        | 'discard' | 'end_turn' | 'respond' | 'tutorial_next';
+        | 'end_turn' | 'respond' | 'tutorial_next';
     player_id?: string;
     player_name?: string;
     room_id?: string;
