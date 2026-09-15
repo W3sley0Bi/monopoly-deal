@@ -183,8 +183,6 @@ export interface RoomView {
     game: GameView;
     radio: RadioState;
     chat: ChatMessage[];
-    /** Player ids currently in the voice/video call. */
-    call_members: string[];
 }
 
 export interface RoomSummary {
@@ -199,7 +197,6 @@ export interface RoomSummary {
     players: Seat[];
     spectator_count: number;
     bot_count: number;
-    call_count: number;
     seats_free: number;
     you_seated: boolean;
     you_spectating: boolean;
@@ -241,7 +238,6 @@ export interface ClientMessage {
         | 'set_options' | 'start_game' | 'new_game' | 'terminate_game'
         | 'kick' | 'take_seat' | 'request_seat' | 'cancel_seat' | 'chat'
         | 'add_bot' | 'remove_bot' | 'set_radio'
-        | 'rtc_join' | 'rtc_leave' | 'rtc_signal'
         | 'play_bank' | 'play_property' | 'play_action' | 'move_wildcard'
         | 'end_turn' | 'respond' | 'tutorial_next';
     player_id?: string;
@@ -269,7 +265,6 @@ export interface ClientMessage {
     text?: string;
     /** Station for `set_radio`; an empty url switches the radio off. */
     radio?: Pick<RadioState, 'name' | 'url' | 'home' | 'playing'>;
-    signal?: RTCSignal;
 }
 
 export type ServerMessage =

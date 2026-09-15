@@ -1,12 +1,10 @@
 import type { GameAudio } from '../game/useGameAudio';
 import GameAudioControls from './GameAudioControls';
 import RoomInvite from './RoomInvite';
-import { useSeatCameras } from '../game/useSeatCameras';
-import CallStage, { ParticipantVideo } from './CallStage';
+
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import type { Card, ClientMessage, Color, PlayerView, RoomView } from '../types';
-import type { Call } from '../game/useWebRTC';
 import { NARROW, PORTRAIT, useMediaQuery } from '../game/useMediaQuery';
 import { DragProvider } from '../game/dragLayer';
 import { applyOptimistic, moveSettled, type PendingMove } from '../game/optimistic';
@@ -26,7 +24,6 @@ import LanguagePicker from './LanguagePicker';
 import ActionDialog from './ActionDialog';
 import ActiveBoard from './ActiveBoard';
 import Avatar from './Avatar';
-import CallControls from './CallControls';
 import DropZone from './DropZone';
 import FeltCards from './FeltCards';
 import OpponentPanel from './OpponentPanel';
@@ -50,7 +47,6 @@ interface Props {
     error?: string;
     /** Server clock minus browser clock, in ms. */
     skewMs: number;
-    call: Call;
     /** The guided tour is running. */
     tutorial: boolean;
     onTutorial: (on: boolean) => void;
@@ -75,7 +71,7 @@ type SheetState =
     | { kind: 'talk' }
     | null;
 
-export default function Table({ audio, room, error, skewMs, call, tutorial, onTutorial, send, onLeave }: Props) {
+export default function Table({ audio, room, error, skewMs, tutorial, onTutorial, send, onLeave }: Props) {
     const { t, tCard, tLog } = useI18n();
 
     // A move whose result only depends on cards already on screen — placing a
@@ -101,7 +97,6 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
     const spectating = !room.you_seated || !me;
     const narrow = useMediaQuery(NARROW);
     const portrait = useMediaQuery(PORTRAIT);
-    const seatCameras = useSeatCameras(call);
     // The log already records every move; this lifts the newest one back onto
     // the player who made it, where you would hear it at a real table.
     const plays = usePlayBubbles(g.log);
@@ -847,7 +842,7 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
 
                 <div className="ml-auto flex shrink-0 items-center gap-2">
                     <Reactions onSend={text => send({ type: 'chat', text })} />
-                    <CallControls call={call} memberCount={room.call_members.length} />
+
                     <button
                         ref={menuButtonRef}
                         type="button"
@@ -977,7 +972,7 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
                 )}
 
             </header>
-            <CallStage call={call} room={room} seated={seatCameras} />
+
 
             {spectating && (
                 <div className="panel flex min-w-0 flex-wrap items-center gap-2 px-3 py-2">
@@ -1025,8 +1020,7 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
                                         reaction: recentReaction(p.id),
                                         isTurn: turnPlayer?.id === p.id,
                                         isTargeted: pending?.targets.some(t => t.player_id === p.id && !t.settled),
-                                        stream: call.remote[p.id] ?? null,
-                                        inCall: room.call_members.includes(p.id),
+                                        lastPlay: play?.entry,
                                     };
                                     return narrow
                                         ? <PlayerChip
@@ -1036,7 +1030,7 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
                                             grow={foes.length <= 3}
                                             onOpen={() => setSheet({ kind: 'player', player: p })}
                                         />
-                                        : <OpponentPanel key={p.id} {...shared} playKey={play?.id} video={seatCameras && room.call_members.includes(p.id) ? <ParticipantVideo call={call} id={p.id} name={p.name} className="seat-camera" /> : undefined} onOpen={() => setSheet({ kind: 'player', player: p })} />;
+                                        : <OpponentPanel key={p.id} {...shared} playKey={play?.id} onOpen={() => setSheet({ kind: 'player', player: p })} />;
                                 })}
                             </section>
 
@@ -1122,7 +1116,7 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
                                 onClick={() => setHandOpen(open => !open)}
                                 title={accordion ? t(handShown ? 'table.hand_fold' : 'table.hand_unfold') : undefined}
                             >
-                                <div className="hand-player"><Avatar id={me.id} name={me.name} size={32} active={myTurn} inCall={room.call_members.includes(me.id)} inCallLabel={t('call.in_call')} /><strong>{me.name}</strong>{recentReaction(me.id) && <ReactionBubble key={recentReaction(me.id)!.id} message={recentReaction(me.id)!} />}{!recentReaction(me.id) && myDiscardPlay && <PlayBubble key={myDiscardPlay.id} text={tLog(myDiscardPlay.entry)} />}<span className="label-caps">{t('table.hand', { count: handSize })}</span></div>
+                                <div className="hand-player"><Avatar id={me.id} name={me.name} size={32} active={myTurn} /><strong>{me.name}</strong>{recentReaction(me.id) && <ReactionBubble key={recentReaction(me.id)!.id} message={recentReaction(me.id)!} />}{!recentReaction(me.id) && myDiscardPlay && <PlayBubble key={myDiscardPlay.id} text={tLog(myDiscardPlay.entry)} />}<span className="label-caps">{t('table.hand', { count: handSize })}</span></div>
                                 {/* Folded, the hand is a strip of colour rather than a
                                     row of readable cards — enough to remember what is
                                     still in it without spending the screen an opponent's

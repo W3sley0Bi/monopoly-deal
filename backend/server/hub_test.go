@@ -449,66 +449,6 @@ func TestSpectatorsCanChat(t *testing.T) {
 	})
 }
 
-func TestCallMembershipAndSignalRelay(t *testing.T) {
-	srv, _ := newTestServer(t)
-	a := dial(t, srv, "a", "Alice")
-	b := dial(t, srv, "b", "Bob")
-
-	a.send(ClientMessage{Type: MsgCreateRoom})
-	code := a.room("created", func(v RoomView) bool { return v.ID != "" }).ID
-	b.send(ClientMessage{Type: MsgJoinRoom, RoomID: code})
-	b.room("seated", func(v RoomView) bool { return v.YouSeated })
-
-	a.send(ClientMessage{Type: MsgRTCJoin})
-	b.send(ClientMessage{Type: MsgRTCJoin})
-	v := b.room("both in call", func(v RoomView) bool { return len(v.CallMembers) == 2 })
-	if v.CallMembers[0] != "a" || v.CallMembers[1] != "b" {
-		t.Fatalf("call members should be ordered: %v", v.CallMembers)
-	}
-
-	// An offer from Alice reaches Bob untouched.
-	a.send(ClientMessage{Type: MsgRTCSignal, TargetPlayerID: "b",
-		Signal: json.RawMessage(`{"kind":"offer","sdp":"v=0"}`)})
-	m := b.await("signal", func(m rawMsg) bool { return m.Type == "rtc_signal" })
-	var env RTCEnvelope
-	if err := json.Unmarshal(m.Payload, &env); err != nil {
-		t.Fatal(err)
-	}
-	if env.From != "a" || string(env.Signal) != `{"kind":"offer","sdp":"v=0"}` {
-		t.Fatalf("signal was altered: %+v", env)
-	}
-
-	// Leaving the call removes you from the roster.
-	a.send(ClientMessage{Type: MsgRTCLeave})
-	b.room("alice left call", func(v RoomView) bool {
-		return len(v.CallMembers) == 1 && v.CallMembers[0] == "b"
-	})
-
-	// Signals to someone who is not connected are refused.
-	b.send(ClientMessage{Type: MsgRTCSignal, TargetPlayerID: "zz",
-		Signal: json.RawMessage(`{"kind":"offer"}`)})
-	if err := b.expectError("unknown peer"); !strings.Contains(err, "not connected") {
-		t.Fatalf("unexpected error: %q", err)
-	}
-}
-
-func TestLeavingRoomLeavesTheCall(t *testing.T) {
-	srv, _ := newTestServer(t)
-	a := dial(t, srv, "a", "Alice")
-	b := dial(t, srv, "b", "Bob")
-
-	a.send(ClientMessage{Type: MsgCreateRoom})
-	code := a.room("created", func(v RoomView) bool { return v.ID != "" }).ID
-	b.send(ClientMessage{Type: MsgJoinRoom, RoomID: code})
-	b.room("seated", func(v RoomView) bool { return v.YouSeated })
-
-	a.send(ClientMessage{Type: MsgRTCJoin})
-	b.send(ClientMessage{Type: MsgRTCJoin})
-	b.room("both in call", func(v RoomView) bool { return len(v.CallMembers) == 2 })
-
-	a.conn.Close()
-	b.room("alice dropped from call", func(v RoomView) bool { return len(v.CallMembers) == 1 })
-}
 
 func TestOwnerClosesTableAndEvictsEveryone(t *testing.T) {
 	srv, _ := newTestServer(t)

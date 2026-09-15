@@ -1,7 +1,6 @@
 package server
 
 import (
-	"encoding/json"
 	"time"
 
 	"monopoly-deal-backend/game"
@@ -29,11 +28,6 @@ const (
 	MsgAddBot      = "add_bot"
 	MsgRemoveBot   = "remove_bot"
 	MsgChat        = "chat"
-
-	// Voice and video: the server only relays, it never inspects the payloads.
-	MsgRTCJoin   = "rtc_join"
-	MsgRTCLeave  = "rtc_leave"
-	MsgRTCSignal = "rtc_signal"
 
 	// Game scope.
 	MsgPlayBank     = "play_bank"
@@ -87,8 +81,6 @@ type ClientMessage struct {
 
 	// Chat.
 	Text string `json:"text,omitempty"`
-	// WebRTC offer/answer/candidate, passed through untouched.
-	Signal json.RawMessage `json:"signal,omitempty"`
 }
 
 // ChatMessage is one line in a table's group chat. Player messages carry Text;
@@ -104,12 +96,6 @@ type ChatMessage struct {
 	AtMS     int64          `json:"at_ms"`
 	// System marks server-generated lines rather than player messages.
 	System bool `json:"system,omitempty"`
-}
-
-// RTCEnvelope is one relayed signalling payload.
-type RTCEnvelope struct {
-	From   string          `json:"from"`
-	Signal json.RawMessage `json:"signal"`
 }
 
 // ServerMessage is the single outbound envelope. Errors and notices carry a
@@ -250,8 +236,6 @@ type RoomView struct {
 	Radio RadioState `json:"radio"`
 
 	Chat []ChatMessage `json:"chat"`
-	// CallMembers are the player ids currently in the voice/video call.
-	CallMembers []string `json:"call_members"`
 }
 
 // RadioState is the table's shared station. Every client plays the same
@@ -279,7 +263,6 @@ type RoomSummary struct {
 	Players        []Seat          `json:"players"`
 	SpectatorCount int             `json:"spectator_count"`
 	BotCount       int             `json:"bot_count"`
-	CallCount      int             `json:"call_count"`
 	SeatsFree      int             `json:"seats_free"`
 	YouSeated      bool            `json:"you_seated"`
 	YouSpectating  bool            `json:"you_spectating"`

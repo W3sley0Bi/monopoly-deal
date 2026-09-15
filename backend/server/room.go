@@ -30,8 +30,6 @@ type Room struct {
 	radio RadioState
 	// chat is the table's group chat, newest last.
 	chat []ChatMessage
-	// call holds the player ids currently in the voice/video call.
-	call map[string]bool
 	seq  int
 	// bots counts every robot ever seated here, so ids never collide with a
 	// seat that was removed and re-added.
@@ -66,27 +64,12 @@ func (r *Room) append(m ChatMessage) {
 	}
 }
 
-func (r *Room) callMembers() []string {
-	out := make([]string, 0, len(r.call))
-	for id := range r.call {
-		out = append(out, id)
-	}
-	// Stable order keeps the client's peer list from churning.
-	for i := 1; i < len(out); i++ {
-		for j := i; j > 0 && out[j] < out[j-1]; j-- {
-			out[j], out[j-1] = out[j-1], out[j]
-		}
-	}
-	return out
-}
-
 func newRoom(id, name string) *Room {
 	return &Room{
 		ID:         id,
 		Name:       name,
 		Game:       game.NewGame(id),
 		spectators: map[string]string{},
-		call:       map[string]bool{},
 		chat:       []ChatMessage{},
 	}
 }
@@ -229,7 +212,6 @@ func (r *Room) view(playerID string) RoomView {
 		Game:           gameView(r.Game, playerID),
 		Radio:          r.radio,
 		Chat:           r.chat,
-		CallMembers:    r.callMembers(),
 	}
 }
 
@@ -250,7 +232,6 @@ func (r *Room) summary(playerID string, live int) RoomSummary {
 		Players:        r.playerSeats(),
 		SpectatorCount: len(r.spectators),
 		BotCount:       r.Game.Bots(),
-		CallCount:      len(r.call),
 		SeatsFree:      r.seatsFree(),
 		YouSeated:      r.isSeated(playerID),
 		YouSpectating:  spectating,
