@@ -6,6 +6,7 @@ import type { I18n } from '../i18n';
 import { money } from '../i18n/format';
 import Modal from './Modal';
 import PlayingCard from './PlayingCard';
+import PropertySets from './PropertySets';
 import TurnTimer from './TurnTimer';
 
 interface Props {
@@ -101,6 +102,49 @@ export default function PendingPanel({ view, skewMs, send }: Props) {
         </div>
     );
 
+    // What the answer is actually about. The panel named the action and said
+    // in a sentence what it would do, which leaves the player to find the card
+    // on the table behind the dialog and work out whether they mind. A steal
+    // is about one card, a swap about two, a Deal Breaker about a whole set —
+    // so the panel shows them, ringed the way a chosen card is: amber for what
+    // leaves your table, green for what arrives on it.
+    const instigator = view.players.find(p => p.id === pd.by_id);
+    const findCard = (id?: string) =>
+        id ? assets(me!).find(a => a.card.id === id)?.card : undefined;
+    const losingCard = me && pd.kind !== 'payment' ? findCard(pd.target_card_id) : undefined;
+    const gainingCard = instigator && pd.give_card_id
+        ? assets(instigator).find(a => a.card.id === pd.give_card_id)?.card
+        : undefined;
+    const losingSet = me && pd.kind === 'deal_breaker' && pd.target_color
+        ? me.sets.find(x => x.color === pd.target_color)
+        : undefined;
+    const stakes = (losingCard || gainingCard || losingSet) ? (
+        <div className="pending-stakes">
+            {losingSet && (
+                <div className="stake">
+                    <p className="stake-label stake-label-give">{t('pending.ui.stake_lose_set')}</p>
+                    <div className="stake-cards stake-give"><PropertySets sets={[losingSet]} size="sm" /></div>
+                </div>
+            )}
+            {losingCard && !losingSet && (
+                <div className="stake">
+                    <p className="stake-label stake-label-give">{t('pending.ui.stake_lose')}</p>
+                    <div className="stake-cards">
+                        <PlayingCard card={losingCard} size="sm" selected pick="give" />
+                    </div>
+                </div>
+            )}
+            {gainingCard && (
+                <div className="stake">
+                    <p className="stake-label stake-label-take">{t('pending.ui.stake_gain')}</p>
+                    <div className="stake-cards">
+                        <PlayingCard card={gainingCard} size="sm" selected pick="take" />
+                    </div>
+                </div>
+            )}
+        </div>
+    ) : null;
+
     // Nothing for this client to do — show who everyone is waiting on.
     if (!mine) {
         const waitingOn = pd.targets
@@ -190,6 +234,7 @@ export default function PendingPanel({ view, skewMs, send }: Props) {
                 }
             >
                 {header}
+                {stakes}
             </Modal>
         );
     }

@@ -215,6 +215,9 @@ const table: Catalog = {
 
     'pending.ui.you_target': 'Du bist das Ziel',
     'pending.ui.you_target_blurb': 'Block es mit Sag einfach Nein oder lass es zu.',
+    'pending.ui.stake_lose': 'Das nehmen sie dir weg',
+    'pending.ui.stake_lose_set': 'Sie nehmen diesen ganzen Satz',
+    'pending.ui.stake_gain': 'Das bekommst du dafür',
     'pending.ui.allow_it': 'Zulassen',
 
     'pending.ui.you_owe': 'Du schuldest {amount}',

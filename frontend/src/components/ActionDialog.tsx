@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import type { Card, ClientMessage, Color, GameView, PlayerView } from '../types';
+import type { Card, ClientMessage, Color, GameView, PlayerView, SetView } from '../types';
 import { colorMeta, opponents, playableColors, stealableCards, you } from '../game/meta';
 import { useI18n } from '../i18n';
 import { money } from '../i18n/format';
@@ -49,6 +49,43 @@ function ColorPicker({ colors, value, onChange, disabledColors, note }: {
                     </button>
                 );
             })}
+        </div>
+    );
+}
+
+/**
+ * Choosing a set, by the set rather than by its name. A colour swatch reading
+ * "Brown $2M" is the label on a thing the player is already looking at — the
+ * cards are right there on the table — so this shows the stack itself and
+ * rings the chosen one. The cards inside take no clicks of their own: the
+ * whole stack is the choice, and a card that answered separately would put a
+ * button inside a button.
+ */
+function SetPicker({ sets, value, onChange }: {
+    sets: SetView[];
+    value?: Color;
+    onChange: (c: Color) => void;
+}) {
+    return (
+        <div className="set-picker">
+            {sets.map(set => (
+                <div
+                    key={set.color}
+                    role="button"
+                    tabIndex={0}
+                    aria-pressed={value === set.color}
+                    className={`set-option ${value === set.color ? 'is-chosen' : ''}`}
+                    onClick={() => onChange(set.color)}
+                    onKeyDown={e => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            onChange(set.color);
+                        }
+                    }}
+                >
+                    <PropertySets sets={[set]} size="sm" />
+                </div>
+            ))}
         </div>
     );
 }
@@ -285,8 +322,7 @@ export default function ActionDialog({ view, card, intent, onCancel, onConfirm }
                 }
             >
                 {buildable.length
-                    ? <ColorPicker colors={buildable.map(s => s.color)} value={color} onChange={setColor}
-                        note={c => money(t, me.sets.find(s => s.color === c)?.rent ?? 0)} />
+                    ? <SetPicker sets={buildable} value={color} onChange={setColor} />
                     : <p className="text-sm text-white/60">{t('dialog.bank_it_instead')}</p>}
             </Modal>
         );
@@ -358,7 +394,7 @@ export default function ActionDialog({ view, card, intent, onCancel, onConfirm }
                         <div>
                             <p className="label-caps mb-2">{t('dialog.set_to_steal')}</p>
                             {completeSets.length
-                                ? <ColorPicker colors={completeSets.map(s => s.color)} value={color} onChange={setColor} />
+                                ? <SetPicker sets={completeSets} value={color} onChange={setColor} />
                                 : <p className="text-sm text-white/60">{t('dialog.no_complete_set', { name: target.name })}</p>}
                         </div>
                     )}

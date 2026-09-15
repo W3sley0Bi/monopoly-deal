@@ -1916,6 +1916,80 @@ select:focus-visible {
 .inspection-set-cards { display: flex; padding: 3px 0 7px; }.inspection-set-cards .card-face + .card-face { margin-left: -12px; }
 .bank-inspection ul { max-height: 230px; overflow-y: auto; }
 
+/* ── Choosing a set, and seeing what is at stake ──────────────────────────
+   A set is a stack of cards sitting on the table; naming its colour in a
+   button asks the player to translate. These show the stack and ring the one
+   that is chosen, so the choice is made by looking rather than by reading. */
+.set-picker {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+.set-option {
+    padding: 6px;
+    border-radius: 14px;
+    border: 2px solid oklch(100% 0 0 / 0.12);
+    background: oklch(100% 0 0 / 0.04);
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s, transform 0.15s;
+}
+.set-option:hover {
+    border-color: oklch(100% 0 0 / 0.3);
+}
+/* The cards are the picture, not the target: the stack is one choice, and a
+   card answering for itself would be a button inside a button. */
+.set-option > * {
+    pointer-events: none;
+}
+.set-option.is-chosen {
+    border-color: oklch(84% 0.18 150);
+    background: oklch(84% 0.18 150 / 0.12);
+    box-shadow: 0 0 0 4px oklch(84% 0.18 150 / 0.18);
+}
+.set-option:focus-visible {
+    outline: 2px solid var(--color-brass);
+    outline-offset: 2px;
+}
+
+/* What an answer costs, drawn beside the question. */
+.pending-stakes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    justify-content: center;
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid oklch(100% 0 0 / 0.1);
+}
+.stake {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+.stake-label {
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+.stake-label-give {
+    color: oklch(87% 0.16 92);
+}
+.stake-label-take {
+    color: oklch(84% 0.18 150);
+}
+.stake-cards {
+    display: flex;
+    padding: 4px 6px 6px;
+}
+.stake-give {
+    border-radius: 12px;
+    outline: 3px solid oklch(87% 0.16 92);
+    outline-offset: 2px;
+}
+
 /* A colour you have already started, in the joker's colour tray. Ten equal
    buttons make the player weigh ten equal options; the sets already on the
    table are almost always what the card is for, so they are the ones the

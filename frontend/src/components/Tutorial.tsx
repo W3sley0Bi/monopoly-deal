@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { ClientMessage, RoomView } from '../types';
 import { useI18n } from '../i18n';
 import { useOptionalDragLayer } from '../game/dragLayer';
@@ -448,7 +449,7 @@ export default function Tutorial({ room, narrow, compact, paused = false, send, 
     if (compact || cramped) {
         // A dialog owns the bottom of the screen, so the strip sits under it;
         // a cramped table owns the bottom with the hand, so it sits on top.
-        return (
+        return createPortal(
             <div
                 className={`pointer-events-none fixed inset-x-2 z-[90] flex justify-center ${
                     compact ? 'bottom-2' : 'tour-strip-top top-2'
@@ -468,7 +469,8 @@ export default function Tutorial({ room, narrow, compact, paused = false, send, 
                         {t('tutorial.skipTour')}
                     </button>
                 </div>
-            </div>
+            </div>,
+            document.body,
         );
     }
 
@@ -489,7 +491,14 @@ export default function Tutorial({ room, narrow, compact, paused = false, send, 
     // move has been made and the table is waiting on the player.
     const ready = !lesson.task || lesson.done;
 
-    return (
+    // Hung on the document, not inside the room it is teaching. The room is
+    // its own stacking context, so everything in it — this card included —
+    // is one flat layer as far as the page is concerned, and the cards the
+    // table flies between places are appended to the body above that layer.
+    // From inside the room there is no z-index that beats them; from out here
+    // the ordering is the obvious one, and a card still flies over the table
+    // while passing under the coach.
+    return createPortal(
         <div className="pointer-events-none fixed inset-0 z-[80]">
             {holes.length > 0 ? (
                 <svg className="absolute inset-0 h-full w-full" aria-hidden="true">
@@ -623,6 +632,7 @@ export default function Tutorial({ room, narrow, compact, paused = false, send, 
                     </button>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body,
     );
 }
