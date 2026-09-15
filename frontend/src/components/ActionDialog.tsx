@@ -82,6 +82,13 @@ export default function ActionDialog({ view, card, intent, onCancel, onConfirm }
     const foes = opponents(view);
     const [color, setColor] = useState<Color | undefined>(() => {
         const opts = playableColors(card, view.colors);
+        // A rent card prints two colours, but only one is ever a real choice
+        // once you only own a set in one of them — the other was never going
+        // to charge anything, so there is nothing to ask about.
+        if (card.type === 'rent') {
+            const owned = opts.filter(c => me.sets.some(s => s.color === c && s.cards.length > 0));
+            if (owned.length === 1) return owned[0];
+        }
         return opts.length === 1 ? opts[0] : undefined;
     });
     const [targetPlayer, setTargetPlayer] = useState<string | undefined>(foes.length === 1 ? foes[0].id : undefined);

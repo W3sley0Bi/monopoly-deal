@@ -12,6 +12,8 @@ interface Props {
     hint?: string;
     /** `data-tour` anchor name, so the tutorial can spotlight this zone. */
     tour?: string;
+    /** Native `hidden`, for a zone whose panel can fold away. */
+    hidden?: boolean;
 }
 
 /**
@@ -22,7 +24,7 @@ interface Props {
  * events of its own: the pointer that carries the card is hit-tested against
  * the page, which is the only way a finger can drop anything at all.
  */
-export default function DropZone({ active, onDrop, children, className = '', hint, tour }: Props) {
+export default function DropZone({ active, onDrop, children, className = '', hint, tour, hidden }: Props) {
     const id = useId();
     const layer = useOptionalDragLayer();
     const setZone = layer?.setZone;
@@ -41,6 +43,7 @@ export default function DropZone({ active, onDrop, children, className = '', hin
 
     return (
         <div
+            hidden={hidden}
             data-tour={tour}
             data-drop-id={id}
             data-active={active || undefined}

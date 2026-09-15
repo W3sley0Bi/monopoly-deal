@@ -105,6 +105,8 @@ const table: Catalog = {
 
     // ── Hand ─────────────────────────────────────────────────────────────
     'table.hand': 'Hand · {count}',
+    'table.hand_fold': 'Eigene Hand einklappen',
+    'table.hand_unfold': 'Eigene Hand zeigen',
     'table.over_limit': 'Über 7 um {count} — Extrakarten fallen beim Rundenende weg',
     'table.hand_tap': 'Tipp eine Karte für Optionen an oder zieh sie nach oben',
     'table.hand_drag': 'Zieh eine Karte auf den Tisch oder tipp sie für Optionen an',

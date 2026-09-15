@@ -105,6 +105,8 @@ const table: Catalog = {
 
     // ── Hand ─────────────────────────────────────────────────────────────
     'table.hand': 'Hand · {count}',
+    'table.hand_fold': 'Fold your hand away',
+    'table.hand_unfold': 'Show your hand',
     'table.over_limit': 'Over 7 by {count} — extra cards drop when you end your turn',
     'table.hand_tap': 'Tap a card for options, or drag it up to play',
     'table.hand_drag': 'Drag a card onto the mat, or tap it for options',

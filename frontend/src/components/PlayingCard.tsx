@@ -61,11 +61,13 @@ function cardTitle(card: Card, t: I18n['t'], tCard: I18n['tCard']): string {
     return tCard(card);
 }
 
-/** Colours drawn in the header stripe. */
-function stripeColors(card: Card): Color[] {
+/** Colours drawn in the header stripe. An any-colour joker shows the
+ *  rainbow only until it has been committed to one — tapped in hand, or
+ *  already played — at which point the stripe is that colour, plainly. */
+function stripeColors(card: Card, activeColor?: Color): Color[] {
     const cols = card.colors ?? [];
     if (!cols.length) return [];
-    if (cols.length === 1 && cols[0] === 'all') return ['all'];
+    if (cols.length === 1 && cols[0] === 'all') return [activeColor ?? 'all'];
     return cols;
 }
 
@@ -94,7 +96,7 @@ export default function PlayingCard({
     const dragLayer = useOptionalDragLayer();
     const pickUp = draggable && dragLayer ? dragLayer.begin : null;
     const interactive = Boolean(onClick);
-    const cols = stripeColors(card);
+    const cols = stripeColors(card, activeColor);
     const isProp =
         card.type === 'property' || card.type === 'property_wildcard';
 

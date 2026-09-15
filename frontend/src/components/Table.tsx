@@ -237,6 +237,18 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
     // A card already in the air needs its targets, whatever the fold says.
     const boardShown = !accordion || boardOpen || Boolean(drag);
 
+    // The hand folds the other way round: it is what the accordion gives
+    // back while somebody else is playing, so their board gets the room your
+    // own cards do not need until it is your turn again. A pending action
+    // keeps it open regardless — an answer (Just Say No, a payment) can come
+    // from your hand at any moment while one is unresolved.
+    const [handOpen, setHandOpen] = useState(true);
+    useEffect(() => {
+        if (!accordion) return;
+        setHandOpen(myTurn || Boolean(pending));
+    }, [accordion, myTurn, pending]);
+    const handShown = !accordion || handOpen || Boolean(drag && drag.from === 'hand');
+
 
     // The reveal wheel runs with the turn not yet live: plays are still zero
     // there, and ending the turn during it would skip the first player.
@@ -277,11 +289,46 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
             && (!isAnyColorWild(card) || Boolean(me?.sets.some(s => s.color === c && s.cards.length > 0))));
     };
 
-    // What the currently dragged card can accept.
+    // A colour a wildcard in hand has been tapped to commit to, ahead of the
+    // drag itself. Nothing here decides which stack it plays into — that is
+    // still whichever zone the card lands on — it only narrows which single
+    // zone lights up, so a two- or any-colour card stops asking the player to
+    // aim at a whole spread of possible targets at once.
+    const [wildColor, setWildColor] = useState<Record<string, Color>>({});
+    // Which any-colour joker currently has its colour tray open, so tapping
+    // it again (or picking a swatch) is what closes it.
+    const [colorPickerFor, setColorPickerFor] = useState<string | null>(null);
+
+    /** Taps a wildcard toward a committed colour rather than opening the tap
+     *  tray for it. Returns whether the card was actually a wildcard, so the
+     *  caller knows whether to fall through to the ordinary tap behaviour. */
+    const tapWildcard = (card: Card): boolean => {
+        if (card.type !== 'property_wildcard') return false;
+        const cols = card.colors ?? [];
+        if (cols.length === 2) {
+            setWildColor(prev => {
+                const cur = prev[card.id] ?? cols[0];
+                return { ...prev, [card.id]: cur === cols[0] ? cols[1] : cols[0] };
+            });
+            return true;
+        }
+        if (isAnyColorWild(card)) {
+            setColorPickerFor(prev => (prev === card.id ? null : card.id));
+            return true;
+        }
+        return false;
+    };
+
+    // What the currently dragged card can accept. A wildcard that was tapped
+    // to a colour already collapses to just that one, if it is still legal.
     const dragTargets = drag?.from === 'hand'
         ? dropTargets(drag.card, g.colors)
         : { colors: drag ? moveColors(drag.card) : [], bankable: false };
-    const dragColors = drag && canPlay ? dragTargets.colors : [];
+    const committedColor = drag ? wildColor[drag.card.id] : undefined;
+    const dragColorsAll = committedColor && dragTargets.colors.includes(committedColor)
+        ? [committedColor]
+        : dragTargets.colors;
+    const dragColors = drag && canPlay ? dragColorsAll : [];
     const dragBankable = Boolean(drag && canPlay && dragTargets.bankable);
 
     const playCard = (card: Card, color: Color, from: 'hand' | 'board') => {
@@ -294,7 +341,45 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
         }
     };
 
+    // Which colour a card dropped anywhere in the property panel actually
+    // lands in — the panel is one target, not a row of them, so this is
+    // where the choice a wildcard's tap left open finally gets settled.
+    const resolvePropertyColor = (card: Card, from: 'hand' | 'board'): Color | null => {
+        const targets = from === 'board' ? moveColors(card) : dropTargets(card, g.colors).colors;
+        if (targets.length === 0) return null;
+        const committed = wildColor[card.id];
+        if (committed && targets.includes(committed)) return committed;
+        // Topping up a stack that is already under way beats opening another.
+        const existing = targets.find(c => me?.sets.some(s => s.color === c));
+        return existing ?? targets[0];
+    };
+
+    const dropProperty = (card: Card, from: 'hand' | 'board') => {
+        const color = resolvePropertyColor(card, from);
+        if (color) playCard(card, color, from);
+    };
+
     const playActionCard = (card: Card) => {
+        // A two-colour rent card only ever asks the dialog's colour question
+        // because both prices are shown as options — once a property set of
+        // only one of them exists, that question already has one answer, and
+        // charging every opponent needs no target either. Nothing is left to
+        // decide, so nothing is asked: it charges the instant it lands,
+        // exactly like a bank or action-space drop already does. A wild rent
+        // still needs a target player, and a hand still holding Double The
+        // Rent still gets asked, since spending one is a real choice.
+        if (card.type === 'rent') {
+            const isWild = card.colors?.length === 1 && card.colors[0] === 'all';
+            const hasDouble = me?.hand?.some(c => c.action === 'double_rent') ?? false;
+            if (!isWild && !hasDouble) {
+                const owned = playableColors(card, g.colors)
+                    .filter(c => me?.sets.some(s => s.color === c && s.cards.length > 0));
+                if (owned.length === 1) {
+                    act({ type: 'play_action', card_id: card.id, color: owned[0] });
+                    return;
+                }
+            }
+        }
         if (needsTargeting(card)) setDialog({ card, intent: 'action' });
         else act({ type: 'play_action', card_id: card.id });
     };
@@ -455,70 +540,134 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
                 <div className="mb-2 flex items-center justify-between gap-2">{propertyHeading}</div>
             )}
 
-            <div
-                hidden={!boardShown}
-                className={`property-groups min-w-0 flex-1 gap-3 pb-1 ${me?.sets.length ? 'items-start' : 'items-center justify-center'}`}
-            >
-                {me?.sets.map(set => {
-                    const accepts = dragColors.includes(set.color);
-                    return (
-                        <DropZone
-                            key={set.color}
-                            active={accepts}
-                            hint={t(`color.short.${set.color}`)}
-                            onDrop={() => drag && playCard(drag.card, set.color, drag.from)}
-                            className="shrink-0 rounded-xl"
-                        >
-                            <PropertySets
-                                sets={[set]}
-                                size="sm"
-                                draggableIds={myTurn && !pending ? wildcardIds(set.cards) : undefined}
-                                onDragCard={card => setDrag({ card, from: 'board' })}
-                                onDragEndCard={() => setDrag(null)}
-                                draggingId={drag?.card.id}
-                                onCardClick={myTurn && !pending
-                                    ? card => {
-                                        if (card.type === 'property_wildcard') setDialog({ card, intent: 'move' });
-                                    }
-                                    : undefined}
-                                enabledIds={wildcardIds(set.cards)}
-                                dimDisabled={false}
-                            />
-                        </DropZone>
-                    );
-                })}
+            {/* A phone drops anywhere in the panel and lets the system work
+                out which stack that means (see `dropProperty`) — there is no
+                room to aim precisely with a thumb. A mouse has no such
+                excuse, so it keeps the exact, one-zone-per-colour version:
+                land the card on the stack you mean, same as it always did. */}
+            {narrow ? (
+                <DropZone
+                    hidden={!boardShown}
+                    active={dragColors.length > 0}
+                    onDrop={() => drag && dropProperty(drag.card, drag.from)}
+                    className={`property-groups min-w-0 flex-1 gap-3 pb-1 ${me?.sets.length ? 'items-start' : 'items-center justify-center'}`}
+                >
+                    {me?.sets.map(set => {
+                        const accepts = dragColors.includes(set.color);
+                        return (
+                            <div key={set.color} className={`shrink-0 rounded-xl ${accepts ? 'property-set-live' : ''}`}>
+                                <PropertySets
+                                    sets={[set]}
+                                    size="sm"
+                                    draggableIds={myTurn && !pending ? wildcardIds(set.cards) : undefined}
+                                    onDragCard={card => setDrag({ card, from: 'board' })}
+                                    onDragEndCard={() => setDrag(null)}
+                                    draggingId={drag?.card.id}
+                                    onCardClick={myTurn && !pending
+                                        ? card => {
+                                            if (card.type === 'property_wildcard') setDialog({ card, intent: 'move' });
+                                        }
+                                        : undefined}
+                                    enabledIds={wildcardIds(set.cards)}
+                                    dimDisabled={false}
+                                />
+                            </div>
+                        );
+                    })}
 
-                {/* Empty slots for colours this card could start. */}
-                {dragColors
-                    .filter(c => !me?.sets.some(s => s.color === c))
-                    .map(c => {
-                        const m = colorMeta(c);
+                    {/* A preview only, not a target of its own — dropping
+                        anywhere in this panel is what starts the set. */}
+                    {dragColors
+                        .filter(c => !me?.sets.some(s => s.color === c))
+                        .map(c => {
+                            const m = colorMeta(c);
+                            return (
+                                <div key={`new-${c}`} className="shrink-0 rounded-xl">
+                                    <div
+                                        className="grid h-[7.5rem] w-[5.5rem] place-items-center rounded-xl border-2 border-dashed p-1 text-center"
+                                        style={{ borderColor: m.hex, background: `${m.hex}22` }}
+                                    >
+                                        <span className="font-display text-sm leading-tight tracking-wide">
+                                            {t('table.new_set')}<br />{t(`color.short.${c}`)}
+                                        </span>
+                                    </div>
+                                </div>
+                            );
+                        })}
+
+                    {me?.sets.length === 0 && dragColors.length === 0 && (
+                        <p className="property-empty px-3 text-center text-xs text-white/60">
+                            <span aria-hidden="true" className="property-ghosts"><i>⌂</i><i>⌂</i><i>⌂</i></span>
+                            {t('table.properties_tap')}
+                        </p>
+                    )}
+                </DropZone>
+            ) : (
+                <div
+                    hidden={!boardShown}
+                    className={`property-groups min-w-0 flex-1 gap-3 pb-1 ${me?.sets.length ? 'items-start' : 'items-center justify-center'}`}
+                >
+                    {me?.sets.map(set => {
+                        const accepts = dragColors.includes(set.color);
                         return (
                             <DropZone
-                                key={`new-${c}`}
-                                active
-                                onDrop={() => drag && playCard(drag.card, c, drag.from)}
+                                key={set.color}
+                                active={accepts}
+                                hint={t(`color.short.${set.color}`)}
+                                onDrop={() => drag && playCard(drag.card, set.color, drag.from)}
                                 className="shrink-0 rounded-xl"
                             >
-                                <div
-                                    className="grid h-[7.5rem] w-[5.5rem] place-items-center rounded-xl border-2 border-dashed p-1 text-center"
-                                    style={{ borderColor: m.hex, background: `${m.hex}22` }}
-                                >
-                                    <span className="font-display text-sm leading-tight tracking-wide">
-                                        {t('table.new_set')}<br />{t(`color.short.${c}`)}
-                                    </span>
-                                </div>
+                                <PropertySets
+                                    sets={[set]}
+                                    size="sm"
+                                    draggableIds={myTurn && !pending ? wildcardIds(set.cards) : undefined}
+                                    onDragCard={card => setDrag({ card, from: 'board' })}
+                                    onDragEndCard={() => setDrag(null)}
+                                    draggingId={drag?.card.id}
+                                    onCardClick={myTurn && !pending
+                                        ? card => {
+                                            if (card.type === 'property_wildcard') setDialog({ card, intent: 'move' });
+                                        }
+                                        : undefined}
+                                    enabledIds={wildcardIds(set.cards)}
+                                    dimDisabled={false}
+                                />
                             </DropZone>
                         );
                     })}
 
-                {me?.sets.length === 0 && dragColors.length === 0 && (
-                    <p className="property-empty px-3 text-center text-xs text-white/60">
-                        <span aria-hidden="true" className="property-ghosts"><i>⌂</i><i>⌂</i><i>⌂</i></span>
-                        {t(narrow ? 'table.properties_tap' : 'table.properties_drag')}
-                    </p>
-                )}
-            </div>
+                    {/* Empty slots for colours this card could start. */}
+                    {dragColors
+                        .filter(c => !me?.sets.some(s => s.color === c))
+                        .map(c => {
+                            const m = colorMeta(c);
+                            return (
+                                <DropZone
+                                    key={`new-${c}`}
+                                    active
+                                    onDrop={() => drag && playCard(drag.card, c, drag.from)}
+                                    className="shrink-0 rounded-xl"
+                                >
+                                    <div
+                                        className="grid h-[7.5rem] w-[5.5rem] place-items-center rounded-xl border-2 border-dashed p-1 text-center"
+                                        style={{ borderColor: m.hex, background: `${m.hex}22` }}
+                                    >
+                                        <span className="font-display text-sm leading-tight tracking-wide">
+                                            {t('table.new_set')}<br />{t(`color.short.${c}`)}
+                                        </span>
+                                    </div>
+                                </DropZone>
+                            );
+                        })}
+
+                    {me?.sets.length === 0 && dragColors.length === 0 && (
+                        <p className="property-empty px-3 text-center text-xs text-white/60">
+                            <span aria-hidden="true" className="property-ghosts"><i>⌂</i><i>⌂</i><i>⌂</i></span>
+                            {t('table.properties_drag')}
+                        </p>
+                    )}
+                </div>
+            )}
 
             {/* Shuffling a wildcard between colours used to be free; it is not
                 any more, so the board says so where the move is made. */}
@@ -556,6 +705,8 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
             !narrow && handPos !== 'bottom' ? `hand-column hand-${handPos}` : ''
         } ${
             accordion && !boardShown ? 'board-folded' : ''
+        } ${
+            accordion && !handShown ? 'hand-folded' : ''
         }`}>
             <Cityscape />
             {/* ── Top bar ─────────────────────────────────────────────── */}
@@ -832,10 +983,6 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
                                 />
                             )}
                             {!narrow && <div className="table-status" aria-live="polite"><span className={myTurn ? 'status-light active' : 'status-light'} />{myTurn ? t('table.your_turn') : t('table.turn_of', { name: turnPlayer?.name ?? '' })}</div>}
-                            {/* Keyed on the log, so a new line arrives with a
-                                beat of its own rather than silently swapping
-                                the text under the reader. */}
-                            <div key={g.log.length} className="table-event" aria-live="polite">{g.log.length > 0 ? tLog(g.log[g.log.length - 1]) : t('table.shared_space')}</div>
                         </div>
 
                         {/* ── My board ────────────────────────────────── */}
@@ -849,14 +996,44 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
 
                     {/* ── Hand: pinned below the table ─────────────────── */}
                     {me && (
-                        <section data-tour="hand" className="hand-zone relative min-w-0 shrink-0">
-                            <div className="mb-1 flex min-w-0 items-center justify-between gap-2">
+                        <section
+                            data-tour="hand"
+                            className={`hand-zone relative min-w-0 shrink-0 ${accordion ? 'hand-accordion' : ''} ${accordion && !handShown ? 'is-folded' : ''}`}
+                        >
+                            <button
+                                type="button"
+                                className="hand-fold mb-1 flex w-full min-w-0 items-center justify-between gap-2"
+                                aria-expanded={handShown}
+                                disabled={!accordion}
+                                onClick={() => setHandOpen(open => !open)}
+                                title={accordion ? t(handShown ? 'table.hand_fold' : 'table.hand_unfold') : undefined}
+                            >
                                 <div className="hand-player"><Avatar id={me.id} name={me.name} size={32} active={myTurn} inCall={room.call_members.includes(me.id)} inCallLabel={t('call.in_call')} /><strong>{me.name}</strong>{recentReaction(me.id) && <ReactionBubble key={recentReaction(me.id)!.id} message={recentReaction(me.id)!} />}{!recentReaction(me.id) && myDiscardPlay && <PlayBubble key={myDiscardPlay.id} text={tLog(myDiscardPlay.entry)} />}<span className="label-caps">{t('table.hand', { count: handSize })}</span></div>
+                                {/* Folded, the hand is a strip of colour rather than a
+                                    row of readable cards — enough to remember what is
+                                    still in it without spending the screen an opponent's
+                                    turn needs more. */}
+                                {accordion && !handShown && handSize > 0 && (
+                                    <span className="hand-swatches" aria-hidden="true">
+                                        {me.hand?.map(c => (
+                                            <span
+                                                key={c.id}
+                                                style={{
+                                                    background: c.type === 'money'
+                                                        ? 'oklch(78% 0.14 150)'
+                                                        : c.type === 'action' || c.type === 'rent'
+                                                          ? 'oklch(74% 0.16 305)'
+                                                          : colorMeta(c.colors?.[0]).hex,
+                                                }}
+                                            />
+                                        ))}
+                                    </span>
+                                )}
                                 {overLimit ? (
                                     <p className="truncate rounded-md bg-amber-600/25 px-2 py-1 text-xs font-bold text-amber-200">
                                         {t('table.over_limit', { count: handSize - 7 })}
                                     </p>
-                                ) : (
+                                ) : (!accordion || handShown) && (
                                     <p className="truncate text-xs text-white/40">
                                         {t(
                                             narrow
@@ -865,8 +1042,8 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
                                         )}
                                     </p>
                                 )}
-                            </div>
-                            <div onKeyDown={e => {
+                            </button>
+                            <div hidden={!handShown} onKeyDown={e => {
                                 if (e.key === 'Escape') { setSelected(null); return; }
                                 const cards = Array.from(e.currentTarget.querySelectorAll<HTMLButtonElement>('.hand-card'));
                                 const index = cards.indexOf(document.activeElement as HTMLButtonElement);
@@ -884,12 +1061,16 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
                                         card={c}
                                         size={narrow ? 'sm' : 'md'}
                                         selected={selected?.id === c.id}
+                                        activeColor={wildColor[c.id]}
                                         draggable={myTurn && !pending}
                                         dragAxis={narrow ? 'vertical' : 'free'}
                                         dragging={drag?.card.id === c.id || inFlight === c.id}
                                         onDragStart={() => setDrag({ card: c, from: 'hand' })}
                                         onDragEnd={() => setDrag(null)}
-                                        onClick={tapOpens ? () => setSelected(prev => (prev?.id === c.id ? null : c)) : undefined}
+                                        onClick={() => {
+                                            if (tapWildcard(c)) return;
+                                            if (tapOpens) setSelected(prev => (prev?.id === c.id ? null : c));
+                                        }}
                                         className="hand-card"
                                         style={{ '--fan-angle': `${(i - (handSize - 1) / 2) * Math.min(3, 22 / Math.max(handSize, 1))}deg`, '--fan-y': `${Math.pow(i - (handSize - 1) / 2, 2) * Math.min(1.2, 12 / Math.max(handSize, 1))}px`, '--deal-delay': `${Math.min(i, 8) * 35}ms` } as CSSProperties}
                                     />
@@ -922,6 +1103,35 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
                     />
                 )}
             </div>
+
+            {/* ── Colour tray for an any-colour joker ────────────────────
+                Tapped instead of dragged first: the card commits to one
+                colour before it ever leaves the hand, so the drag that
+                follows has exactly one zone to aim at, not a spread of them. */}
+            {colorPickerFor && me && (() => {
+                const card = me.hand?.find(h => h.id === colorPickerFor);
+                if (!card) return null;
+                return (
+                    <div className="card-action-tray panel animate-slide-up flex min-w-0 flex-wrap items-center gap-2 px-3 py-2">
+                        <span className="font-display text-lg tracking-wide text-brass">{t('inspect.wild_choose')}</span>
+                        {g.colors.filter(c => c !== 'all').map(c => (
+                            <button
+                                key={c}
+                                type="button"
+                                className="btn !px-2.5 !py-1.5 !text-xs"
+                                style={{ background: colorMeta(c).hex, color: colorMeta(c).ink }}
+                                onClick={() => {
+                                    setWildColor(prev => ({ ...prev, [card.id]: c }));
+                                    setColorPickerFor(null);
+                                }}
+                            >
+                                {t(`color.short.${c}`)}
+                            </button>
+                        ))}
+                        <button type="button" className="btn btn-ghost ml-auto" onClick={() => setColorPickerFor(null)}>{t('common.close')}</button>
+                    </div>
+                );
+            })()}
 
             {/* ── Card actions ────────────────────────────────────────── */}
             {selected && me && (
@@ -1013,12 +1223,17 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
                 </div>
             )}
 
-            <TurnBanner
-                player={turnPlayer}
-                isYou={myTurn}
-                turn={g.current_turn}
-                enabled={g.state === 'playing' && !startPending}
-            />
+            {/* A phone has no side log and no header turn-chip in easy view,
+                so it still gets the big announcement; a desktop already has
+                both, and the popup on top of them was one notice too many. */}
+            {narrow && (
+                <TurnBanner
+                    player={turnPlayer}
+                    isYou={myTurn}
+                    turn={g.current_turn}
+                    enabled={g.state === 'playing' && !startPending}
+                />
+            )}
 
             <TableMotion game={g} enabled={motion} />
             <DiscardBurst plays={plays} you={g.you} players={g.players} />

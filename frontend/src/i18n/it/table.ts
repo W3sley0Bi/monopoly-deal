@@ -105,6 +105,8 @@ const table: Catalog = {
 
     // ── Hand ─────────────────────────────────────────────────────────────
     'table.hand': 'Mano · {count}',
+    'table.hand_fold': 'Chiudi la tua mano',
+    'table.hand_unfold': 'Mostra la tua mano',
     'table.over_limit': 'Più di 7 di {count} — le carte in più cadranno a fine turno',
     'table.hand_tap': 'Tocca una carta per le opzioni o trascinala in alto',
     'table.hand_drag': 'Trascina una carta sul tavolo, oppure toccala per le opzioni',
