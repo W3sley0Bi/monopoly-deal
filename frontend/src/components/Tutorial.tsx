@@ -447,6 +447,13 @@ export default function Tutorial({ room, narrow, compact, paused = false, send, 
         : null;
 
     if (compact || cramped) {
+        // On a phone a dialog is the screen, and its buttons run to the bottom
+        // edge — which is the only place this strip could sit, so it lands on
+        // Cancel and Confirm. There is nothing here the dialog does not
+        // already say: it carries its own title, and the task is the dialog.
+        // So the coach stands down until it closes, the same as it does for a
+        // card in the air or a tray of colours.
+        if (compact && narrow) return null;
         // A dialog owns the bottom of the screen, so the strip sits under it;
         // a cramped table owns the bottom with the hand, so it sits on top.
         return createPortal(
