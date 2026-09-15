@@ -102,7 +102,7 @@ const table: Catalog = {
     'table.properties_drag': 'Zieh eine Immobilienkarte hierher, um einen Satz zu beginnen',
     // The wildcard rule changed: a card already on the table is no longer free
     // to shuffle around, so the mat says what a move now costs.
-    'table.joker_pick_colour': 'Tipp den Joker an und wähl zuerst seine Farbe.',
+    'table.joker_pick_colour': 'Lass ihn auf einer Farbe los, oder tipp ihn an und wähl eine.',
     'table.wildcard_move_cost': 'Einen Joker zu bewegen, der schon auf dem Tisch liegt, kostet einen Zug.',
 
     // ── Hand ─────────────────────────────────────────────────────────────
@@ -168,6 +168,10 @@ const table: Catalog = {
     'dialog.deal_breaker': 'Geschäftsbruch',
     'dialog.deal_breaker_blurb': 'Stiehl einen ganzen vollständigen Satz',
     'dialog.take_the_set': 'Satz nehmen',
+    'dialog.chosen_take': 'Du nimmst: {card}',
+    'dialog.chosen_take_none': 'Tipp eine seiner Karten an, um sie zu nehmen.',
+    'dialog.chosen_give': 'Du gibst: {card}',
+    'dialog.chosen_give_none': 'Tipp eine eigene an, die du im Tausch gibst.',
     'dialog.victim': 'Opfer',
     'dialog.set_to_steal': 'Vollständiger Satz zum Stehlen',
     'dialog.no_complete_set': '{name} hat keinen vollständigen Satz.',

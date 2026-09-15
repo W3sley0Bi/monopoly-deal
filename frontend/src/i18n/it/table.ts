@@ -102,7 +102,7 @@ const table: Catalog = {
     'table.properties_drag': 'Trascina qui una carta proprietà per iniziare una serie',
     // The wildcard rule changed: a card already on the table is no longer free
     // to shuffle around, so the mat says what a move now costs.
-    'table.joker_pick_colour': 'Tocca la jolly e scegli prima il suo colore.',
+    'table.joker_pick_colour': 'Lasciala su un colore, oppure toccala e scegline uno.',
     'table.wildcard_move_cost': 'Spostare un jolly già sul tavolo costa una giocata.',
 
     // ── Hand ─────────────────────────────────────────────────────────────
@@ -168,6 +168,10 @@ const table: Catalog = {
     'dialog.deal_breaker': 'Affare Rotto',
     'dialog.deal_breaker_blurb': 'Ruba un’intera serie completa',
     'dialog.take_the_set': 'Prendi la serie',
+    'dialog.chosen_take': 'Prendi: {card}',
+    'dialog.chosen_take_none': 'Tocca una delle sue carte per prenderla.',
+    'dialog.chosen_give': 'Dai: {card}',
+    'dialog.chosen_give_none': 'Tocca una delle tue da dare in cambio.',
     'dialog.victim': 'Vittima',
     'dialog.set_to_steal': 'Serie completa da rubare',
     'dialog.no_complete_set': '{name} non ha nessuna serie completa.',

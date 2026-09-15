@@ -91,7 +91,7 @@ const tutorial: Catalog = {
     'lesson.rent.body': 'Una serie di colore rende affitto. Gioca una carta affitto del colore che possiedi e tutti ti pagano. Se può chiedere due colori ma ne possiedi solo uno, chiede subito quello.',
     'lesson.rent.task': 'Chiedi affitto per la tua serie blu.',
     'lesson.double_rent.title': 'Raddoppia affitto',
-    'lesson.double_rent.body': 'Raddoppia l Affitto si gioca insieme a una carta affitto e raddoppia la cifra. Costa una giocata in più.',
+    'lesson.double_rent.body': 'Raddoppia l Affitto non si gioca mai da sola — va insieme a una carta affitto e raddoppia la cifra, al costo di una giocata in più. Prendi la carta affitto e guarda la mano: quello che può raddoppiarla brilla. Agganciala nel pannello che si apre.',
     'lesson.double_rent.task': 'Chiedi affitto con Raddoppia l Affitto.',
     'lesson.paying.title': 'Pagare',
     'lesson.paying.body': 'Ora al contrario: Ada ti sta chiedendo. Scegli tu cosa lascia il tavolo — soldi se puoi, perché le proprietà fanno vincere.',

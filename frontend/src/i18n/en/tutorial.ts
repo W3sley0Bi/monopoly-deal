@@ -91,7 +91,7 @@ const tutorial: Catalog = {
     'lesson.rent.body': 'A colour set earns rent. Play a rent card matching a colour you own and everyone pays you for it. If it can charge two colours but you only own one, it charges that colour straight away.',
     'lesson.rent.task': 'Charge rent for your blue set.',
     'lesson.double_rent.title': 'Double the rent',
-    'lesson.double_rent.body': 'Double The Rent rides along with a rent card and doubles what it collects. It costs an extra play.',
+    'lesson.double_rent.body': 'Double The Rent is never played on its own — it rides along with a rent card and doubles what it collects, for an extra play. Pick up the rent card and watch your hand: whatever can double it catches the light. Attach it in the panel that opens.',
     'lesson.double_rent.task': 'Charge rent with Double The Rent attached.',
     'lesson.paying.title': 'Paying up',
     'lesson.paying.body': 'Now the other way round: Ada is charging you. You choose what leaves your table — money first if you can, because property is how you win.',

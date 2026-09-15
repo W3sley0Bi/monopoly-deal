@@ -1916,6 +1916,133 @@ select:focus-visible {
 .inspection-set-cards { display: flex; padding: 3px 0 7px; }.inspection-set-cards .card-face + .card-face { margin-left: -12px; }
 .bank-inspection ul { max-height: 230px; overflow-y: auto; }
 
+/* A colour you have already started, in the joker's colour tray. Ten equal
+   buttons make the player weigh ten equal options; the sets already on the
+   table are almost always what the card is for, so they are the ones the
+   tray puts forward. */
+.wild-swatch-owned {
+    outline: 2px solid oklch(100% 0 0 / 0.9);
+    outline-offset: 2px;
+    box-shadow: 0 0 14px -2px oklch(100% 0 0 / 0.5);
+}
+.wild-swatch-count {
+    margin-left: 4px;
+    font-size: 0.85em;
+    font-weight: 800;
+    opacity: 0.75;
+}
+
+/* ── A chosen card, and what choosing it means ────────────────────────────
+   In a dialog the cards sit in overlapping stacks, where a small lift and a
+   soft glow read as "maybe": a player taps a card and cannot tell whether
+   they hit the one they aimed at or the one in front of it. A chosen card
+   comes clear of its stack and takes a ring in the colour of what is about
+   to happen — green for the card you are taking, amber for the one you are
+   giving up — so a swap says which way round it is without being read. */
+.card-pick {
+    position: relative;
+}
+.card-pick-take {
+    outline: 3px solid oklch(84% 0.18 150);
+    outline-offset: 2px;
+    box-shadow:
+        0 0 0 6px oklch(84% 0.18 150 / 0.2),
+        0 14px 26px -12px oklch(10% 0.02 220 / 0.85);
+}
+.card-pick-give {
+    outline: 3px solid oklch(87% 0.16 92);
+    outline-offset: 2px;
+    box-shadow:
+        0 0 0 6px oklch(87% 0.16 92 / 0.2),
+        0 14px 26px -12px oklch(10% 0.02 220 / 0.85);
+}
+/* Named as well as ringed: the ring says which card, this says which card in
+   words, for the tap that is not sure it landed. */
+.pick-line {
+    margin-top: 8px;
+    font-size: 12px;
+    font-weight: 700;
+}
+.pick-line-take {
+    color: oklch(84% 0.18 150);
+}
+.pick-line-give {
+    color: oklch(87% 0.16 92);
+}
+.pick-line:empty {
+    display: none;
+}
+
+/* The coach drops in from just above rather than popping open in place, and
+   owns its own animation rather than borrowing `pop`: the card is positioned
+   by `left` alone, so `transform` here belongs to the entrance and has
+   nothing to override. */
+@keyframes tour-card-in {
+    from {
+        transform: translateY(-16px) scale(0.97);
+        opacity: 0;
+    }
+    to {
+        transform: none;
+        opacity: 1;
+    }
+}
+.tour-card {
+    animation: tour-card-in 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+    .tour-card {
+        animation: none;
+    }
+}
+
+/* ── The card that rides along ────────────────────────────────────────────
+   Double The Rent is played with a rent card, not after it, so a player who
+   remembers it once the rent is charged has remembered too late. While a
+   rent card is being carried or is sitting chosen, anything in the hand that
+   could double it catches the light — a reminder that arrives while it can
+   still be acted on, and needs no second card to aim at and no line of text.
+   The tour used to ring this card as a target of its own, which taught the
+   wrong move: it is never dragged anywhere itself. */
+@keyframes card-companion-sheen {
+    0% {
+        transform: translateX(-140%) rotate(8deg);
+    }
+    55%, 100% {
+        transform: translateX(260%) rotate(8deg);
+    }
+}
+.card-companion {
+    outline: 2px solid oklch(88% 0.14 92 / 0.6);
+    outline-offset: 2px;
+    box-shadow: 0 0 20px -2px oklch(88% 0.14 92 / 0.55);
+}
+.card-companion::before {
+    content: '';
+    position: absolute;
+    top: -25%;
+    bottom: -25%;
+    left: 0;
+    width: 42%;
+    z-index: 3;
+    pointer-events: none;
+    background: linear-gradient(
+        90deg,
+        transparent,
+        oklch(100% 0 0 / 0.16) 30%,
+        oklch(100% 0 0 / 0.62) 50%,
+        oklch(100% 0 0 / 0.16) 70%,
+        transparent
+    );
+    animation: card-companion-sheen 1.9s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+    .card-companion::before {
+        animation: none;
+        opacity: 0.35;
+    }
+}
+
 /* ── The two ends of a joker are not equal ────────────────────────────────
    A real wildcard prints its two colours as equal halves, and the card is
    turned to say which is in play. Split down the middle, though, the card

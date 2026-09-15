@@ -12,6 +12,8 @@ interface Props {
     /** Cards that can be clicked. When omitted every card is clickable. */
     enabledIds?: Set<string>;
     selectedIds?: Set<string>;
+    /** What picking a card in these sets means — see PlayingCard's `pick`. */
+    pickTone?: 'take' | 'give';
     flaggedIds?: Set<string>;
     /** Overrides the default "no properties yet" line; already translated. */
     emptyLabel?: string;
@@ -25,7 +27,7 @@ interface Props {
 }
 
 export default function PropertySets({
-    sets, size = 'sm', onCardClick, enabledIds, selectedIds, flaggedIds, emptyLabel,
+    sets, size = 'sm', onCardClick, enabledIds, selectedIds, pickTone, flaggedIds, emptyLabel,
     draggableIds, onDragCard, onDragEndCard, draggingId, dimDisabled = true,
 }: Props) {
     const { t, tCard, tColor } = useI18n();
@@ -72,6 +74,7 @@ export default function PropertySets({
                                             activeColor={set.color}
                                             setInfo={set}
                                             selected={selectedIds?.has(c.id)}
+                                            pick={pickTone}
                                             flagged={flaggedIds?.has(c.id)}
                                             dimmed={Boolean(dimDisabled && onCardClick && enabledIds && !enabledIds.has(c.id))}
                                             onClick={enabled ? () => onCardClick!(c, set.color) : undefined}
@@ -80,7 +83,7 @@ export default function PropertySets({
                                             onDragStart={() => onDragCard?.(c)}
                                             onDragEnd={onDragEndCard}
                                             className={i > 0 ? '-ml-8' : ''}
-                                            style={{ zIndex: i }}
+                                            style={{ zIndex: selectedIds?.has(c.id) ? 50 : i }}
                                         />
                                     );
                                 })}

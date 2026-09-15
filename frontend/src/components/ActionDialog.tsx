@@ -240,6 +240,7 @@ export default function ActionDialog({ view, card, intent, onCancel, onConfirm }
                                         card={d}
                                         size="sm"
                                         selected={doubles.includes(d.id)}
+                                        pick="take"
                                         onClick={() => setDoubles(cur =>
                                             cur.includes(d.id) ? cur.filter(x => x !== d.id) : [...cur, d.id])}
                                     />
@@ -373,6 +374,8 @@ export default function ActionDialog({ view, card, intent, onCancel, onConfirm }
         const mine = stealableCards(me);
         const theirIds = new Set(theirs.map(x => x.card.id));
         const myIds = new Set(mine.map(x => x.card.id));
+        const takenCard = theirs.find(x => x.card.id === targetCard)?.card;
+        const givenCard = mine.find(x => x.card.id === giveCard)?.card;
 
         return (
             <Modal
@@ -419,8 +422,14 @@ export default function ActionDialog({ view, card, intent, onCancel, onConfirm }
                                     onCardClick={c => setTargetCard(c.id)}
                                     enabledIds={theirIds}
                                     selectedIds={targetCard ? new Set([targetCard]) : undefined}
+                                    pickTone="take"
                                 />
                                 : <p className="text-sm text-white/60">{t('dialog.nothing_stealable')}</p>}
+                            <p className="pick-line pick-line-take">
+                                {takenCard
+                                    ? t('dialog.chosen_take', { card: tCard(takenCard) })
+                                    : t('dialog.chosen_take_none')}
+                            </p>
                         </div>
                     )}
 
@@ -433,8 +442,14 @@ export default function ActionDialog({ view, card, intent, onCancel, onConfirm }
                                     onCardClick={c => setGiveCard(c.id)}
                                     enabledIds={myIds}
                                     selectedIds={giveCard ? new Set([giveCard]) : undefined}
+                                    pickTone="give"
                                 />
                                 : <p className="text-sm text-white/60">{t('dialog.nothing_to_give')}</p>}
+                            <p className="pick-line pick-line-give">
+                                {givenCard
+                                    ? t('dialog.chosen_give', { card: tCard(givenCard) })
+                                    : t('dialog.chosen_give_none')}
+                            </p>
                         </div>
                     )}
                 </div>

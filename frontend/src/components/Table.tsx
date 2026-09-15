@@ -371,23 +371,56 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
         }
     };
 
+    // A two-colour wildcard always has a face up: the colour it was tapped to,
+    // or the first of the two if it has not been tapped. The card is never
+    // ambiguous about which it is — the player can see it.
+    const faceColor = (card: Card): Color | undefined => {
+        const cols = card.colors ?? [];
+        if (card.type !== 'property_wildcard' || cols.length !== 2) return undefined;
+        return wildColor[card.id] ?? cols[0];
+    };
+
     // Which colour a card dropped anywhere in the property panel actually
     // lands in — the panel is one target, not a row of them, so this is
     // where the choice a wildcard's tap left open finally gets settled.
     const resolvePropertyColor = (card: Card, from: 'hand' | 'board'): Color | null => {
         const targets = from === 'board' ? moveColors(card) : dropTargets(card, g.colors).colors;
         if (targets.length === 0) return null;
-        const committed = wildColor[card.id];
-        if (committed && targets.includes(committed)) return committed;
-        // Topping up a stack that is already under way beats opening another.
+        // What the card shows is what it plays as. This used to read only an
+        // explicit tap and otherwise prefer whichever stack was already under
+        // way, so a joker sitting face-up green dropped into the blue set the
+        // player happened to own — the card said one thing and the board did
+        // another, and the only way to be believed was to tap twice back to
+        // the colour it was already showing.
+        const showing = faceColor(card) ?? wildColor[card.id];
+        if (showing && targets.includes(showing)) return showing;
+        // Nothing on the card to go by: topping up a stack that is already
+        // under way beats opening another.
         const existing = targets.find(c => me?.sets.some(s => s.color === c));
         return existing ?? targets[0];
     };
+
+    // On a phone the panel resolves the drop itself, so the marker belongs on
+    // the one stack the card will actually join rather than on every stack it
+    // would be legal in. Two lit stacks and one card is a question the player
+    // cannot answer by aiming.
+    const landingColor = drag && canPlay && narrow
+        ? resolvePropertyColor(drag.card, drag.from)
+        : null;
 
     const dropProperty = (card: Card, from: 'hand' | 'board') => {
         const color = resolvePropertyColor(card, from);
         if (color) playCard(card, color, from);
     };
+
+    // Double The Rent is the rule nobody remembers they are holding: it is
+    // played with a rent card rather than on its own, so by the time the rent
+    // has been charged it is too late to use. The moment a rent card is
+    // picked up or chosen, then, whatever could double it catches the light
+    // in the hand — the reminder arrives while it can still be acted on, and
+    // says it without a line of text or a second card to aim at.
+    const rentInPlay = drag?.card.type === 'rent' || selected?.type === 'rent';
+    const ridesAlong = (card: Card) => rentInPlay && card.action === 'double_rent';
 
     const playActionCard = (card: Card) => {
         // A two-colour rent card only ever asks the dialog's colour question
@@ -583,9 +616,10 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
                     className={`property-groups min-w-0 flex-1 gap-3 pb-1 ${me?.sets.length ? 'items-start' : 'items-center justify-center'}`}
                 >
                     {me?.sets.map(set => {
-                        const accepts = dragColors.includes(set.color);
-                        return (
-                            <div key={set.color} className={`shrink-0 rounded-xl ${accepts ? 'property-set-live' : ''}`}>
+                        const accepts = set.color === landingColor;
+                        const aimable = carryingUnaimedJoker && dragColors.includes(set.color);
+                        const stack = (
+                            <div className={`shrink-0 rounded-xl ${accepts ? 'property-set-live' : ''}`}>
                                 <PropertySets
                                     sets={[set]}
                                     size="sm"
@@ -603,25 +637,60 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
                                 />
                             </div>
                         );
+                        return aimable ? (
+                            <DropZone
+                                key={set.color}
+                                active
+                                onDrop={() => drag && playCard(drag.card, set.color, drag.from)}
+                                className="shrink-0 rounded-xl"
+                            >
+                                {stack}
+                            </DropZone>
+                        ) : <div key={set.color} className="contents">{stack}</div>;
                     })}
 
-                    {/* A preview only, not a target of its own — dropping
-                        anywhere in this panel is what starts the set. */}
+                    {/* Normally a preview only: dropping anywhere in this
+                        panel is what starts the set, and the panel works out
+                        which colour that meant. A joker with no colour chosen
+                        is the one card it cannot work out — so for that card,
+                        and only that card, each tile answers for itself and
+                        the drop can be aimed after all. */}
                     {dragColors
                         .filter(c => !me?.sets.some(s => s.color === c))
                         .map(c => {
                             const m = colorMeta(c);
-                            return (
-                                <div key={`new-${c}`} className="shrink-0 rounded-xl">
-                                    <div
-                                        className="grid h-[7.5rem] w-[5.5rem] place-items-center rounded-xl border-2 border-dashed p-1 text-center"
-                                        style={{ borderColor: m.hex, background: `${m.hex}22` }}
-                                    >
-                                        <span className="font-display text-sm leading-tight tracking-wide">
-                                            {t('table.new_set')}<br />{t(`color.short.${c}`)}
-                                        </span>
-                                    </div>
+                            // A joker offers every colour at once. At the size
+                            // of a card that is four rows of tiles in a panel
+                            // three rows tall, so the choice goes off the
+                            // bottom of the screen; they are swatches here,
+                            // not cards, and the whole choice fits on screen.
+                            const tile = (
+                                <div
+                                    className={`grid place-items-center rounded-xl border-2 border-dashed p-1 text-center ${
+                                        carryingUnaimedJoker
+                                            ? 'h-[4.25rem] w-[4.25rem] text-[0.7rem]'
+                                            : 'h-[7.5rem] w-[5.5rem] text-sm'
+                                    }`}
+                                    style={{ borderColor: m.hex, background: `${m.hex}22` }}
+                                >
+                                    <span className="font-display leading-tight tracking-wide">
+                                        {carryingUnaimedJoker
+                                            ? t(`color.short.${c}`)
+                                            : <>{t('table.new_set')}<br />{t(`color.short.${c}`)}</>}
+                                    </span>
                                 </div>
+                            );
+                            return carryingUnaimedJoker ? (
+                                <DropZone
+                                    key={`new-${c}`}
+                                    active
+                                    onDrop={() => drag && playCard(drag.card, c, drag.from)}
+                                    className="shrink-0 rounded-xl"
+                                >
+                                    {tile}
+                                </DropZone>
+                            ) : (
+                                <div key={`new-${c}`} className="shrink-0 rounded-xl">{tile}</div>
                             );
                         })}
 
@@ -1116,7 +1185,7 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
                                             if (tapWildcard(c)) return;
                                             if (tapOpens) setSelected(prev => (prev?.id === c.id ? null : c));
                                         }}
-                                        className="hand-card"
+                                        className={`hand-card ${ridesAlong(c) ? 'card-companion' : ''}`}
                                         style={{ '--fan-angle': `${(i - (handSize - 1) / 2) * Math.min(3, 22 / Math.max(handSize, 1))}deg`, '--fan-y': `${Math.pow(i - (handSize - 1) / 2, 2) * Math.min(1.2, 12 / Math.max(handSize, 1))}px`, '--deal-delay': `${Math.min(i, 8) * 35}ms` } as CSSProperties}
                                     />
                                 ))}
@@ -1159,20 +1228,27 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
                 return (
                     <div className="card-action-tray panel animate-slide-up flex min-w-0 flex-wrap items-center gap-2 px-3 py-2">
                         <span className="font-display text-lg tracking-wide text-brass">{t('inspect.wild_choose')}</span>
-                        {g.colors.filter(c => c !== 'all').map(c => (
-                            <button
-                                key={c}
-                                type="button"
-                                className="btn !px-2.5 !py-1.5 !text-xs"
-                                style={{ background: colorMeta(c).hex, color: colorMeta(c).ink }}
-                                onClick={() => {
-                                    setWildColor(prev => ({ ...prev, [card.id]: c }));
-                                    setColorPickerFor(null);
-                                }}
-                            >
-                                {t(`color.short.${c}`)}
-                            </button>
-                        ))}
+                        {g.colors.filter(c => c !== 'all').map(c => {
+                            // A colour you have already started is the one this
+                            // card is usually for, so it is the one the tray
+                            // points at rather than leaving ten equal buttons.
+                            const own = me.sets.find(s => s.color === c && s.cards.length > 0);
+                            return (
+                                <button
+                                    key={c}
+                                    type="button"
+                                    className={`btn !px-2.5 !py-1.5 !text-xs ${own ? 'wild-swatch-owned' : ''}`}
+                                    style={{ background: colorMeta(c).hex, color: colorMeta(c).ink }}
+                                    onClick={() => {
+                                        setWildColor(prev => ({ ...prev, [card.id]: c }));
+                                        setColorPickerFor(null);
+                                    }}
+                                >
+                                    {t(`color.short.${c}`)}
+                                    {own && <span className="wild-swatch-count">{own.cards.length}/{own.size}</span>}
+                                </button>
+                            );
+                        })}
                         <button type="button" className="btn btn-ghost ml-auto" onClick={() => setColorPickerFor(null)}>{t('common.close')}</button>
                     </div>
                 );
@@ -1360,6 +1436,7 @@ export default function Table({ audio, room, error, skewMs, call, tutorial, onTu
                     room={room}
                     narrow={narrow}
                     send={send}
+                    paused={Boolean(colorPickerFor)}
                     compact={Boolean(dialog || sheet || pending || g.state === 'finished')}
                     onClose={() => (g.mode === 'tutorial' ? onLeave() : onTutorial(false))}
                 />

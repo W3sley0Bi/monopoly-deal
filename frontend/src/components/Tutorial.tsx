@@ -71,10 +71,12 @@ const HINTS: Record<string, Hint> = {
     end_turn: { anchor: 'end-turn', targets: '[data-tour="end-turn"]', gesture: 'tap' },
     rent: { anchor: 'action-space', targets: '.hand-card[data-card-type="rent"]', gesture: 'drag' },
     double_rent: {
-        // Both halves of the move: the rent and the card that doubles it.
+        // The rent card, and only the rent card. Double The Rent is not a
+        // second thing to drag — it is attached to the rent when the panel
+        // asks — so ringing it taught a move that does not exist. The hand
+        // gleams it instead, the moment the rent card is picked up.
         anchor: 'action-space',
-        targets: `.hand-card[data-card-type="rent"], ${action('double_rent')}`,
-        targetCount: 2,
+        targets: '.hand-card[data-card-type="rent"]',
         gesture: 'drag',
     },
     // A pending action owns the screen, so the coach is a strip and has
@@ -216,11 +218,15 @@ interface Props {
     /** A dialog or payment panel owns the screen: shrink to a hint strip so the
      *  coach never covers the thing it just asked the player to use. */
     compact: boolean;
+    /** Something small and temporary has the player's attention — a tray of
+     *  colours to choose from — and it sits exactly where the coach does. It
+     *  gets out of the way whole rather than shrinking into the same corner. */
+    paused?: boolean;
     send: (msg: ClientMessage) => void;
     onClose: () => void;
 }
 
-export default function Tutorial({ room, narrow, compact, send, onClose }: Props) {
+export default function Tutorial({ room, narrow, compact, paused = false, send, onClose }: Props) {
     const { t } = useI18n();
     const [cardHeight, setCardHeight] = useState(220);
     const cardRef = useRef<HTMLDivElement | null>(null);
@@ -355,7 +361,7 @@ export default function Tutorial({ room, narrow, compact, send, onClose }: Props
     // A card in the air means the player is mid-move. The coach — dimmer,
     // card, everything — gets out of the way entirely rather than covering
     // the board the player is trying to look at while dragging.
-    if (!lesson || carrying) return null;
+    if (!lesson || carrying || paused) return null;
 
     const finish = () => {
         markTutorialSeen(true);
@@ -405,10 +411,19 @@ export default function Tutorial({ room, narrow, compact, send, onClose }: Props
     // Parked, not tracked: centred in whatever the hand leaves, and in the slot
     // chosen when the lesson opened. The highlight still follows what it is
     // pointing at; the words do not have to.
+    //
+    // Centred by arithmetic rather than by `translateX(-50%)`, because that
+    // transform was not ours to keep: the entrance animation animates
+    // `transform`, and a CSS animation outranks an inline style for as long
+    // as it runs. Every time the card came back — a new lesson, a card put
+    // down — it spent a quarter of a second with its left edge on the centre
+    // line, hanging off the right of the screen, and then snapped into place.
     const cardStyle: React.CSSProperties = {
         width: cardWidth,
-        left: (free.left + free.right) / 2,
-        transform: 'translateX(-50%)',
+        left: Math.max(
+            12,
+            Math.min(vw - cardWidth - 12, (free.left + free.right) / 2 - cardWidth / 2),
+        ),
     };
     if (slot === 'bottom') cardStyle.bottom = Math.max(vh - free.bottom + 12, 12);
     else cardStyle.top = free.top + 12;
@@ -539,7 +554,7 @@ export default function Tutorial({ room, narrow, compact, send, onClose }: Props
 
             <div
                 ref={cardRef}
-                className="panel animate-pop pointer-events-auto absolute border-brass/40 p-4 shadow-2xl"
+                className="panel tour-card pointer-events-auto absolute border-brass/40 p-4 shadow-2xl"
                 style={cardStyle}
             >
                 <div className="mb-1 flex items-center gap-2">

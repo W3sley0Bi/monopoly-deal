@@ -102,7 +102,7 @@ const table: Catalog = {
     'table.properties_drag': 'Drag a property card here to start a set',
     // The wildcard rule changed: a card already on the table is no longer free
     // to shuffle around, so the mat says what a move now costs.
-    'table.joker_pick_colour': 'Tap the joker to choose its colour first.',
+    'table.joker_pick_colour': 'Drop it on a colour, or tap the joker to choose one.',
     'table.wildcard_move_cost': 'Moving a wildcard already on the table costs one play.',
 
     // ── Hand ─────────────────────────────────────────────────────────────
@@ -168,6 +168,10 @@ const table: Catalog = {
     'dialog.deal_breaker': 'Deal Breaker',
     'dialog.deal_breaker_blurb': 'Steal an entire complete set',
     'dialog.take_the_set': 'Take the set',
+    'dialog.chosen_take': 'Taking: {card}',
+    'dialog.chosen_take_none': 'Tap one of their cards to take it.',
+    'dialog.chosen_give': 'Giving: {card}',
+    'dialog.chosen_give_none': 'Tap one of yours to give in exchange.',
     'dialog.victim': 'Victim',
     'dialog.set_to_steal': 'Complete set to steal',
     'dialog.no_complete_set': '{name} has no complete set.',

@@ -30,6 +30,10 @@ interface Props {
     dimmed?: boolean;
     /** Highlight ring, e.g. a card being offered in a swap. */
     flagged?: boolean;
+    /** What choosing this card means, when it has been chosen: the card you
+     *  are taking, or the one you are giving up. A lift and a soft glow read
+     *  as "maybe" in an overlapping stack; a direction reads as an answer. */
+    pick?: 'take' | 'give';
     onClick?: () => void;
     className?: string;
     style?: CSSProperties;
@@ -80,6 +84,7 @@ export default function PlayingCard({
     selected,
     dimmed,
     flagged,
+    pick,
     onClick,
     className = '',
     style,
@@ -235,9 +240,10 @@ export default function PlayingCard({
                         ? 'cursor-pointer transition-transform duration-150 hover:-translate-y-1.5 hover:shadow-[var(--shadow-lift)]'
                         : 'cursor-default',
                     pickUp ? 'cursor-grab active:cursor-grabbing' : '',
-                    selected
+                    selected && !pick
                         ? '-translate-y-1.5 shadow-[var(--shadow-glow)]'
                         : '',
+                    selected && pick ? `-translate-y-1.5 card-pick card-pick-${pick}` : '',
                     dragging ? 'opacity-35 saturate-50' : '',
                     dimmed ? 'opacity-45 saturate-50' : '',
                     flagged ? 'ring-2 ring-sky-300' : '',

@@ -91,7 +91,7 @@ const tutorial: Catalog = {
     'lesson.rent.body': 'Ein Farbsatz bringt Miete. Spiel eine Mietkarte passend zu einer Farbe, die du besitzt. Kann sie zwei Farben kassieren, besitzt du aber nur eine, wird sofort diese kassiert.',
     'lesson.rent.task': 'Kassier Miete für deinen blauen Satz.',
     'lesson.double_rent.title': 'Miete verdoppeln',
-    'lesson.double_rent.body': 'Doppelte Miete wird zusammen mit einer Mietkarte gespielt und verdoppelt den Betrag. Kostet einen Zug extra.',
+    'lesson.double_rent.body': 'Doppelte Miete wird nie allein gespielt — sie geht zusammen mit einer Mietkarte und verdoppelt den Betrag, für einen Zug extra. Nimm die Mietkarte auf und schau auf deine Hand: was sie verdoppeln kann, blitzt auf. Häng sie im Feld an, das sich öffnet.',
     'lesson.double_rent.task': 'Kassier Miete mit Doppelter Miete.',
     'lesson.paying.title': 'Bezahlen',
     'lesson.paying.body': 'Jetzt andersherum: Ada kassiert bei dir. Du wählst, was deinen Tisch verlässt — wenn möglich Geld, denn Immobilien gewinnen.',
