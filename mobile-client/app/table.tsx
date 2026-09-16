@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Pressable, ScrollView, Share, StyleSheet, Text, View, useWindowDimensions, type StyleProp, type ViewStyle } from 'react-native';
+import { Alert, Pressable, ScrollView, Share, StyleSheet, Text, View, useWindowDimensions, type LayoutRectangle, type StyleProp, type ViewStyle } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
@@ -22,6 +22,7 @@ import { ActiveBoard } from '../src/components/board/ActiveBoard';
 import { useChatBubbles } from '../src/game/useChatBubbles';
 import { PendingPanel } from '../src/components/table/PendingPanel';
 import { ChatPanel } from '../src/components/table/ChatPanel';
+import { TutorialCoach, TutorialDone, type TutorialAnchors } from '../src/components/table/TutorialCoach';
 import { useI18n } from '../src/i18n';
 import { FIXTURES } from '../src/dev/fixtures';
 import {
@@ -37,7 +38,7 @@ import {
     you as youOf,
 } from '../src/game/meta';
 import { applyOptimistic, moveSettled, type PendingMove } from '../src/game/optimistic';
-import type { Card as CardT, ChatMessage, Color, RoomView } from '../src/types';
+import type { Card as CardT, ChatMessage, Color, RoomView, TutorialState } from '../src/types';
 import type { ActionDialogIntent, PendingViewerRole } from '../lib/contracts';
 
 const EMPTY_CHAT: ChatMessage[] = [];
@@ -56,7 +57,16 @@ function TableBody() {
     const router = useRouter();
     const insets = useSafeAreaInsets();
     const feltTarget = useRef<View>(null);
-    const { height: windowHeight } = useWindowDimensions();
+    const tableRootRef = useRef<View>(null);
+    const handScrollRef = useRef<ScrollView>(null);
+    const handTutorialRef = useRef<View>(null);
+    const propertiesTutorialRef = useRef<View>(null);
+    const bankTutorialRef = useRef<View>(null);
+    const actionTutorialRef = useRef<View>(null);
+    const endTurnTutorialRef = useRef<View>(null);
+    const tutorialCardRef = useRef<View>(null);
+    const handCardXs = useRef(new Map<string, number>());
+    const { width: windowWidth, height: windowHeight } = useWindowDimensions();
     // The felt belongs to the viewport, not to the accordion's remaining space.
     // Just the rail now (~64, the chips being one row shorter) plus the top
     // padding. It has to clear the rail rather than merely start near it: the
@@ -72,6 +82,7 @@ function TableBody() {
     const setDevRoom = useStore((s) => s.setDevRoom);
     const livePlay = useStore((s) => s.livePlay);
     const setLivePlay = useStore((s) => s.setLivePlay);
+    const setTutorialDone = useStore((s) => s.setTutorialDone);
 
     const [guess, setGuess] = useState<PendingMove | null>(null);
     const [sent, setSent] = useState<string | null>(null);
@@ -91,6 +102,35 @@ function TableBody() {
     // Dev only: paints the seat tap targets and the overlay band they live in.
     const [showHits, setShowHits] = useState(false);
     const [copied, setCopied] = useState(false);
+    const [tutorialNext, setTutorialNext] = useState(false);
+    const [tutorialAnchors, setTutorialAnchors] = useState<TutorialAnchors>({});
+
+    // `onLayout` is relative to each component's immediate parent. The coach
+    // is a root overlay, so adding nested layout values eventually points at
+    // a different card or the top of the screen. Measure both nodes in window
+    // space and translate once into the overlay's coordinate system instead.
+    const recordTutorialAnchor = useCallback((key: keyof TutorialAnchors, target: View | null) => {
+        const root = tableRootRef.current;
+        if (!root || !target) return;
+        target.measureInWindow((x, y, width, height) => {
+            if (!width || !height) return;
+            root.measureInWindow((rootX, rootY) => {
+                const next = { x: x - rootX, y: y - rootY, width, height };
+                setTutorialAnchors((current) =>
+                    sameRect(current[key], next) ? current : { ...current, [key]: next },
+                );
+            });
+        });
+    }, []);
+
+    const measureTutorialAnchors = useCallback(() => {
+        recordTutorialAnchor('hand', handTutorialRef.current);
+        recordTutorialAnchor('properties', propertiesTutorialRef.current);
+        recordTutorialAnchor('bank', bankTutorialRef.current);
+        recordTutorialAnchor('action', actionTutorialRef.current);
+        recordTutorialAnchor('controls', endTurnTutorialRef.current);
+        recordTutorialAnchor('card', tutorialCardRef.current);
+    }, [recordTutorialAnchor]);
 
     useEffect(() => {
         if (!live) router.replace('/');
@@ -111,6 +151,21 @@ function TableBody() {
         return () => clearTimeout(timer);
     }, [sent]);
 
+    useEffect(() => {
+        setTutorialNext(false);
+        setSelected(null);
+        setSent(null);
+        setTutorialAnchors((current) => ({ ...current, card: undefined }));
+    }, [live?.game.tutorial?.step]);
+
+    // Completion is durable as soon as the server finishes the scripted
+    // table, even if the app backgrounds before the six-second exit runs.
+    useEffect(() => {
+        if (live?.game.state === 'finished' && live.game.mode === 'tutorial') {
+            setTutorialDone(true);
+        }
+    }, [live?.game.mode, live?.game.state, setTutorialDone]);
+
     // Retire the prediction the moment the real state agrees with it.
     useEffect(() => {
         if (live && guess && moveSettled(live, guess)) setGuess(null);
@@ -120,6 +175,36 @@ function TableBody() {
         if (!live) return null;
         return guess ? applyOptimistic(live, guess) : live;
     }, [live, guess]);
+
+    const tutorialSourceCardId = useMemo(() => {
+        const tutorial = room?.game.tutorial ?? null;
+        const me = room ? youOf(room.game) : null;
+        if (!tutorial || !tutorial.task || tutorial.done || !me?.hand) return null;
+        return me.hand.find((card) => card.id !== sent && tutorialAllowsCard(card, tutorial))?.id ?? null;
+    }, [room, sent]);
+
+    useEffect(() => {
+        if (!tutorialSourceCardId) {
+            setTutorialAnchors((current) =>
+                current.card ? { ...current, card: undefined } : current,
+            );
+            return;
+        }
+        const cardX = handCardXs.current.get(tutorialSourceCardId);
+        if (cardX !== undefined) {
+            handScrollRef.current?.scrollTo({ x: Math.max(0, cardX - 8), animated: false });
+        }
+        // ScrollView applies its offset on the following frame. Measure after
+        // that frame so the ring and hand animation start on the visible card.
+        let second: ReturnType<typeof requestAnimationFrame> | null = null;
+        const first = requestAnimationFrame(() => {
+            second = requestAnimationFrame(measureTutorialAnchors);
+        });
+        return () => {
+            cancelAnimationFrame(first);
+            if (second !== null) cancelAnimationFrame(second);
+        };
+    }, [measureTutorialAnchors, tutorialSourceCardId, live?.game.tutorial?.step]);
 
     const ownTurn = room ? isYourTurn(room.game) : false;
     const hasPending = Boolean(room?.game.pending);
@@ -143,15 +228,22 @@ function TableBody() {
         [send],
     );
 
+    const leaveTutorial = useCallback(() => {
+        setTutorialDone(true);
+        leave();
+    }, [leave, setTutorialDone]);
+
     if (!room) return null;
 
     const g = room.game;
     const me = youOf(g);
     const rivals = opponents(g);
     const pending = g.pending;
+    const tutorial = g.tutorial ?? null;
+    const tutorialActive = g.mode === 'tutorial' && Boolean(tutorial);
     const spectating = !room.you_seated || !me;
     const myTurn = isYourTurn(g);
-    const canPlay = myTurn && !pending && g.plays_left > 0;
+    const canPlay = myTurn && !pending && g.plays_left > 0 && (!tutorial || (tutorial.task && !tutorial.done));
     const hand = (me?.hand ?? []).filter((c) => c.id !== sent);
     const overLimit = (me?.hand?.length ?? 0) > 7;
 
@@ -169,7 +261,11 @@ function TableBody() {
     const lastEvent = [...g.log].reverse().find((e) => e.key !== 'log.turn' && e.key !== 'log.tutorial_lesson');
 
     function openCard(card: CardT) {
-        if (!canPlay) return;
+        if (
+            !canPlay ||
+            !tutorialAllowsCard(card, tutorial) ||
+            (tutorial && card.id !== tutorialSourceCardId)
+        ) return;
         const colors = card.colors ?? [];
 
         // A two-colour wildcard aims itself by tapping — the player picks which
@@ -218,10 +314,13 @@ function TableBody() {
     const carriedTargets = carriedCard ? dropTargets(carriedCard, g.colors) : null;
 
     const propertyActive =
-        !!carried && canPlay && (carried.from === 'board' || !!carriedTargets?.colors.length);
-    const bankActive = !!carried && canPlay && carried.from === 'hand' && !!carriedTargets?.bankable;
+        !!carried && canPlay && tutorialAllowsZone(tutorial, 'properties') &&
+        (carried.from === 'board' || !!carriedTargets?.colors.length);
+    const bankActive = !!carried && canPlay && tutorialAllowsZone(tutorial, 'bank') &&
+        carried.from === 'hand' && !!carriedTargets?.bankable;
     const actionActive =
-        !!carried && canPlay && carried.from === 'hand' && !!carriedCard && isPlayableAction(carriedCard);
+        !!carried && canPlay && tutorialAllowsZone(tutorial, 'action') &&
+        carried.from === 'hand' && !!carriedCard && isPlayableAction(carriedCard);
 
     // The eligible zone still leans towards the thumb, but the other one keeps
     // enough width to stay readable — a crushed tile looked broken, not inert.
@@ -235,7 +334,12 @@ function TableBody() {
         <TableGlassProvider target={feltTarget}>
         {/* The bar is a floating pill now, so it sits in the home-indicator
             gutter rather than above it — the indicator is its bottom padding. */}
-        <View style={[styles.root, { paddingTop: insets.top + 4, paddingBottom: Math.max(6, insets.bottom - 14) }]}>
+        <View
+            ref={tableRootRef}
+            collapsable={false}
+            onLayout={measureTutorialAnchors}
+            style={[styles.root, { paddingTop: insets.top + 4, paddingBottom: Math.max(6, insets.bottom - 14) }]}
+        >
             <BlurTargetView ref={feltTarget} pointerEvents="box-none" style={[styles.feltBackground, { top: feltTop, height: feltHeight }]}>
                 <FeltTable
                     players={g.players}
@@ -244,7 +348,9 @@ function TableBody() {
                     deckCount={g.deck_count}
                     discardCount={g.discard_count}
                     discardTop={g.discard_top}
-                    onOpenDiscard={() => setDiscardOpen(true)}
+                    onOpenDiscard={() => {
+                        if (!tutorialActive) setDiscardOpen(true);
+                    }}
                     turnId={turnPlayer?.id}
                     playsLeft={g.plays_left}
                     onSeats={setSeatHits}
@@ -270,7 +376,9 @@ function TableBody() {
                             isOwner={p.id === room.owner_id}
                             isYou={false}
                             playBubbleText={said[p.id]?.text ?? null}
-                            onPress={() => setSheetPlayer(p.id)}
+                            onPress={() => {
+                                if (!tutorialActive) setSheetPlayer(p.id);
+                            }}
                         />
                     </View>
                 ))}
@@ -297,11 +405,13 @@ function TableBody() {
             {me ? <>
             {/* ---- my board ---- */}
             <GlassPanel
-                onLayout={(e) => setLocalTop(e.nativeEvent.layout.y)}
+                onLayout={(e) => {
+                    setLocalTop(e.nativeEvent.layout.y);
+                }}
                 style={[styles.board, !boardShown && styles.boardFolded]}
             >
                 <Pressable style={({ pressed }) => [styles.boardHead, styles.foldHead, pressed && styles.foldHeadPressed]} accessibilityRole="button"
-                    accessibilityState={{ expanded: boardShown }} disabled={!!carried}
+                    accessibilityState={{ expanded: boardShown }} disabled={!!carried || tutorialActive}
                     accessibilityLabel={t(boardShown ? 'table.board_fold' : 'table.board_unfold')}
                     onPress={() => {
                         void Haptics.selectionAsync();
@@ -318,9 +428,11 @@ function TableBody() {
                 </Pressable>
                 <DropZone
                     id="properties"
+                    targetRef={propertiesTutorialRef}
                     active={propertyActive}
                     grow={1}
                     hint={t('table.play_it')}
+                    onLayout={() => recordTutorialAnchor('properties', propertiesTutorialRef.current)}
                     onDrop={(card) => {
                         // A board wildcard has no single obvious destination, so
                         // dropping it asks which set rather than guessing.
@@ -338,7 +450,7 @@ function TableBody() {
                         size="propertyZone"
                         density={(me?.sets.length ?? 0) > 6 ? 'tight' : (me?.sets.length ?? 0) > 4 ? 'dense' : 'normal'}
                         onCardPress={
-                            canPlay
+                            canPlay && !tutorial
                                 ? (card, set) => {
                                       if (card.type === 'property_wildcard') {
                                           setDialog({ card, intent: 'move', fromColor: set.color });
@@ -356,6 +468,7 @@ function TableBody() {
                 <View style={styles.dropRow}>
                     <DropZone
                         id="bank"
+                        targetRef={bankTutorialRef}
                         glass
                         active={bankActive}
                         grow={growFor(bankActive)}
@@ -366,6 +479,7 @@ function TableBody() {
                                 cardId: card.id,
                             })
                         }
+                        onLayout={() => recordTutorialAnchor('bank', bankTutorialRef.current)}
                         style={styles.zoneTile}
                     >
                         {/* Tapping the tile opens the pile; dragging still drops
@@ -374,7 +488,7 @@ function TableBody() {
                             style={styles.zoneHead}
                             accessibilityRole="button"
                             accessibilityLabel={`${t('table.bank')}: ${t('table.bank_cards', { count: me?.bank.length ?? 0 })}`}
-                            disabled={!!carried}
+                            disabled={!!carried || tutorialActive}
                             onPress={() => {
                                 void Haptics.selectionAsync();
                                 setBankOpen(true);
@@ -393,11 +507,13 @@ function TableBody() {
 
                     <DropZone
                         id="action"
+                        targetRef={actionTutorialRef}
                         glass
                         active={actionActive}
                         grow={growFor(actionActive)}
                         hint={t('table.play_it')}
                         onDrop={(card) => playAction(card)}
+                        onLayout={() => recordTutorialAnchor('action', actionTutorialRef.current)}
                         style={styles.zoneTile}
                     >
                         <View style={styles.zoneHead}>
@@ -411,14 +527,18 @@ function TableBody() {
                 </View>
 
             {/* ---- hand ---- */}
-            <GlassPanel style={styles.handZone}>
+            <GlassPanel
+                targetRef={handTutorialRef}
+                style={styles.handZone}
+                onLayout={() => recordTutorialAnchor('hand', handTutorialRef.current)}
+            >
                 {/* The hand folds like the board does, and a bare header row did
                     not read as something you could collapse. */}
                 <View style={styles.grabberRow} pointerEvents="none">
                     <View style={styles.grabber} />
                 </View>
                 <Pressable style={({ pressed }) => [styles.handHead, styles.foldHead, pressed && styles.foldHeadPressed]} accessibilityRole="button"
-                    accessibilityState={{ expanded: handShown }} disabled={!!carried}
+                    accessibilityState={{ expanded: handShown }} disabled={!!carried || tutorialActive}
                     accessibilityLabel={t(handShown ? 'table.hand_fold' : 'table.hand_unfold')}
                     onPress={() => {
                         void Haptics.selectionAsync();
@@ -441,17 +561,39 @@ function TableBody() {
 
 
                 <ScrollView
+                    ref={handScrollRef}
                     style={[styles.handScroll, !handShown && styles.hidden]}
                     horizontal
                     showsHorizontalScrollIndicator={false}
                     contentContainerStyle={styles.handFan}
+                    onLayout={measureTutorialAnchors}
+                    onScroll={() => recordTutorialAnchor('card', tutorialCardRef.current)}
+                    scrollEventThrottle={32}
                 >
-                    {hand.map((card, i) => (
-                        <View key={card.id} style={i > 0 ? styles.handOverlap : undefined}>
+                    {hand.map((card, i) => {
+                        const cardEnabled = canPlay && tutorialAllowsCard(card, tutorial) &&
+                            (!tutorial || card.id === tutorialSourceCardId);
+                        return <View
+                            key={card.id}
+                            ref={card.id === tutorialSourceCardId ? tutorialCardRef : undefined}
+                            collapsable={false}
+                            style={i > 0 ? styles.handOverlap : undefined}
+                            onLayout={(e) => {
+                                handCardXs.current.set(card.id, e.nativeEvent.layout.x);
+                                if (card.id !== tutorialSourceCardId) return;
+                                handScrollRef.current?.scrollTo({
+                                    x: Math.max(0, e.nativeEvent.layout.x - 8),
+                                    animated: false,
+                                });
+                                requestAnimationFrame(() =>
+                                    recordTutorialAnchor('card', tutorialCardRef.current),
+                                );
+                            }}
+                        >
                             <Draggable
                                 state={{ card, from: 'hand' }}
                                 axis="vertical"
-                                enabled={canPlay}
+                                enabled={cardEnabled}
                                 onTap={() => openCard(card)}
                             >
                                 {/* A two-colour wildcard turns rather than
@@ -464,14 +606,14 @@ function TableBody() {
                                             size="hand"
                                             activeColor={shown ?? null}
                                             selected={selected?.id === card.id}
-                                            disabled={!canPlay}
-                                            dimmed={!canPlay || carriedCard?.id === card.id}
+                                            disabled={!cardEnabled}
+                                            dimmed={!cardEnabled || carriedCard?.id === card.id}
                                         />
                                     )}
                                 </WildFlip>
                             </Draggable>
                         </View>
-                    ))}
+                    })}
                     {hand.length === 0 ? <Text style={styles.handHint}>{t('table.hand_empty')}</Text> : null}
                 </ScrollView>
             </GlassPanel>
@@ -482,7 +624,7 @@ function TableBody() {
             {/* The options tray. Opt-in: dragging a card where it goes is the
                 gesture the table is built around, and the tray covers the felt
                 to say the same thing in buttons. */}
-            {tapTray && selected && handShown ? (
+            {(tapTray || tutorial?.id === 'tapping') && selected && handShown ? (
                 <Panel style={styles.tray}>
                     <Text style={styles.trayTitle} numberOfLines={1}>
                         {tCard(selected)}
@@ -533,11 +675,11 @@ function TableBody() {
                 {/* Table-level controls, all in one bar: the header above was a
                     36pt strip carrying a single button, and the felt wanted
                     those points more than the gear did. */}
-                <Pressable onPress={() => setMenu(true)} style={({ pressed }) => [styles.talkBtn, pressed && styles.talkBtnPressed]} accessibilityRole="button" accessibilityLabel={t('table.menu')}>
+                <Pressable disabled={tutorialActive} onPress={() => setMenu(true)} style={({ pressed }) => [styles.talkBtn, tutorialActive && styles.controlDisabled, pressed && styles.talkBtnPressed]} accessibilityRole="button" accessibilityLabel={t('table.menu')}>
                     <Icon name="gearshape.fill" fallback="☰" size={18} color={ink.muted60} />
                 </Pressable>
 
-                <Pressable onPress={() => setLogOpen(true)} style={({ pressed }) => [styles.talkBtn, pressed && styles.talkBtnPressed]} accessibilityRole="button" accessibilityLabel={t('panel.log')}>
+                <Pressable disabled={tutorialActive} onPress={() => setLogOpen(true)} style={({ pressed }) => [styles.talkBtn, tutorialActive && styles.controlDisabled, pressed && styles.talkBtnPressed]} accessibilityRole="button" accessibilityLabel={t('panel.log')}>
                     <Icon name="list.bullet.rectangle" fallback="≡" size={18} color={ink.muted60} />
                 </Pressable>
 
@@ -556,12 +698,24 @@ function TableBody() {
                     </View> : null}
                 </View>
 
-                <Pressable onPress={() => setTalk(true)} style={({ pressed }) => [styles.talkBtn, pressed && styles.talkBtnPressed]} accessibilityRole="button" accessibilityLabel={t('panel.chat')}>
+                <Pressable disabled={tutorialActive} onPress={() => setTalk(true)} style={({ pressed }) => [styles.talkBtn, tutorialActive && styles.controlDisabled, pressed && styles.talkBtnPressed]} accessibilityRole="button" accessibilityLabel={t('panel.chat')}>
                     <Icon name="bubble.left.and.bubble.right.fill" fallback="…" size={18} color={ink.muted60} />
                 </Pressable>
 
                 {myTurn && !pending && !spectating ? (
-                    <Btn label={t('table.end_turn')} variant="red" onPress={() => act({ type: 'end_turn' })} style={styles.endTurn} />
+                    <View
+                        ref={endTurnTutorialRef}
+                        collapsable={false}
+                        onLayout={() => recordTutorialAnchor('controls', endTurnTutorialRef.current)}
+                    >
+                        <Btn
+                            label={t('table.end_turn')}
+                            variant="red"
+                            disabled={Boolean(tutorial && (tutorial.id !== 'end_turn' || tutorial.done))}
+                            onPress={() => act({ type: 'end_turn' })}
+                            style={styles.endTurn}
+                        />
+                    </View>
                 ) : null}
             </GlassPanel>
 
@@ -574,7 +728,7 @@ function TableBody() {
                 did not answer. These are the same rectangles, last in the tree.
                 `box-none`, so only the rectangles themselves catch anything. */}
             <View
-                pointerEvents="box-none"
+                pointerEvents={tutorialActive ? 'none' : 'box-none'}
                 style={[
                     styles.feltBackground,
                     {
@@ -639,6 +793,12 @@ function TableBody() {
                     payableCards={role === 'payer' ? payable : undefined}
                     you={room.you}
                     skewMs={0}
+                    tutorialCopy={tutorial ? {
+                        title: t(`lesson.${tutorial.id}.title`),
+                        body: t(`lesson.${tutorial.id}.body`),
+                        task: t(`lesson.${tutorial.id}.task`),
+                        onSkip: leaveTutorial,
+                    } : undefined}
                     onRespond={(msg) => act({ type: 'respond', ...msg })}
                 />
             ) : null}
@@ -816,7 +976,30 @@ function TableBody() {
                 ) : null}
             </Sheet>
 
-            {g.state === 'finished' ? (
+            <TutorialCoach
+                tutorial={tutorial}
+                locked={Boolean(tutorial && !(tutorial.task && tutorial.done))}
+                compact={Boolean(dialog || pending)}
+                carrying={Boolean(carried)}
+                paused={Boolean(selected && (tapTray || tutorial?.id === 'tapping'))}
+                anchors={tutorialAnchors}
+                screenWidth={windowWidth}
+                screenHeight={windowHeight}
+                safeTop={insets.top + 8}
+                safeBottom={insets.bottom + 8}
+                pendingNext={tutorialNext}
+                onNext={() => {
+                    setTutorialNext(true);
+                    send({ type: 'tutorial_next' });
+                }}
+                onSkip={leaveTutorial}
+            />
+
+            {g.state === 'finished' && g.mode === 'tutorial' ? (
+                <TutorialDone onLeave={leaveTutorial} />
+            ) : null}
+
+            {g.state === 'finished' && g.mode !== 'tutorial' ? (
                 <View style={styles.winOverlay}>
                     <Text style={styles.winTitle}>
                         {g.winner_id === room.you
@@ -836,6 +1019,57 @@ function TableBody() {
         </View>
         </TableGlassProvider>
     );
+}
+
+/** Only the card a scripted lesson is teaching stays live. */
+function tutorialAllowsCard(card: CardT, tutorial: TutorialState | null): boolean {
+    if (!tutorial) return true;
+    if (!tutorial.task || tutorial.done) return false;
+
+    switch (tutorial.id) {
+        case 'property':
+        case 'tapping':
+        case 'win':
+            return card.type === 'property' || card.type === 'property_wildcard';
+        case 'wildcard':
+        case 'wildcard_any':
+            return card.type === 'property_wildcard';
+        case 'bank':
+            return card.type === 'money';
+        case 'rent':
+        case 'double_rent':
+            return card.type === 'rent';
+        case 'pass_go':
+        case 'sly_deal':
+        case 'forced_deal':
+        case 'deal_breaker':
+        case 'house':
+            return card.action === tutorial.id;
+        default:
+            return false;
+    }
+}
+
+/** Destination gating is the native equivalent of the web tour's live holes. */
+function tutorialAllowsZone(
+    tutorial: TutorialState | null,
+    zone: 'properties' | 'bank' | 'action',
+): boolean {
+    if (!tutorial) return true;
+    if (!tutorial.task || tutorial.done) return false;
+    if (zone === 'properties') {
+        return ['property', 'wildcard', 'wildcard_any', 'tapping', 'win'].includes(tutorial.id);
+    }
+    if (zone === 'bank') return tutorial.id === 'bank';
+    return ['pass_go', 'rent', 'double_rent', 'sly_deal', 'forced_deal', 'deal_breaker', 'house'].includes(tutorial.id);
+}
+
+function sameRect(a: LayoutRectangle | undefined, b: LayoutRectangle): boolean {
+    if (!a) return false;
+    return Math.abs(a.x - b.x) < 0.5 &&
+        Math.abs(a.y - b.y) < 0.5 &&
+        Math.abs(a.width - b.width) < 0.5 &&
+        Math.abs(a.height - b.height) < 0.5;
 }
 
 /**
@@ -1053,6 +1287,7 @@ const styles = StyleSheet.create({
         borderColor: '#d8fff01f',
     },
     talkBtnPressed: { backgroundColor: '#d8fff026' },
+    controlDisabled: { opacity: 0.34 },
     // Concentric with the bar: the bar's radius minus its padding, so the red
     // edge never crosses the glass border behind it.
     endTurn: { borderRadius: 15, paddingHorizontal: 14, minHeight: 40 },

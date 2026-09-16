@@ -30,7 +30,7 @@ const home: Catalog = {
     'home.solo.show_tutorial': 'Tutorial anzeigen',
     'home.solo.play': '🎓 Üben gegen Roboter',
     'home.learn.title': 'Spielen lernen',
-    'home.learn.blurb': 'Fünfzehn praktische Lektionen an einem Tisch, der für jede einzelne gebaut wird — von der ersten Immobilie bis zum Deal Breaker.',
+    'home.learn.blurb': 'Siebzehn praktische Lektionen an einem Tisch, der für jede einzelne gebaut wird — von der ersten Immobilie bis zum Deal Breaker.',
     'home.learn.start': 'Tutorial starten',
     'home.learn.again': 'Nochmal durchgehen',
     'home.learn.table_name': '{name} lernt',

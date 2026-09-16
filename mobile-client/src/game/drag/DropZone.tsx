@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useRef, type Ref } from 'react';
+import { StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
 import Animated, {
     Easing,
     interpolate,
@@ -34,9 +34,13 @@ interface Props {
      *  zone can sit next to the board and hand panels without reading as a
      *  different material. */
     glass?: boolean;
+    /** Optional table-local geometry hook used by the native tutorial coach. */
+    onLayout?: (event: LayoutChangeEvent) => void;
+    /** Exposes the native zone only for cross-tree tutorial measurement. */
+    targetRef?: Ref<View>;
 }
 
-export function DropZone({ id, active, onDrop, hint, grow, children, style, glass }: Props) {
+export function DropZone({ id, active, onDrop, hint, grow, children, style, glass, onLayout, targetRef }: Props) {
     const layer = useDragLayer();
     const shared = useDragShared();
     const ref = useRef<View>(null);
@@ -73,6 +77,12 @@ export function DropZone({ id, active, onDrop, hint, grow, children, style, glas
     const eligible = useSharedValue(0);
     const inert = useSharedValue(0);
     const pulse = useSharedValue(0);
+
+    const attachRef = useCallback((node: View | null) => {
+        ref.current = node;
+        if (typeof targetRef === 'function') targetRef(node);
+        else if (targetRef) targetRef.current = node;
+    }, [targetRef]);
 
     useEffect(() => {
         const live = carrying && active;
@@ -122,8 +132,9 @@ export function DropZone({ id, active, onDrop, hint, grow, children, style, glas
 
     return (
         <Animated.View
-            ref={ref}
+            ref={attachRef}
             collapsable={false}
+            onLayout={onLayout}
             style={[styles.zone, glass && styles.glassZone, { flexGrow: grow ?? 1 }, animated, style]}
         >
             {glass ? <>

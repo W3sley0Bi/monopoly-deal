@@ -30,7 +30,7 @@ const home: Catalog = {
     'home.solo.show_tutorial': 'Show the tutorial',
     'home.solo.play': '🎓 Practice vs robots',
     'home.learn.title': 'Learn to play',
-    'home.learn.blurb': 'Fifteen hands-on lessons on a table built for each one, from your first property to Deal Breaker.',
+    'home.learn.blurb': 'Seventeen hands-on lessons on a table built for each one, from your first property to Deal Breaker.',
     'home.learn.start': 'Start the tutorial',
     'home.learn.again': 'Run it again',
     'home.learn.table_name': '{name} is learning',

@@ -23,6 +23,7 @@ export function PendingPanel({
     myTarget,
     payableCards,
     you,
+    tutorialCopy,
     onRespond,
 }: PendingPanelProps) {
     const { t, tCard, tColor } = useI18n();
@@ -56,6 +57,24 @@ export function PendingPanel({
 
     return (
         <Modal open title={title}>
+            {tutorialCopy ? (
+                <View style={styles.tutorial}>
+                    <View style={styles.tutorialHead}>
+                        <LabelCaps color={brand.brass}>{t('tutorial.label')}</LabelCaps>
+                        <Pressable
+                            accessibilityRole="button"
+                            onPress={tutorialCopy.onSkip}
+                            hitSlop={8}
+                            style={({ pressed }) => [styles.tutorialSkip, pressed && styles.tutorialSkipPressed]}
+                        >
+                            <Text style={styles.tutorialSkipText}>{t('tutorial.skipTour')}</Text>
+                        </Pressable>
+                    </View>
+                    <Text style={styles.tutorialTitle} accessibilityRole="header">{tutorialCopy.title}</Text>
+                    <Text style={styles.tutorialBody}>{tutorialCopy.body}</Text>
+                    <Text style={styles.tutorialTask}>→ {tutorialCopy.task}</Text>
+                </View>
+            ) : null}
             <View style={styles.head}>
                 <Card card={pending.card} size="sm" />
                 <View style={styles.headText}>
@@ -172,6 +191,21 @@ export function PendingPanel({
 }
 
 const styles = StyleSheet.create({
+    tutorial: {
+        gap: 4,
+        borderRadius: radius.md,
+        borderWidth: 1,
+        borderColor: '#dce64e42',
+        backgroundColor: '#dce64e14',
+        padding: 10,
+    },
+    tutorialHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    tutorialSkip: { marginLeft: 'auto', paddingHorizontal: 6, paddingVertical: 3, borderRadius: radius.sm },
+    tutorialSkipPressed: { backgroundColor: '#ffffff12' },
+    tutorialSkipText: { fontFamily: uiFont(800), fontSize: 10, color: ink.muted60 },
+    tutorialTitle: { fontFamily: uiFont(900), fontSize: 15, color: brand.brass },
+    tutorialBody: { fontFamily: uiFont(700), fontSize: 12, lineHeight: 17, color: ink.muted60 },
+    tutorialTask: { fontFamily: uiFont(800), fontSize: 11, lineHeight: 15, color: ink.endTurnHint },
     head: { flexDirection: 'row', gap: 10, alignItems: 'center' },
     headText: { flex: 1, gap: 3 },
     label: { fontFamily: uiFont(800), fontSize: 14, color: ink.body },

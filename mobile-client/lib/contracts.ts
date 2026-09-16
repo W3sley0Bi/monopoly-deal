@@ -341,6 +341,9 @@ export interface PendingPanelProps {
     /** For the corner countdown ring, when `deadline_kind === 'respond'`. */
     deadlineMs?: number;
     skewMs: number;
+    /** Scripted lesson copy shown inside the native pending modal, which owns
+     *  the whole screen and therefore hides the floating tutorial coach. */
+    tutorialCopy?: { title: string; body: string; task: string; onSkip: () => void };
     onClose?: () => void;
     onRespond: (msg: { say_no?: boolean; card_ids?: string[] }) => void;
 }

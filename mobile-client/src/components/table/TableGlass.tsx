@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type RefObject, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, type Ref, type RefObject, type ReactNode } from 'react';
 import { AccessibilityInfo, StyleSheet, View, type ViewProps } from 'react-native';
 import { BlurView } from 'expo-blur';
 
@@ -32,14 +32,14 @@ export function GlassLayer({ radius = 19 }: { radius?: number }) {
 }
 
 /** The effect is behind the content and never participates in card gestures. */
-export function GlassPanel({ children, style, ...props }: ViewProps) {
+export function GlassPanel({ children, style, targetRef, ...props }: ViewProps & { targetRef?: Ref<View> }) {
     const glass = useContext(GlassContext);
     // The blur is a clipped child, so it has to follow whatever radius the
     // caller set — at the panel default it squares off the corners of a
     // rounder panel and the fill shows through behind the border.
     const flat = StyleSheet.flatten([styles.panel, style]);
     const corner = typeof flat.borderRadius === 'number' ? flat.borderRadius : 20;
-    return <View {...props} style={[styles.panel, style, glass?.reduced && styles.solid]}>
+    return <View ref={targetRef} {...props} style={[styles.panel, style, glass?.reduced && styles.solid]}>
         <GlassLayer radius={corner - 1} />
         {children}
     </View>;
