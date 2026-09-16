@@ -1,0 +1,204 @@
+import { useEffect, useMemo, useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+
+import type { PendingPanelProps } from '../../../lib/contracts';
+import { brand, ink, line, radius, status } from '../../../lib/theme';
+import { colorMeta } from '../../game/meta';
+import { Btn, LabelCaps, Modal } from '../../ui/kit';
+import { Card } from '../../ui/card';
+import { useI18n } from '../../i18n';
+import { uiFont } from '../../../lib/fonts';
+
+/**
+ * The modal that owns the screen while a demand is unresolved.
+ *
+ * It has four faces and they are not variations on one layout — a payer is
+ * choosing what to hand over, a steal target is deciding whether to block, a
+ * blocked instigator is deciding whether to escalate, and a bystander is only
+ * watching. Each gets the buttons that belong to it and no others.
+ */
+export function PendingPanel({
+    pending,
+    role,
+    myTarget,
+    payableCards,
+    you,
+    onRespond,
+}: PendingPanelProps) {
+    const { t, tCard, tColor } = useI18n();
+    const [picked, setPicked] = useState<string[]>([]);
+
+    // A fresh demand must never inherit the last one's selection.
+    useEffect(() => setPicked([]), [pending.card.id, myTarget?.player_id]);
+
+    const owed = myTarget?.amount ?? 0;
+    const pool = payableCards ?? [];
+
+    const selectedTotal = useMemo(
+        () => pool.filter((p) => picked.includes(p.card.id)).reduce((sum, p) => sum + p.card.value, 0),
+        [pool, picked],
+    );
+    const poolTotal = useMemo(() => pool.reduce((sum, p) => sum + p.card.value, 0), [pool]);
+
+    // When everything you own still doesn't cover the debt, the rule is that it
+    // all goes — so the button unlocks only once every card is selected.
+    const mustGiveAll = poolTotal <= owed;
+    const canPay = mustGiveAll ? picked.length === pool.length && pool.length > 0 : selectedTotal >= owed;
+
+    const title =
+        role === 'payer'
+            ? t('pending.ui.you_owe', { amount: owed })
+            : role === 'target'
+              ? t('pending.ui.you_target')
+              : role === 'blocked_instigator'
+                ? t('pending.ui.you_blocked')
+                : t('pending.ui.in_progress');
+
+    return (
+        <Modal open title={title}>
+            <View style={styles.head}>
+                <Card card={pending.card} size="sm" />
+                <View style={styles.headText}>
+                    <Text style={styles.label}>{t(pending.label_key, pending.label_args)}</Text>
+                    {role === 'payer' ? (
+                        <Text style={styles.blurb}>
+                            {mustGiveAll
+                                ? t('pending.ui.give_everything', { amount: owed })
+                                : t('pending.ui.pick_cards')}
+                        </Text>
+                    ) : role === 'target' ? (
+                        <Text style={styles.blurb}>{t('pending.ui.you_target_blurb')}</Text>
+                    ) : role === 'blocked_instigator' ? (
+                        <Text style={styles.blurb}>{t('pending.ui.you_blocked_blurb')}</Text>
+                    ) : null}
+                </View>
+            </View>
+
+            {/* ---- bystander: who still owes what ---- */}
+            {role === 'bystander' ? (
+                <View style={styles.roster}>
+                    {(pending.targets ?? []).map((tg) => (
+                        <View key={tg.player_id} style={styles.rosterRow}>
+                            <Text style={styles.rosterName}>{tg.player_id === you ? t('common.you') : tg.player_id}</Text>
+                            <Text style={styles.rosterState}>
+                                {tg.settled
+                                    ? tg.note
+                                        ? t('pending.ui.blocked_it')
+                                        : t('pending.ui.settled')
+                                    : tg.cancelled
+                                      ? t('pending.ui.said_no')
+                                      : tg.amount > 0
+                                        ? t('pending.ui.owes', { amount: tg.amount })
+                                        : t('pending.ui.deciding')}
+                            </Text>
+                        </View>
+                    ))}
+                    <Text style={styles.blurb}>{t('pending.ui.resolving')}</Text>
+                </View>
+            ) : null}
+
+            {/* ---- payer: pick what leaves ---- */}
+            {role === 'payer' ? (
+                pool.length === 0 ? (
+                    <Text style={styles.warn}>{t('pending.ui.nothing_in_play')}</Text>
+                ) : (
+                    <>
+                        <LabelCaps>{t('pending.ui.your_cards')}</LabelCaps>
+                        <View style={styles.pool}>
+                            {pool.map(({ card, source }) => {
+                                const on = picked.includes(card.id);
+                                return (
+                                    <Pressable
+                                        key={card.id}
+                                        onPress={() =>
+                                            setPicked((prev) =>
+                                                on ? prev.filter((x) => x !== card.id) : [...prev, card.id],
+                                            )
+                                        }
+                                        style={styles.poolItem}
+                                    >
+                                        <Card card={card} size="xs" selected={on} pickTone={on ? 'give' : null} />
+                                        <Text style={styles.source}>
+                                            {source === 'bank'
+                                                ? t('pending.ui.from_bank')
+                                                : tColor(source)}
+                                        </Text>
+                                    </Pressable>
+                                );
+                            })}
+                        </View>
+                        <Text style={styles.total}>
+                            {t('pending.ui.selected', { selected: selectedTotal, owed })}
+                        </Text>
+                    </>
+                )
+            ) : null}
+
+            {/* ---- buttons ---- */}
+            {role !== 'bystander' ? (
+                <View style={styles.actions}>
+                    {role === 'payer' ? (
+                        <Btn
+                            label={t('pending.ui.pay', { amount: selectedTotal })}
+                            variant="gold"
+                            disabled={!canPay && pool.length > 0}
+                            onPress={() => onRespond({ card_ids: picked })}
+                            style={styles.flex}
+                        />
+                    ) : (
+                        <Btn
+                            label={
+                                role === 'blocked_instigator'
+                                    ? t('pending.ui.let_it_go')
+                                    : t('pending.ui.allow_it')
+                            }
+                            onPress={() => onRespond({})}
+                            style={styles.flex}
+                        />
+                    )}
+
+                    {/* Just Say No does not dismiss anything — it hands the
+                        decision back to the other player, who may have one too. */}
+                    <Btn
+                        label={t('pending.ui.just_say_no')}
+                        variant="red"
+                        onPress={() => onRespond({ say_no: true })}
+                        style={styles.flex}
+                    />
+                </View>
+            ) : null}
+        </Modal>
+    );
+}
+
+const styles = StyleSheet.create({
+    head: { flexDirection: 'row', gap: 10, alignItems: 'center' },
+    headText: { flex: 1, gap: 3 },
+    label: { fontFamily: uiFont(800), fontSize: 14, color: ink.body },
+    blurb: { fontFamily: uiFont(700), fontSize: 12, color: ink.muted60, lineHeight: 17 },
+    roster: { gap: 6, marginTop: 4 },
+    rosterRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        paddingVertical: 6,
+        borderTopWidth: 1,
+        borderTopColor: line.hairlineWhite10,
+    },
+    rosterName: { fontFamily: uiFont(700), fontSize: 12, color: ink.body },
+    rosterState: { fontFamily: uiFont(700), fontSize: 12, color: ink.muted60 },
+    pool: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+    poolItem: { alignItems: 'center', gap: 2 },
+    source: { fontFamily: uiFont(700), fontSize: 9, color: ink.muted45 },
+    total: {
+        fontFamily: uiFont(800),
+        fontSize: 16,
+        color: brand.brass,
+        textAlign: 'center',
+        marginTop: 2,
+    },
+    warn: { fontFamily: uiFont(700), fontSize: 12, color: status.give },
+    actions: { flexDirection: 'row', gap: 8, marginTop: 6 },
+    flex: { flex: 1 },
+});
+
+export default PendingPanel;

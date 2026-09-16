@@ -1,0 +1,26 @@
+import type { Catalog } from '../types';
+const invite: Catalog = {
+    'invite.open': "Invita amici",
+    'invite.title': "Tieni un posto per loro",
+    'invite.private_hint': "Nascosto dall’elenco pubblico. Chi ha il codice o il link può entrare.",
+    'invite.public_hint': "Visibile nell’elenco dei tavoli. Tutti possono entrare.",
+    'invite.code': "Codice tavolo",
+    'invite.auto_join': "Il link porta gli amici direttamente a questo tavolo. I nuovi giocatori scelgono prima un nome.",
+    'invite.link': "Link d’invito",
+    'invite.copy': "Copia link d’invito",
+    'invite.copied': "Link copiato",
+    'invite.manual': "Seleziona e copia il link qui sopra.",
+    'invite.arrival': "Sei invitato al tavolo {code}. Scegli un nome e ti porteremo lì.",
+    'invite.visibility': "Chi può trovare questo tavolo?",
+    'invite.private': "Privato · solo su invito",
+    'invite.public': "Pubblico · tavolo aperto",
+    'wheel.eyebrow': "Si parte alla pari",
+    'wheel.title': "Chi farà la prima mossa?",
+    'wheel.fair': "Tutti hanno una possibilità. L’intero ordine di gioco è casuale.",
+    'wheel.winner': "Inizia {name}!",
+    'wheel.spinning': "Scelta del primo giocatore…",
+    'wheel.order': "Il vostro ordine di gioco",
+    'timer.starting': "Scelta del primo giocatore",
+    'err.game_starting': "La scelta dell’ordine di gioco è ancora in corso.",
+};
+export default invite;
