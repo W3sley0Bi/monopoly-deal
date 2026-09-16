@@ -659,7 +659,7 @@ function TableBody() {
                             />
                         ))}
                         <Text style={styles.trayHint}>
-                            Frozen tables — moves do nothing. Leave to go back.
+                            Your moves apply locally; nobody else moves. Leave to go back.
                         </Text>
                     </View>
                 ) : null}

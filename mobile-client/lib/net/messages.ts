@@ -9,6 +9,7 @@ import type { ReactNode } from 'react';
 import * as Linking from 'expo-linking';
 import { SERVER_URL } from '../config';
 import { useStore } from '../store';
+import { applyDevMove } from '../../src/dev/reduce';
 import { useJsonSocket, type SocketStatus } from './socket';
 import type { ClientMessage, HomeView, RoomView, ServerMessage } from '../../src/types';
 
@@ -205,16 +206,16 @@ export function GameConnectionProvider({ children }: { children: ReactNode }) {
 
     const connection = useGameConnection(playerId, playerName, setPlayerName, setRoomId, roomId);
 
-    // A dev fixture stands in for the live room. Its table is frozen: `send`
-    // is swallowed rather than posted, because the server has never heard of
-    // this room and would answer every move with an error banner.
+    // A dev fixture stands in for the live room. Moves are applied locally by
+    // `applyDevMove` rather than posted: the server has never heard of this
+    // room and would answer every one with an error banner.
     const devRoom = useStore((s) => s.devRoom);
     const setDevRoom = useStore((s) => s.setDevRoom);
     const value: UseGameConnection = devRoom
         ? {
               ...connection,
               room: devRoom,
-              send: () => {},
+              send: (msg) => setDevRoom(applyDevMove(devRoom, msg)),
               leave: () => setDevRoom(null),
           }
         : connection;

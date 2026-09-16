@@ -1,10 +1,13 @@
 /**
  * Hand-built tables for looking at the UI.
  *
- * These never touch the socket: the store holds one of these as `devRoom` and
- * the connection provider hands it out in place of the real room, so a fixture
- * is a *frozen* table — moves are inert. It exists to answer "what does a busy
- * five-player board look like", which is otherwise a twenty-minute game away.
+ * These never touch the socket: the store holds one of these as `devRoom`, the
+ * connection provider hands it out in place of the real room, and your own
+ * moves are applied locally by `applyDevMove` — enough to place a card and
+ * watch what happens, not a rules engine. Nobody else on the table moves.
+ *
+ * They exist to answer "what does a busy five-player board look like", or
+ * "what does a house landing look like", without a twenty-minute game first.
  *
  * Kept out of the release build by the `__DEV__` gate at every call site.
  */
@@ -140,10 +143,10 @@ function player(
 
 function room(youId: string, game: GameView, label: string): RoomView {
     return {
-        id: 'DEV1',
+        id: game.id,
         name: label,
         private: false,
-        invite_code: 'DEV1',
+        invite_code: game.id,
         owner_id: youId,
         owner_name: 'you',
         is_owner: true,
@@ -227,11 +230,77 @@ function crowdedTable(youId: string, youName: string): RoomView {
     return room(youId, game, 'Dev · five-player table');
 }
 
+/**
+ * Two seats, and every building move one tap away: three finished sets with
+ * nothing on them, one that already has a house waiting for its hotel, and a
+ * House and a Hotel card in hand. Made for watching the building spawn.
+ */
+function buildingBench(youId: string, youName: string): RoomView {
+    serial = 0;
+    const you = player(
+        youName || 'You',
+        [
+            set('lightblue', 3),
+            set('orange', 3),
+            set('green', 3, 'house'),
+            set('brown', 2),
+            set('red', 2),
+        ],
+        [money(5), money(4), money(2)],
+        5,
+        {
+            bot: false,
+            playerId: youId,
+            hand: [
+                action('House', 'house', 3),
+                action('Hotel', 'hotel', 4),
+                action('House', 'house', 3),
+                property('red', 2),
+                money(3),
+            ],
+        },
+    );
+
+    const otto = player('Otto', [set('pink', 3, 'house'), set('yellow', 3), set('blue', 1)], [money(3), money(1)], 4);
+
+    const players = [you, otto];
+    const game: GameView = {
+        id: 'DEV2',
+        you: youId,
+        players,
+        deck_count: 58,
+        discard_count: 3,
+        discard_top: money(2),
+        current_turn: 0,
+        state: 'playing',
+        plays_left: 3,
+        pending: null,
+        log: [] as GameView['log'],
+        set_sizes: SET_SIZES,
+        colors: ['brown', 'lightblue', 'pink', 'orange', 'red', 'yellow', 'green', 'blue', 'railroad', 'utility'],
+        mode: 'classic',
+        mode_label: 'Classic',
+        turn_seconds: 0,
+        respond_seconds: 0,
+        bot_difficulty: 'normal',
+        deadline_ms: 0,
+        deadline_seconds: 0,
+        now_ms: Date.now(),
+    };
+    return room(youId, game, 'Dev · building bench');
+}
+
 export const FIXTURES: Fixture[] = [
     {
         id: 'crowded',
         label: 'Five-player table',
         blurb: 'Everyone holding two full sets, money and loose property',
         build: crowdedTable,
+    },
+    {
+        id: 'buildings',
+        label: 'Two players · buildings',
+        blurb: 'House and Hotel in hand, finished sets to put them on',
+        build: buildingBench,
     },
 ];

@@ -2,8 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { Easing, runOnJS, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from 'react-native-reanimated';
-import type { Card as CardT, PlayerView } from '../../types';
+import type { Card as CardT, PlayerView, SetView } from '../../types';
 import { Card } from '../../ui/card';
+import { MiniBuilding, type BuildingKind } from './MiniBuilding';
 import { colorMeta, moneyMeta } from '../../game/meta';
 import { useStore } from '../../../lib/store';
 import { useI18n } from '../../i18n';
@@ -18,6 +19,16 @@ function seed(id: string) {
     let h = 0;
     for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) | 0;
     return Math.abs(h);
+}
+
+/**
+ * What stands on a set: nothing, a house, or a hotel. Read off the set rather
+ * than remembered, so a building paid away takes the model down on the next
+ * frame without any bookkeeping of its own.
+ */
+function built(set: SetView): BuildingKind {
+    if (!set.complete || !set.buildings.length) return 'none';
+    return set.buildings.some(b => b.action === 'hotel') ? 'hotel' : 'house';
 }
 
 /** -span..span from a card's seed, in `steps` discrete positions. */
@@ -310,8 +321,22 @@ export function FeltTable({
                 }]}>
                     {/* Each card sits a degree or two off its slot: a pile that
                         is perfectly square reads as a spreadsheet, not a table. */}
-                    {player.sets.map((set, group) => <View key={set.color} style={{ position: 'absolute', left: (group % COLS) * COL, top: Math.floor(group / COLS) * ROW }}>
-                        {set.cards.map((card, i) => <MiniCard key={card.id} color={colorMeta(set.color).hex}
+                    {player.sets.map((set, group) => <View key={set.color} style={{
+                        position: 'absolute',
+                        left: (group % COLS) * COL,
+                        top: Math.floor(group / COLS) * ROW,
+                        ...(built(set) !== 'none' ? { width: STACK_W, height: STACK_H, alignItems: 'center', justifyContent: 'flex-end' } : null),
+                    }}>
+                        {/* A built set is shown as what was built on it. The
+                            cards are still there in the state — tap the seat to
+                            see them — but on the felt the building is the news. */}
+                        {built(set) !== 'none' ? (
+                            <MiniBuilding
+                                key={built(set)}
+                                kind={built(set) as 'house' | 'hotel'}
+                                color={colorMeta(set.color).hex}
+                            />
+                        ) : set.cards.map((card, i) => <MiniCard key={card.id} color={colorMeta(set.color).hex}
                             left={Math.min(i, FAN_STEPS) * 2 + scatter(card.id, 0, 1)}
                             top={Math.min(i, FAN_STEPS) * 2 + scatter(card.id, 3, 1)}
                             rotate={scatter(card.id, 6, 6)}
