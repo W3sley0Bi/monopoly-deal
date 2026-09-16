@@ -9,6 +9,7 @@ import { MiniBuilding, type BuildingKind } from './MiniBuilding';
 import { colorMeta, moneyMeta } from '../../game/meta';
 import { useStore } from '../../../lib/store';
 import { useI18n } from '../../i18n';
+import { brand } from '../../../lib/theme';
 import { uiFont } from '../../../lib/fonts';
 
 /**
@@ -115,6 +116,12 @@ const SEAT_GAP = 14;
 // The two piles at the middle of the felt.
 const DECK_W = 30;
 const DECK_H = 43;
+/**
+ * The Pass Go prompt's line box, centred on the deck. Wide enough for the
+ * longest of the three translations on one line — it is not allowed to clamp
+ * itself, so a line that does not fit would wrap into the felt instead.
+ */
+const PROMPT_W = 120;
 
 /**
  * A play mat, not a card table. Green baize is the visual language of a casino
@@ -180,6 +187,7 @@ export function FeltTable({
     playsLeft = 3,
     onSeats,
     onOpenDiscard,
+    onDrawTwo,
     debugSeats,
 }: {
     players: PlayerView[];
@@ -194,6 +202,13 @@ export function FeltTable({
     playsLeft?: number;
     onSeats?: (seats: SeatHit[]) => void;
     onOpenDiscard?: () => void;
+    /**
+     * Set only while the player is holding a Pass Go they could play now. The
+     * deck then offers it: the prompt appears on the pile and a tap plays the
+     * card, which is the gesture the card describes — you take two off the top.
+     * Undefined leaves the deck the scenery it normally is.
+     */
+    onDrawTwo?: () => void;
     /** Dev only: outlines each seat box where the felt itself thinks it is. */
     debugSeats?: boolean;
 }) {
@@ -359,6 +374,13 @@ export function FeltTable({
             : 0;
     }, [pulse, motion, reduced]);
 
+    // The Pass Go prompt breathes on the same value as the marker, scaled a
+    // little harder: it is asking for a tap, where the marker only reports.
+    const promptStyle = useAnimatedStyle(() => ({
+        opacity: 0.6 + 0.4 * pulse.value,
+        transform: [{ scale: 1 + 0.06 * pulse.value }],
+    }));
+
     const markerStyle = useAnimatedStyle(() => ({
         opacity: 0.55 + 0.3 * pulse.value,
         transform: [
@@ -435,8 +457,22 @@ export function FeltTable({
                 left: centre.x - DECK_W - 4,
                 top: centre.y - DECK_H / 2,
             }]} pointerEvents="box-none">
-                {/* The draw pile: a few backs, each sitting slightly off true. */}
-                <View style={styles.pile} pointerEvents="none">
+                {/* The draw pile: a few backs, each sitting slightly off true.
+                    Inert unless a Pass Go is in hand, when the whole pile
+                    becomes the button for it. `none` the rest of the time, so
+                    the backs never take a touch meant for the felt behind. */}
+                <Pressable
+                    style={styles.pile}
+                    pointerEvents={onDrawTwo ? 'auto' : 'none'}
+                    disabled={!onDrawTwo}
+                    accessibilityRole={onDrawTwo ? 'button' : undefined}
+                    accessibilityLabel={
+                        onDrawTwo
+                            ? `${t('table.deck_count', { count: deckCount })}: ${t('table.tap_draw_two')}`
+                            : undefined
+                    }
+                    onPress={onDrawTwo}
+                >
                     {Array.from({ length: Math.min(4, Math.max(1, Math.ceil(deckCount / 14))) }, (_, i) => (
                         <View key={i} style={[styles.deckCard, {
                             left: i * 0.8,
@@ -445,7 +481,18 @@ export function FeltTable({
                         }]} />
                     ))}
                     <Text style={styles.pileCount}>{deckCount}</Text>
-                </View>
+                    {/* The same slow breath as the turn lamp, off the same
+                        shared value — two things pulsing out of step would read
+                        as two separate alarms rather than one table. No
+                        `numberOfLines`: it makes react-native-web clamp the
+                        line to `max-width: 100%`, and 100% of a card back is
+                        30pt, so the prompt came out as "Tap…". */}
+                    {onDrawTwo ? (
+                        <Animated.Text style={[styles.drawPrompt, promptStyle]}>
+                            {t('table.tap_draw_two')}
+                        </Animated.Text>
+                    ) : null}
+                </Pressable>
 
                 <Pressable
                     style={styles.pile}
@@ -673,6 +720,23 @@ const styles = StyleSheet.create({
         fontFamily: uiFont(800),
         fontSize: 10,
         color: '#dbe2ffb8',
+    },
+    /**
+     * Above the pile, not below it: the count already owns the space under the
+     * deck, and the discard's count sits alongside that. Wider than the deck
+     * and centred on it, because the line is several times the width of a card
+     * back — the pile has no padding to give.
+     */
+    drawPrompt: {
+        position: 'absolute',
+        bottom: DECK_H + 7,
+        left: (DECK_W - PROMPT_W) / 2,
+        width: PROMPT_W,
+        textAlign: 'center',
+        // The count's font and size, as the deck's own lettering.
+        fontFamily: uiFont(800),
+        fontSize: 10,
+        color: brand.brass,
     },
     flight: {
         position: 'absolute',

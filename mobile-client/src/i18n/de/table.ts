@@ -72,6 +72,7 @@ const table: Catalog = {
 
     // ── Deck, discard and the action space ───────────────────────────────
     'table.deck': 'Stapel',
+    'table.tap_draw_two': 'Tippen: 2 ziehen',
     'table.deck_count': 'Stapel {count}',
     'table.discard': 'Ablage',
     'table.discard_count': 'Ablage {count}',

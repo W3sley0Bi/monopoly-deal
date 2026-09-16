@@ -248,6 +248,15 @@ function TableBody() {
     const hand = (me?.hand ?? []).filter((c) => c.id !== sent);
     const overLimit = (me?.hand?.length ?? 0) > 7;
 
+    // The deck offers Pass Go when playing one is legal right now — `canPlay`
+    // already carries the turn, the plays left and the pending check, and
+    // `hand` has dropped anything already sent. Not during the tutorial: the
+    // coach is pointing at the move it wants, and a second thing pulsing for
+    // attention argues with it.
+    const passGo = !tutorialActive && canPlay
+        ? hand.find((c) => c.action === 'pass_go') ?? null
+        : null;
+
     const target = myTarget(g);
     const role: PendingViewerRole | null = !pending
         ? null
@@ -352,6 +361,9 @@ function TableBody() {
                     onOpenDiscard={() => {
                         if (!tutorialActive) setDiscardOpen(true);
                     }}
+                    onDrawTwo={
+                        passGo ? () => act({ type: 'play_action', card_id: passGo.id }, passGo.id) : undefined
+                    }
                     turnId={turnPlayer?.id}
                     playsLeft={g.plays_left}
                     onSeats={setSeatHits}

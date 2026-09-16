@@ -38,6 +38,12 @@ function retotal(room: RoomView, playerId: string, mutate: (player: RoomView['ga
     return { ...room, game: { ...room.game, players } };
 }
 
+/** A card off the dev deck. Money, because it needs no colour to be legal. */
+let drawn = 0;
+function devMoney(value: number): Card {
+    return { id: `drawn${drawn++}`, key: `card.money_${value}`, type: 'money', name: `$${value}M`, value };
+}
+
 function take(player: { hand?: Card[] }, cardId?: string): Card | null {
     if (!cardId || !player.hand) return null;
     const index = player.hand.findIndex(c => c.id === cardId);
@@ -83,6 +89,7 @@ export function applyDevMove(room: RoomView, msg: Omit<ClientMessage, 'player_id
         case 'play_action': {
             // House and hotel are the interesting ones: they are what turns a
             // finished set into a building on the felt.
+            let drew = 0;
             const next = retotal(room, you, (p) => {
                 const card = take(p, msg.card_id);
                 if (!card) return;
@@ -93,10 +100,23 @@ export function applyDevMove(room: RoomView, msg: Omit<ClientMessage, 'player_id
                         return;
                     }
                 }
+                if (card.action === 'pass_go' && p.hand) {
+                    // Two cards actually arrive, because the flight animation on
+                    // the felt is driven by hand counts: banking the card the
+                    // way everything else here does would take one card *out*
+                    // of the hand and the deck would never deal anything.
+                    p.hand.push(devMoney(1), devMoney(2));
+                    drew = 2;
+                    return;
+                }
                 // Anything else just goes to the discard, below.
                 p.bank.push(card);
             });
-            return next;
+            if (!drew) return next;
+            return {
+                ...next,
+                game: { ...next.game, deck_count: Math.max(0, next.game.deck_count - drew) },
+            };
         }
 
         case 'end_turn':

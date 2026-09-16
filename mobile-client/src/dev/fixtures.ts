@@ -369,6 +369,71 @@ function wildcards(youId: string, youName: string): RoomView {
     return room(youId, game, 'Dev · wildcards');
 }
 
+/**
+ * The deck's Pass Go prompt, for looking at it without waiting for the card.
+ *
+ * Three Pass Go in hand: tap the deck three times and the prompt puts itself
+ * away with the last of them, which is the state worth seeing. The rest of the
+ * hand is there to confirm the deck stays quiet for everything else — bank the
+ * money or place the property and the prompt should be unmoved.
+ *
+ * `applyDevMove` deals two cards for a Pass Go, so the flight off the deck and
+ * the falling deck count both play as they do in a real game. What this table
+ * cannot show is the prompt going quiet when the turn's plays run out: the dev
+ * reducer never spends a play, so `plays_left` sits at three. That gating is
+ * the same `canPlay` the hand reads, and needs a real table to exercise.
+ */
+function passGoBench(youId: string, youName: string): RoomView {
+    serial = 0;
+    const you = player(
+        youName || 'You',
+        [set('lightblue', 2), set('orange', 1)],
+        [money(2)],
+        6,
+        {
+            bot: false,
+            playerId: youId,
+            hand: [
+                action('Pass Go', 'pass_go', 1),
+                action('Pass Go', 'pass_go', 1),
+                action('Pass Go', 'pass_go', 1),
+                property('green', 0),
+                money(3),
+                rentCard(['red', 'yellow']),
+            ],
+        },
+    );
+
+    const otto = player('Otto', [set('pink', 2), set('yellow', 1)], [money(3), money(1)], 5);
+
+    const players = [you, otto];
+    const game: GameView = {
+        id: 'DEV4',
+        you: youId,
+        players,
+        // Low enough that the count under the pile visibly drops on each draw.
+        deck_count: 24,
+        discard_count: 2,
+        discard_top: money(1),
+        current_turn: 0,
+        state: 'playing',
+        plays_left: 3,
+        pending: null,
+        log: [] as GameView['log'],
+        set_sizes: SET_SIZES,
+        colors: ['brown', 'lightblue', 'pink', 'orange', 'red', 'yellow', 'green', 'blue', 'railroad', 'utility'],
+        mode: 'classic',
+        mode_label: 'Classic',
+        turn_seconds: 0,
+        respond_seconds: 0,
+        bot_difficulty: 'normal',
+        deadline_ms: 0,
+        deadline_seconds: 0,
+        now_ms: Date.now(),
+    };
+    return room(youId, game, 'Dev · pass go');
+}
+
 export const FIXTURES: Fixture[] = [
     {
         id: 'crowded',
@@ -387,5 +452,11 @@ export const FIXTURES: Fixture[] = [
         label: 'Two players · buildings',
         blurb: 'House and Hotel in hand, finished sets to put them on',
         build: buildingBench,
+    },
+    {
+        id: 'passgo',
+        label: 'Two players · pass go',
+        blurb: 'Three Pass Go against three plays, for the deck prompt',
+        build: passGoBench,
     },
 ];
