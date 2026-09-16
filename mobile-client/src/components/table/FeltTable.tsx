@@ -576,6 +576,7 @@ export function FeltTable({
                         is perfectly square reads as a spreadsheet, not a table. */}
                     {player.sets.map((set, group) => <View key={set.color} style={{
                         position: 'absolute',
+                        zIndex: built(set) !== 'none' ? 2 : 1,
                         left: (group % COLS) * COL,
                         top: Math.floor(group / COLS) * ROW,
                         ...(built(set) !== 'none' ? { width: STACK_W, height: STACK_H, alignItems: 'center', justifyContent: 'flex-end' } : null),

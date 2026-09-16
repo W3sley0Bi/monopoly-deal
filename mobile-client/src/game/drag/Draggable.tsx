@@ -8,8 +8,7 @@ import { useDragLayer, type DragState } from './registry';
 
 interface Props {
     state: DragState;
-    /** `vertical` for hand cards, so a sideways swipe still scrolls the rail;
-     *  `free` for a wildcard already on the board. */
+    /** `vertical` for hand cards; `free` for a wildcard on the board. */
     axis?: 'vertical' | 'free';
     enabled?: boolean;
     onTap?: () => void;
@@ -19,18 +18,17 @@ interface Props {
 /**
  * Wraps a card in the pan that lifts it.
  *
- * The axis rule is the whole reason this is not a plain pan: the hand is a
- * horizontally scrolling rail, so a hand card may only start a drag on an
- * upward pull, and a sideways movement has to fail the gesture and hand the
- * touch back to the ScrollView. That is the native expression of the web's
- * `vertical` axis hack.
+ * A hand card starts only after a deliberate vertical pull. Horizontal drift
+ * never hands the gesture to another interaction: the hand is a fixed fan, so
+ * a quick diagonal lift must still pick up the card rather than cancel it.
  */
 export function Draggable({ state, axis = 'vertical', enabled = true, onTap, children }: Props) {
     const layer = useDragLayer();
     const shared = useDragShared();
     const ref = useRef<View>(null);
 
-    // Measured on pickup rather than on layout: the rail may have scrolled.
+    // Measured on pickup rather than on layout: the card may be transformed by
+    // its hand fan or moved by a scrolling board.
     // The grab offset lives in shared values because the pan's `onUpdate` runs
     // on the UI thread, where a React ref is not readable.
     const grabX = useSharedValue(0);
@@ -43,24 +41,20 @@ export function Draggable({ state, axis = 'vertical', enabled = true, onTap, chi
         });
     }
 
-    // The axis rule above is a native one, and on the web half of it is taken
-    // away before it can apply: gesture-handler writes `touch-action: none`
-    // straight onto this node, so a finger that starts on a card can no longer
-    // pan the hand rail — the browser has been told this element owns every
-    // direction. `pan-x` hands sideways movement back to the scroller and
-    // leaves the upward pull, which no scroller wants, to the pan.
+    // Gesture-handler owns the card touch on web as well. There is no rail
+    // underneath to pan, so yielding the horizontal axis would only recreate
+    // the old slide-versus-drag ambiguity.
     useEffect(() => {
         if (Platform.OS !== 'web') return;
         const node = ref.current as unknown as HTMLElement | null;
         if (!node?.style) return;
-        node.style.touchAction = axis === 'vertical' ? 'pan-x' : 'none';
+        node.style.touchAction = 'none';
     }, [axis, enabled]);
 
     const pan = Gesture.Pan()
         .enabled(enabled)
         .activeOffsetY(axis === 'vertical' ? [-8, 8] : [-8, 8])
-        // Only the hand rail needs to win horizontal movement back.
-        .failOffsetX(axis === 'vertical' ? [-8, 8] : [-10000, 10000])
+        .failOffsetX([-10000, 10000])
         .onStart((e) => {
             runOnJS(pickUp)(e.absoluteX, e.absoluteY);
         })
