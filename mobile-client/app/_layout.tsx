@@ -46,19 +46,52 @@ export default function RootLayout() {
                         {/* Always dark — the room is a near-black teal in both
                             OS themes; there is no light variant of this app. */}
                         <ThemeProvider value={DarkTheme}>
+                            {/*
+                              * Every move between these screens is a `replace`,
+                              * because the server — not the back stack — decides
+                              * where you belong. Without `animationTypeForReplace`
+                              * a replace animates as a pop whichever way it goes,
+                              * which is why screens appeared to arrive from the
+                              * same side and pile up: going deeper looked
+                              * identical to coming back. Each screen declares the
+                              * direction it should arrive from instead.
+                              */}
                             <Stack
                                 screenOptions={{
                                     headerShown: true,
                                     headerStyle: { backgroundColor: surface.room },
                                     headerTintColor: '#f4f2e9',
                                     contentStyle: { backgroundColor: surface.bodyBase },
+                                    animation: 'slide_from_right',
+                                    animationDuration: 260,
                                 }}
                             >
-                                <Stack.Screen name="index" options={{ title: 'Deal' }} />
-                                <Stack.Screen name="lobby" options={{ title: 'Lobby' }} />
+                                {/* Home is always a step back. */}
+                                <Stack.Screen
+                                    name="index"
+                                    options={{ title: 'Deal', animationTypeForReplace: 'pop' }}
+                                />
+                                <Stack.Screen
+                                    name="lobby"
+                                    options={{ title: 'Lobby', animationTypeForReplace: 'push' }}
+                                />
                                 {/* Full-bleed, no native header — the table draws
-                                    its own header and owns the whole screen. */}
-                                <Stack.Screen name="table" options={{ headerShown: false }} />
+                                    its own header and owns the whole screen. It
+                                    fades rather than slides: it is a place you
+                                    arrive at, and a slide fought with the felt
+                                    animating in underneath. The back swipe is off
+                                    — leaving a table goes through `leave`, so the
+                                    server hears about it. */}
+                                <Stack.Screen
+                                    name="table"
+                                    options={{
+                                        headerShown: false,
+                                        animation: 'fade',
+                                        animationDuration: 220,
+                                        animationTypeForReplace: 'push',
+                                        gestureEnabled: false,
+                                    }}
+                                />
                             </Stack>
                             <StatusBar style="light" />
                         </ThemeProvider>

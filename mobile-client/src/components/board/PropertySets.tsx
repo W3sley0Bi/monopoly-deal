@@ -6,6 +6,7 @@ import type { CardSizeKey } from '../../../lib/theme';
 import { brand, ink, radius } from '../../../lib/theme';
 import { colorMeta } from '../../game/meta';
 import { Card } from '../../ui/card';
+import { Icon } from '../../ui/kit';
 import { money } from '../../i18n/format';
 import { useI18n } from '../../i18n';
 import { uiFont } from '../../../lib/fonts';
@@ -86,9 +87,17 @@ function PropertySetsImpl({
                         </View>
 
                         {set.buildings.length ? (
-                            <Text style={styles.buildings}>
-                                {set.buildings.map((b) => (b.action === 'hotel' ? '🏨' : '🏠')).join('')}
-                            </Text>
+                            <View style={styles.buildings}>
+                                {set.buildings.map((b) => (
+                                    <Icon
+                                        key={b.id}
+                                        name={b.action === 'hotel' ? 'building.2.fill' : 'house.fill'}
+                                        fallback={b.action === 'hotel' ? '▥' : '⌂'}
+                                        size={12}
+                                        color={brand.brass}
+                                    />
+                                ))}
+                            </View>
                         ) : null}
                     </View>
                 );
@@ -115,7 +124,7 @@ const styles = StyleSheet.create({
     cards: { flexDirection: 'row' },
     // Only the stripe needs to stay visible, so the overlap is aggressive.
     overlap: { marginLeft: -28 },
-    buildings: { fontSize: 11, marginTop: 2 },
+    buildings: { flexDirection: 'row', gap: 2, marginTop: 3 },
     empty: { fontFamily: uiFont(700), fontSize: 11, color: ink.muted45 },
 });
 

@@ -16,9 +16,10 @@ import { useGameConnectionContext } from '../lib/net/messages';
 import { useStore } from '../lib/store';
 import { brand, ink, line, radius, status, surface } from '../lib/theme';
 import { displayFont, ls, uiFont } from '../lib/fonts';
-import { Avatar, Btn, LabelCaps, LanguagePicker, Panel, Sheet } from '../src/ui/kit';
+import { Avatar, Btn, Icon, LabelCaps, LanguagePicker, Panel, Sheet } from '../src/ui/kit';
 import { useI18n } from '../src/i18n';
 import { formatTurn } from '../src/i18n/format';
+import { FIXTURES } from '../src/dev/fixtures';
 import type { Difficulty } from '../src/types';
 
 export default function HomeScreen() {
@@ -29,6 +30,7 @@ export default function HomeScreen() {
 
     const tutorialDone = useStore((s) => s.tutorialDone);
     const setTutorialDone = useStore((s) => s.setTutorialDone);
+    const setDevRoom = useStore((s) => s.setDevRoom);
 
     const [draft, setDraft] = useState(name);
     const [code, setCode] = useState('');
@@ -113,7 +115,7 @@ export default function HomeScreen() {
                 <Pressable style={styles.account} onPress={() => setAccount(true)}>
                     <Avatar id={myId} name={name} size={30} />
                     <Text style={styles.accountName}>{name}</Text>
-                    <Text style={styles.accountChevron}>›</Text>
+                    <Icon name="chevron.right" fallback="›" size={16} color={ink.muted45} />
                 </Pressable>
 
                 {/* ---- solo ---- */}
@@ -306,6 +308,29 @@ export default function HomeScreen() {
                     }}
                 />
                 <LanguagePicker />
+
+                {/* Dev only: frozen tables for looking at the UI without
+                    playing a game to get there. English on purpose — these
+                    strings never reach a player. */}
+                {__DEV__ ? (
+                    <View style={styles.dev}>
+                        <LabelCaps>Dev tables</LabelCaps>
+                        {FIXTURES.map((fixture) => (
+                            <Btn
+                                key={fixture.id}
+                                label={fixture.label}
+                                onPress={() => {
+                                    setDevRoom(fixture.build(myId, name));
+                                    setAccount(false);
+                                    router.push('/table');
+                                }}
+                            />
+                        ))}
+                        <Text style={styles.devHint}>
+                            Frozen tables — moves do nothing. Leave to go back.
+                        </Text>
+                    </View>
+                ) : null}
             </Sheet>
         </>
     );
@@ -352,6 +377,8 @@ const styles = StyleSheet.create({
     segTextOn: { color: ink.body },
     joinRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
     joinBtn: { flexShrink: 0 },
+    dev: { gap: 8, marginTop: 8, borderTopWidth: 1, borderTopColor: line.seat, paddingTop: 12 },
+    devHint: { fontFamily: uiFont(700), fontSize: 11, color: ink.muted45 },
     tableRow: {
         gap: 8,
         paddingVertical: 10,

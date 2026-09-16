@@ -12,6 +12,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Localization from 'expo-localization';
 import { create } from 'zustand';
 
+import type { RoomView } from '../src/types';
+
 // ---- keys -------------------------------------------------------------------
 
 const KEY_PLAYER_ID = 'md.playerId';
@@ -105,6 +107,9 @@ interface Store {
     motion: boolean;
     tapTray: boolean;
     cryReaction: boolean;
+    /** A hand-built table from `src/dev/fixtures`, shown instead of the live
+     *  room. Never persisted, and only ever set from a `__DEV__` screen. */
+    devRoom: RoomView | null;
 
     hydrate: () => Promise<void>;
     setPlayerName: (name: string) => void;
@@ -115,6 +120,7 @@ interface Store {
     setMotion: (on: boolean) => void;
     setTapTray: (on: boolean) => void;
     setCryReaction: (on: boolean) => void;
+    setDevRoom: (room: RoomView | null) => void;
 }
 
 export const useStore = create<Store>((set, get) => ({
@@ -129,6 +135,7 @@ export const useStore = create<Store>((set, get) => ({
     motion: true,
     tapTray: false,
     cryReaction: false,
+    devRoom: null,
 
     hydrate: async () => {
         if (get().hydrated) return;
@@ -221,6 +228,8 @@ export const useStore = create<Store>((set, get) => ({
         set({ tapTray: on });
         void writeBool(KEY_TAP_TRAY, on);
     },
+
+    setDevRoom: (room) => set({ devRoom: room }),
 
     setCryReaction: (on) => {
         set({ cryReaction: on });

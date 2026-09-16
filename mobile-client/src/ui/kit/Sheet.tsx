@@ -1,6 +1,7 @@
-import { memo, useEffect, useState } from 'react';
+import { memo, useCallback, useEffect, useState } from 'react';
 import { Modal as RNModal, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, {
     Easing,
     interpolate,
@@ -29,6 +30,12 @@ function SheetImpl({ open, onClose, title, children, tabs, activeTab, onTabChang
     const insets = useSafeAreaInsets();
     const reducedMotion = useReducedMotion();
     const [mounted, setMounted] = useState(open);
+    /**
+     * 1 = fully open, 0 = fully off-screen. The drag writes to this same value
+     * rather than adding an offset of its own: two animated styles both setting
+     * the backdrop's opacity raced each frame, which is what made the dim layer
+     * flash back on as the sheet was flung away.
+     */
     const progress = useSharedValue(0);
     const duration = reducedMotion ? 0 : 220;
     const travel = Math.min(height * 0.78, height - 80) + 40;
@@ -48,16 +55,37 @@ function SheetImpl({ open, onClose, title, children, tabs, activeTab, onTabChang
         });
     }, [duration, mounted, open, progress]);
 
-    const backdropStyle = useAnimatedStyle(() => ({
-        opacity: progress.value,
-    }));
+    const backdropStyle = useAnimatedStyle(() => ({ opacity: progress.value }));
     const sheetStyle = useAnimatedStyle(() => ({
         transform: [{ translateY: interpolate(progress.value, [0, 1], [travel, 0]) }],
     }));
 
+    const close = useCallback(() => onClose(), [onClose]);
+
+    // Only the head takes the pan: the body is a ScrollView, and a sheet that
+    // dismisses when you flick its content is a sheet you cannot read.
+    const pan = Gesture.Pan()
+        .onUpdate((e) => {
+            // Downwards only — pulling up must not stretch the sheet past open.
+            progress.value = Math.min(1, Math.max(0, 1 - Math.max(0, e.translationY) / travel));
+        })
+        .onEnd((e) => {
+            if (e.velocityY > 700 || progress.value < 0.78) {
+                // Runs to 0 first, so the backdrop is already gone by the time
+                // the parent unmounts us.
+                progress.value = withTiming(0, { duration: 170, easing: Easing.out(Easing.quad) }, (done) => {
+                    if (done) runOnJS(close)();
+                });
+                return;
+            }
+            progress.value = withTiming(1, { duration: 200, easing: SHEET_EASING });
+        });
+
     return (
         <RNModal visible={mounted} transparent animationType="none" onRequestClose={onClose}>
-            <View style={styles.root}>
+            {/* Gestures inside an RN Modal need their own root: the app's
+                GestureHandlerRootView does not reach into the modal window. */}
+            <GestureHandlerRootView style={styles.root}>
                 <Animated.View style={[styles.backdrop, backdropStyle]}>
                     <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close" />
                 </Animated.View>
@@ -68,8 +96,13 @@ function SheetImpl({ open, onClose, title, children, tabs, activeTab, onTabChang
                         { maxHeight: Math.min(height * 0.78, height - 80), paddingBottom: Math.max(12, insets.bottom) },
                     ]}
                 >
-                    <View style={styles.grabber} />
-                    {title ? <Text style={styles.title}>{title}</Text> : null}
+                    <GestureDetector gesture={pan}>
+                        <View style={styles.head} accessible accessibilityRole="adjustable"
+                            accessibilityLabel="Drag down to close">
+                            <View style={styles.grabber} />
+                            {title ? <Text style={styles.title}>{title}</Text> : null}
+                        </View>
+                    </GestureDetector>
 
                     {tabs?.length ? (
                         <View style={styles.tabs}>
@@ -98,7 +131,7 @@ function SheetImpl({ open, onClose, title, children, tabs, activeTab, onTabChang
                         {children}
                     </ScrollView>
                 </Animated.View>
-            </View>
+            </GestureHandlerRootView>
         </RNModal>
     );
 }
@@ -115,6 +148,8 @@ const styles = StyleSheet.create({
         paddingHorizontal: 14,
         paddingTop: 8,
     },
+    // A generous grab area: the 4pt pill alone is not a touch target.
+    head: { paddingTop: 2, paddingBottom: 2 },
     grabber: {
         alignSelf: 'center',
         width: 38,

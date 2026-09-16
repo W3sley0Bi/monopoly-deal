@@ -12,8 +12,8 @@ import { useGameConnectionContext } from '../lib/net/messages';
 import { useStore } from '../lib/store';
 import { brand, ink, line, radius, status, surface } from '../lib/theme';
 import { displayFont, ls, uiFont } from '../lib/fonts';
-import { Btn, LabelCaps, Panel, Sheet } from '../src/ui/kit';
-import { Card, CardBack } from '../src/ui/card';
+import { Btn, Icon, LabelCaps, Panel, Sheet } from '../src/ui/kit';
+import { Card } from '../src/ui/card';
 import { PlayerChip, PropertySets } from '../src/components/board';
 import { DragLayer, Draggable, DropZone, useDragLayer } from '../src/game/drag';
 import { ActionDialog } from '../src/components/table/ActionDialog';
@@ -21,6 +21,7 @@ import { ActiveBoard } from '../src/components/board/ActiveBoard';
 import { usePlayBubbles } from '../src/game/usePlayBubbles';
 import { PendingPanel } from '../src/components/table/PendingPanel';
 import { useI18n } from '../src/i18n';
+import { FIXTURES } from '../src/dev/fixtures';
 import {
     assets,
     colorMeta,
@@ -62,6 +63,7 @@ function TableBody() {
     const dragLayer = useDragLayer();
 
     const tapTray = useStore((s) => s.tapTray);
+    const setDevRoom = useStore((s) => s.setDevRoom);
 
     const [guess, setGuess] = useState<PendingMove | null>(null);
     const [sent, setSent] = useState<string | null>(null);
@@ -72,6 +74,7 @@ function TableBody() {
     const [menu, setMenu] = useState(false);
     const [sheetPlayer, setSheetPlayer] = useState<string | null>(null);
     const [bankOpen, setBankOpen] = useState(false);
+    const [discardOpen, setDiscardOpen] = useState(false);
 
     useEffect(() => {
         if (!live) router.replace('/');
@@ -220,6 +223,10 @@ function TableBody() {
                     players={g.players}
                     you={room.you}
                     cardAreaHeight={cardAreaHeight}
+                    deckCount={g.deck_count}
+                    discardCount={g.discard_count}
+                    discardTop={g.discard_top}
+                    onOpenDiscard={() => setDiscardOpen(true)}
                     onOpenPlayer={setSheetPlayer}
                     onPreviewPlayer={setSheetPlayer}
                     onPreviewEnd={(playerId) =>
@@ -230,14 +237,14 @@ function TableBody() {
             {/* ---- header ---- */}
             <View style={styles.header}>
                 <Pressable onPress={leave} style={styles.iconBtn} accessibilityLabel={t('table.back_to_tables')}>
-                    <Text style={styles.icon}>‹</Text>
+                    <Icon name="chevron.left" fallback="‹" size={20} />
                 </Pressable>
                 <Text style={styles.roomName} numberOfLines={1}>
                     {room.name}
                 </Text>
                 <Text style={styles.code}>{room.id}</Text>
                 <Pressable onPress={() => setMenu(true)} style={styles.iconBtn} accessibilityLabel={t('table.menu')}>
-                    <Text style={styles.icon}>⚙</Text>
+                    <Icon name="gearshape.fill" fallback="☰" size={20} color={ink.muted60} />
                 </Pressable>
             </View>
 
@@ -247,14 +254,8 @@ function TableBody() {
 
             {/* ---- opponents ---- */}
             <ScrollView horizontal style={styles.opponentRail} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rail}>
-                <View style={styles.deckChip}>
-                    <CardBack width={30} height={43} borderWidth={2} radius={7} />
-                    <View>
-                        <Text style={styles.deckLabel}>{t('table.deck')} <Text style={styles.deckCount}>{g.deck_count}</Text></Text>
-                        <Text style={styles.deckLabel}>{t('table.discard_count', { count: g.discard_count })}</Text>
-                    </View>
-                    {g.discard_top ? <View style={styles.discardThumb}><View style={styles.discardScale}><Card card={g.discard_top} size="xs" /></View></View> : null}
-                </View>
+                {/* The deck and discard live on the felt now, where they read as
+                    piles people draw from rather than as a status chip. */}
                 {rivals.map((p) => (
                     <PlayerChip
                         key={p.id}
@@ -518,7 +519,7 @@ function TableBody() {
                 </View>
 
                 <Pressable onPress={() => setTalk(true)} style={({ pressed }) => [styles.talkBtn, pressed && styles.talkBtnPressed]} accessibilityRole="button" accessibilityLabel={t('table.talk')}>
-                    <Text style={styles.icon}>💬</Text>
+                    <Icon name="bubble.left.and.bubble.right.fill" fallback="…" size={18} color={ink.muted60} />
                 </Pressable>
 
                 {myTurn && !pending && !spectating ? (
@@ -574,6 +575,14 @@ function TableBody() {
                                 {t('board.bank')}: ${p.bank_total}M · {t('board.in_hand')}: {p.hand_count}
                             </Text>
                             <PropertySets sets={p.sets} size="propertyZone" />
+                            {p.bank.length ? (
+                                <>
+                                    <LabelCaps>{t('board.bank')}</LabelCaps>
+                                    <View style={styles.bankGrid}>
+                                        {p.bank.map((card) => <Card key={card.id} card={card} size="bank" />)}
+                                    </View>
+                                </>
+                            ) : null}
                         </>
                     );
                 })()}
@@ -590,6 +599,17 @@ function TableBody() {
                 ) : (
                     <Text style={styles.trayHint}>{t('table.bank_empty')}</Text>
                 )}
+            </Sheet>
+
+            <Sheet open={discardOpen} onClose={() => setDiscardOpen(false)} title={t('table.discard')}>
+                <Text style={styles.sheetStat}>
+                    {t('table.deck')}: {g.deck_count} · {t('table.discard_count', { count: g.discard_count })}
+                </Text>
+                {g.discard_top ? (
+                    <View style={styles.bankGrid}>
+                        <Card card={g.discard_top} size="bank" />
+                    </View>
+                ) : null}
             </Sheet>
 
             <Sheet open={talk} onClose={() => setTalk(false)} title={t('panel.log')}>
@@ -622,6 +642,27 @@ function TableBody() {
                     }
                 />
                 <Btn label={t('table.leave')} onPress={leave} />
+
+                {/* Dev only: swap this table for a hand-built one. English on
+                    purpose — these strings never reach a player. */}
+                {__DEV__ ? (
+                    <View style={styles.dev}>
+                        <LabelCaps>Dev tables</LabelCaps>
+                        {FIXTURES.map((fixture) => (
+                            <Btn
+                                key={fixture.id}
+                                label={fixture.label}
+                                onPress={() => {
+                                    setDevRoom(fixture.build(room.you, me?.name ?? 'You'));
+                                    setMenu(false);
+                                }}
+                            />
+                        ))}
+                        <Text style={styles.trayHint}>
+                            Frozen tables — moves do nothing. Leave to go back.
+                        </Text>
+                    </View>
+                ) : null}
             </Sheet>
 
             {g.state === 'finished' ? (
@@ -717,23 +758,7 @@ const styles = StyleSheet.create({
     swatches: { flexDirection: 'row', gap: 3, height: 6 },
     swatch: { flex: 1, borderRadius: 3 },
     inlineSwatches: { flex: 1, marginHorizontal: 4 },
-    deckLabel: { fontFamily: uiFont(700), fontSize: 11, color: ink.muted60 },
-    discardThumb: { width: 30, height: 43 },
-    discardScale: { width: 56, height: 80, transform: [{ scale: 0.54 }], transformOrigin: 'top left' },
     rail: { gap: 6, paddingVertical: 4, alignItems: 'stretch' },
-    deckChip: {
-        minWidth: 145,
-        flexDirection: 'row',
-        gap: 9,
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderRadius: radius.panel,
-        backgroundColor: surface.panelOverlay,
-        borderWidth: 1,
-        borderColor: line.seat,
-        padding: 7,
-    },
-    deckCount: { fontFamily: displayFont(900), fontSize: 18, color: ink.body },
     event: {
         textAlign: 'center',
         fontFamily: uiFont(700),
@@ -793,6 +818,7 @@ const styles = StyleSheet.create({
     overLimit: { fontFamily: uiFont(700), fontSize: 10, color: ink.endTurnHint },
     tray: { flexShrink: 0, padding: 10, gap: 8 },
     bankGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingVertical: 4 },
+    dev: { gap: 8, marginTop: 8, borderTopWidth: 1, borderTopColor: line.seat, paddingTop: 12 },
     trayTitle: { fontFamily: uiFont(800), fontSize: 13, color: ink.body },
     trayRow: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
     trayHint: { fontFamily: uiFont(700), fontSize: 11, color: ink.muted45 },

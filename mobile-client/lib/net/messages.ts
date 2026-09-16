@@ -205,7 +205,21 @@ export function GameConnectionProvider({ children }: { children: ReactNode }) {
 
     const connection = useGameConnection(playerId, playerName, setPlayerName, setRoomId, roomId);
 
-    return createElement(GameConnectionContext.Provider, { value: connection }, children);
+    // A dev fixture stands in for the live room. Its table is frozen: `send`
+    // is swallowed rather than posted, because the server has never heard of
+    // this room and would answer every move with an error banner.
+    const devRoom = useStore((s) => s.devRoom);
+    const setDevRoom = useStore((s) => s.setDevRoom);
+    const value: UseGameConnection = devRoom
+        ? {
+              ...connection,
+              room: devRoom,
+              send: () => {},
+              leave: () => setDevRoom(null),
+          }
+        : connection;
+
+    return createElement(GameConnectionContext.Provider, { value }, children);
 }
 
 export function useGameConnectionContext(): UseGameConnection {
