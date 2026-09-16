@@ -1,5 +1,5 @@
-import { useRef } from 'react';
-import { View } from 'react-native';
+import { useEffect, useRef } from 'react';
+import { Platform, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { runOnJS, useSharedValue } from 'react-native-reanimated';
 
@@ -42,6 +42,19 @@ export function Draggable({ state, axis = 'vertical', enabled = true, onTap, chi
             layer.begin(state, { x: wx, y: wy, w, h });
         });
     }
+
+    // The axis rule above is a native one, and on the web half of it is taken
+    // away before it can apply: gesture-handler writes `touch-action: none`
+    // straight onto this node, so a finger that starts on a card can no longer
+    // pan the hand rail — the browser has been told this element owns every
+    // direction. `pan-x` hands sideways movement back to the scroller and
+    // leaves the upward pull, which no scroller wants, to the pan.
+    useEffect(() => {
+        if (Platform.OS !== 'web') return;
+        const node = ref.current as unknown as HTMLElement | null;
+        if (!node?.style) return;
+        node.style.touchAction = axis === 'vertical' ? 'pan-x' : 'none';
+    }, [axis, enabled]);
 
     const pan = Gesture.Pan()
         .enabled(enabled)

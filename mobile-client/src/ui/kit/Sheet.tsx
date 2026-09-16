@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useState } from 'react';
-import { Keyboard, Modal as RNModal, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Modal as RNModal, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, {
@@ -13,6 +13,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import type { SheetProps } from '../../../lib/contracts';
+import { useKeyboardInset } from '../useKeyboardInset';
 import { ink, line, radius, surface } from '../../../lib/theme';
 import { displayFont, ls, uiFont } from '../../../lib/fonts';
 
@@ -25,28 +26,6 @@ const SHEET_EASING = Easing.bezier(0.16, 1, 0.3, 1);
  * button. The backdrop fades in place while the sheet keeps the familiar
  * bottom-up movement. Both use GPU properties and finish before unmounting.
  */
-/**
- * How much of the screen the keyboard is currently covering.
- *
- * `KeyboardAvoidingView` solves this for a normal screen, but a sheet is a
- * separate modal window whose own height is the thing that has to change —
- * padding it from below only pushes it off the top of the screen.
- */
-function useKeyboardInset(): number {
-    const [inset, setInset] = useState(0);
-    useEffect(() => {
-        const show = Keyboard.addListener(
-            Platform.OS === 'ios' ? 'keyboardWillChangeFrame' : 'keyboardDidShow',
-            (e) => setInset(e.endCoordinates?.height ?? 0),
-        );
-        const hide = Keyboard.addListener(
-            Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
-            () => setInset(0),
-        );
-        return () => { show.remove(); hide.remove(); };
-    }, []);
-    return inset;
-}
 
 function SheetImpl({ open, onClose, title, children, tabs, activeTab, onTabChange, scroll = true }: SheetProps) {
     const { height } = useWindowDimensions();
@@ -62,10 +41,19 @@ function SheetImpl({ open, onClose, title, children, tabs, activeTab, onTabChang
     const progress = useSharedValue(0);
     const duration = reducedMotion ? 0 : 220;
     const keyboard = useKeyboardInset();
-    // The sheet rides above the keyboard rather than under it, and gives up
-    // whatever height that costs — a composer you cannot see is the one part
-    // of a chat that has to work.
-    const room = Math.min(height * 0.78, height - 80 - keyboard);
+    // `KeyboardAvoidingView` solves this for a normal screen, but a sheet is a
+    // separate modal window whose own height is the thing that has to change —
+    // padding it from below only pushes it off the top of the screen. So the
+    // sheet rides above the keyboard and gives up whatever height that costs:
+    // a composer you cannot see is the one part of a chat that has to work.
+    //
+    // webInsetNote: on the web `height` has already lost the keyboard, because
+    // react-native-web measures `Dimensions` from the visual viewport and the
+    // page is resized to match (see `lockViewport`). Subtracting it again here
+    // collapsed the sheet to a sliver. The padding below still applies on both:
+    // RN's `Modal` is fixed to the *window*, so the sheet is laid out in a box
+    // that never shrank, and it is the padding that lifts it clear.
+    const room = Math.min(height * 0.78, height - 80 - (Platform.OS === 'web' ? 0 : keyboard));
     const travel = room + 40;
 
     useEffect(() => {
@@ -123,7 +111,16 @@ function SheetImpl({ open, onClose, title, children, tabs, activeTab, onTabChang
                         sheetStyle,
                         {
                             maxHeight: room,
-                            paddingBottom: Math.max(12, insets.bottom) + keyboard,
+                            // Padding on native, a margin on the web. Padding
+                            // only shrinks the content box while the sheet stays
+                            // stuck to the bottom of the window, so a panel with
+                            // a minimum height of its own — the chat is 300 —
+                            // simply overflowed it and sat back under the
+                            // keyboard. Moving the whole box up instead leaves
+                            // every one of those points usable.
+                            marginBottom: Platform.OS === 'web' ? keyboard : 0,
+                            paddingBottom:
+                                Math.max(12, insets.bottom) + (Platform.OS === 'web' ? 0 : keyboard),
                         },
                     ]}
                 >

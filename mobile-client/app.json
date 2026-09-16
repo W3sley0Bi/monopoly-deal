@@ -18,6 +18,10 @@
         "NSLocalNetworkUsageDescription": "Deal connects to the game server running on your local network."
       }
     },
+    "web": {
+      "bundler": "metro",
+      "output": "single"
+    },
     "plugins": [
       "expo-router",
       "expo-localization",

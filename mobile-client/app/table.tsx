@@ -5,7 +5,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import * as Clipboard from 'expo-clipboard';
 import { BlurTargetView } from 'expo-blur';
-import { SymbolView } from 'expo-symbols';
 import { FeltTable, type SeatHit } from '../src/components/table/FeltTable';
 import { GlassPanel, TableGlassProvider } from '../src/components/table/TableGlass';
 
@@ -20,6 +19,7 @@ import { DragLayer, Draggable, DropZone, useDragLayer } from '../src/game/drag';
 import { ActionDialog } from '../src/components/table/ActionDialog';
 import { ActiveBoard } from '../src/components/board/ActiveBoard';
 import { useChatBubbles } from '../src/game/useChatBubbles';
+import { useRailScroll } from '../src/game/useRailScroll';
 import { PendingPanel } from '../src/components/table/PendingPanel';
 import { ChatPanel } from '../src/components/table/ChatPanel';
 import { TutorialCoach, TutorialDone, type TutorialAnchors } from '../src/components/table/TutorialCoach';
@@ -213,6 +213,7 @@ function TableBody() {
     // Bubbles carry what players *said*. What they did is on the felt and in
     // the log; narrating it over their head as well made the table chatter.
     const said = useChatBubbles(room?.chat ?? EMPTY_CHAT, room?.id);
+    useRailScroll(handScrollRef, Boolean(room));
     useEffect(() => { setBoardOpen(ownTurn); }, [ownTurn, room?.id]);
     useEffect(() => { setHandOpen(ownTurn || hasPending); }, [ownTurn, hasPending, room?.id]);
 
@@ -1121,14 +1122,7 @@ function SeatTap({ style, accessibilityLabel, label, onOpen, onPreview, onPrevie
 function ZoneGlyph({ name, fallback }: { name: string; fallback: string }) {
     return (
         <View style={styles.zoneGlyph} pointerEvents="none">
-            <SymbolView
-                name={name as never}
-                size={14}
-                weight="semibold"
-                tintColor={ink.muted60}
-                fallback={<Text style={styles.zoneGlyphFallback}>{fallback}</Text>}
-                style={styles.zoneGlyphSymbol}
-            />
+            <Icon name={name as never} fallback={fallback} size={14} color={ink.muted60} />
         </View>
     );
 }
@@ -1136,13 +1130,11 @@ function ZoneGlyph({ name, fallback }: { name: string; fallback: string }) {
 function DisclosureIcon({ expanded }: { expanded: boolean }) {
     return (
         <View style={styles.disclosure} pointerEvents="none">
-            <SymbolView
+            <Icon
                 name={expanded ? 'chevron.down' : 'chevron.up'}
+                fallback={expanded ? '⌄' : '⌃'}
                 size={12}
-                weight="semibold"
-                tintColor={ink.muted60}
-                fallback={<Text style={styles.disclosureFallback}>{expanded ? '⌄' : '⌃'}</Text>}
-                style={styles.disclosureSymbol}
+                color={ink.muted60}
             />
         </View>
     );
@@ -1161,10 +1153,19 @@ const styles = StyleSheet.create({
     railSlot: { flex: 1, minWidth: 0 },
     // Gives up height faster than your own board does: when the tray opens, the
     // shared table is the part you are least likely to be reading.
-    sharedTable: { flex: 1, flexShrink: 1.6, minHeight: 104, gap: 5, justifyContent: 'flex-start', overflow: 'hidden' },
+    // Longhands for the same reason as `board`: `flex: 1` sets a shrink of its
+    // own, so pairing it with `flexShrink` left the faster shrink to whichever
+    // of the two the platform happened to apply last.
+    sharedTable: { flexGrow: 1, flexShrink: 1.6, flexBasis: 0, minHeight: 104, gap: 5, justifyContent: 'flex-start', overflow: 'hidden' },
     handScroll: { flexGrow: 0, flexShrink: 0 },
     hidden: { display: 'none' },
-    boardFolded: { flex: 0, minHeight: 0, paddingVertical: 3 },
+    // What `flex: 0` means on native — grow 0, shrink 0, basis auto — written
+    // out, so the folded board is sized by its header on both platforms.
+    // `flex: 0` itself cannot be used here: react-native-web compiles each
+    // flex prop to its own class, so layered over the board's growth it zeroed
+    // the grow but kept `flex-basis: 0`, collapsing the panel to its padding
+    // with the header clipped away inside it.
+    boardFolded: { flexGrow: 0, flexShrink: 0, flexBasis: 'auto', minHeight: 0, paddingVertical: 3 },
     foldHead: {
         minHeight: 48,
         gap: 8,
@@ -1184,8 +1185,6 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: '#d8fff01f',
     },
-    disclosureSymbol: { width: 14, height: 14 },
-    disclosureFallback: { fontSize: 13, lineHeight: 14, color: ink.muted60, textAlign: 'center' },
     swatches: { flexDirection: 'row', gap: 3, height: 6 },
     swatch: { flex: 1, borderRadius: 3 },
     inlineSwatches: { flex: 1, marginHorizontal: 4 },
@@ -1203,7 +1202,10 @@ const styles = StyleSheet.create({
     // The board is the only panel that gives up height when the tray opens, and
     // it clips: a squeezed ScrollView would otherwise paint its cards straight
     // through the bank row below it.
-    board: { flex: 1, flexShrink: 1, padding: 4, gap: 6, minHeight: 96, overflow: 'hidden' },
+    // Longhands, not `flex: 1`, because `boardFolded` below overrides them: a
+    // merged style holding both the shorthand and its parts has no defined
+    // winner, and the two platforms did not pick the same one.
+    board: { flexGrow: 1, flexShrink: 1, flexBasis: 0, padding: 4, gap: 6, minHeight: 96, overflow: 'hidden' },
     boardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     boardScroll: { flex: 1 },
     progress: { fontFamily: uiFont(700), fontSize: 11, color: ink.muted60 },
@@ -1235,8 +1237,6 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: '#d8fff01f',
     },
-    zoneGlyphSymbol: { width: 14, height: 14 },
-    zoneGlyphFallback: { fontSize: 12, lineHeight: 14, color: ink.muted60, textAlign: 'center' },
     bankTotal: { fontFamily: displayFont(900), fontSize: 16, color: status.bank },
     handZone: { flexShrink: 0, gap: 2, paddingHorizontal: 4, paddingBottom: 4, paddingTop: 2, overflow: 'hidden' },
     grabberRow: { alignItems: 'center', paddingTop: 2 },

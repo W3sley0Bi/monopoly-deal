@@ -9,6 +9,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 
+import { lockViewport } from '../src/web/lockViewport';
 import { useAppFonts } from '../lib/fonts';
 import { useStore } from '../lib/store';
 import { GameConnectionProvider } from '../lib/net/messages';
@@ -17,6 +18,10 @@ import { surface } from '../lib/theme';
 
 // Must run at module scope, before the first render — EXPO-57.md §2.
 SplashScreen.preventAutoHideAsync();
+
+// Same reason, and a no-op off the web: the page has to stop being zoomable
+// before it has been painted, not after the player has already pinched it.
+lockViewport();
 
 export default function RootLayout() {
     const hydrated = useStore((s) => s.hydrated);
