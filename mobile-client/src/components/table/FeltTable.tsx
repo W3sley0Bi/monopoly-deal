@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import Svg, { Ellipse } from 'react-native-svg';
 import Animated, { Easing, runOnJS, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from 'react-native-reanimated';
 import type { Card as CardT, PlayerView, SetView } from '../../types';
 import { Card } from '../../ui/card';
@@ -317,16 +318,29 @@ export function FeltTable({
                 borderRadius: size.width * 0.65,
             }]}
         >
-            {/* The play circle reads as a circle lying on the table only if it
-                is drawn as the ellipse a circle becomes at this angle. */}
-            <View style={[styles.orbit, {
-                width: radiusX * 1.3,
-                height: radiusY * 1.3,
-                left: centre.x - radiusX * 0.65,
-                top: centre.y - radiusY * 0.65,
-                borderRadius: radiusX,
-            }]} />
         </LinearGradient>
+
+        {/* The play circle: the path the seats actually sit on.
+            Drawn in SVG because a dashed *ellipse* is not something a View can
+            be — `borderRadius` on a wide box gives a stadium with straight
+            sides, and RN's dashed border spaces its dashes per edge, so the
+            corners doubled up and the sides ran long. Here the dash pattern
+            follows the curve itself. */}
+        {size.width > 0 ? (
+            <Svg pointerEvents="none" style={StyleSheet.absoluteFill} width="100%" height="100%">
+                <Ellipse
+                    cx={centre.x}
+                    cy={centre.y}
+                    rx={radiusX}
+                    ry={radiusY}
+                    fill="none"
+                    stroke="#ccd5ff38"
+                    strokeWidth={1}
+                    strokeDasharray="7 9"
+                    strokeLinecap="round"
+                />
+            </Svg>
+        ) : null}
 
         {size.width > 0 ? (
             <View style={[styles.centre, {
@@ -470,7 +484,6 @@ const styles = StyleSheet.create({
         // table has an edge rather than being a painted background.
         boxShadow: '0px 10px 26px #05081c8f, inset 0px 2px 0px #e3e9ff2e',
     },
-    orbit: { position: 'absolute', borderWidth: 1, borderColor: '#ccd5ff2b', borderStyle: 'dashed' },
     // The pile is centred in the box so a half turn keeps it inside, and the
     // box is exactly what `SeatHit` reports to the tap layer.
     // Width and height come from the seat itself; the pile is centred in it so
@@ -518,7 +531,23 @@ const styles = StyleSheet.create({
         borderStyle: 'dashed',
         borderColor: '#d5dcff26',
     },
-    pileCount: { marginTop: DECK_H + 2, fontFamily: uiFont(800), fontSize: 10, color: '#dbe2ffb8' },
+    /*
+     * Pinned under the pile, not pushed down by it.
+     *
+     * A margin worked for the deck, whose cards are absolutely positioned and
+     * so take no room in the flow — but the discard's card is a normal child,
+     * so its count was pushed a whole card's height further down than the
+     * deck's and read as floating loose on the felt.
+     */
+    pileCount: {
+        position: 'absolute',
+        top: DECK_H + 3,
+        width: DECK_W,
+        textAlign: 'center',
+        fontFamily: uiFont(800),
+        fontSize: 10,
+        color: '#dbe2ffb8',
+    },
     flight: {
         position: 'absolute',
         width: DECK_W,

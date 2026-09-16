@@ -51,6 +51,8 @@ const table: Catalog = {
 
     // ── Table menu ───────────────────────────────────────────────────────
     'table.menu': 'Tischmenü',
+    'table.live_play': 'Live-Zug',
+    'table.live_play_hint': 'Zeigt den Zug des aktiven Spielers groß über dem Tisch',
     'table.menu_summary': '{mode} · {turn} · Gastgeber {host}',
     'table.menu_robots': 'Roboter: {difficulty}',
     'table.cancel_seat': 'Platzanfrage zurückziehen',

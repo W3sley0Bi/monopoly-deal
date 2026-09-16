@@ -25,6 +25,7 @@ const KEY_AUDIO = 'md.game.audio';
 const KEY_MOTION = 'md.motion';
 const KEY_TAP_TRAY = 'md.taptray';
 const KEY_CRY_REACTION = 'md.cryreaction';
+const KEY_LIVE_PLAY = 'md.liveplay';
 // md.install.dismissed intentionally dropped — a native app is already installed.
 
 export type Lang = 'en' | 'it' | 'de';
@@ -107,6 +108,10 @@ interface Store {
     motion: boolean;
     tapTray: boolean;
     cryReaction: boolean;
+    /** Show the player whose turn it is, full size, over the table. Off by
+     *  default: it is a big panel over the felt, and most of the time you want
+     *  to watch the table itself. */
+    livePlay: boolean;
     /** A hand-built table from `src/dev/fixtures`, shown instead of the live
      *  room. Never persisted, and only ever set from a `__DEV__` screen. */
     devRoom: RoomView | null;
@@ -120,6 +125,7 @@ interface Store {
     setMotion: (on: boolean) => void;
     setTapTray: (on: boolean) => void;
     setCryReaction: (on: boolean) => void;
+    setLivePlay: (on: boolean) => void;
     setDevRoom: (room: RoomView | null) => void;
 }
 
@@ -135,6 +141,7 @@ export const useStore = create<Store>((set, get) => ({
     motion: true,
     tapTray: false,
     cryReaction: false,
+    livePlay: false,
     devRoom: null,
 
     hydrate: async () => {
@@ -173,6 +180,7 @@ export const useStore = create<Store>((set, get) => ({
         const motion = await readBool(KEY_MOTION, true);
         const tapTray = await readBool(KEY_TAP_TRAY, false);
         const cryReaction = await readBool(KEY_CRY_REACTION, false);
+        const livePlay = await readBool(KEY_LIVE_PLAY, false);
 
         set({
             hydrated: true,
@@ -182,6 +190,7 @@ export const useStore = create<Store>((set, get) => ({
             tutorialDone,
             lang,
             audio,
+            livePlay,
             motion,
             tapTray,
             cryReaction,
@@ -227,6 +236,11 @@ export const useStore = create<Store>((set, get) => ({
     setTapTray: (on) => {
         set({ tapTray: on });
         void writeBool(KEY_TAP_TRAY, on);
+    },
+
+    setLivePlay: (on) => {
+        set({ livePlay: on });
+        void writeBool(KEY_LIVE_PLAY, on);
     },
 
     setDevRoom: (room) => set({ devRoom: room }),

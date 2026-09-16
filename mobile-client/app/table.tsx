@@ -12,7 +12,7 @@ import { useGameConnectionContext } from '../lib/net/messages';
 import { useStore } from '../lib/store';
 import { brand, ink, line, radius, status, surface } from '../lib/theme';
 import { displayFont, ls, uiFont } from '../lib/fonts';
-import { Btn, Icon, LabelCaps, Panel, Sheet } from '../src/ui/kit';
+import { Btn, Icon, LabelCaps, Panel, Sheet, Toggle } from '../src/ui/kit';
 import { Card } from '../src/ui/card';
 import { PlayerChip, PropertySets } from '../src/components/board';
 import { DragLayer, Draggable, DropZone, useDragLayer } from '../src/game/drag';
@@ -64,6 +64,8 @@ function TableBody() {
 
     const tapTray = useStore((s) => s.tapTray);
     const setDevRoom = useStore((s) => s.setDevRoom);
+    const livePlay = useStore((s) => s.livePlay);
+    const setLivePlay = useStore((s) => s.setLivePlay);
 
     const [guess, setGuess] = useState<PendingMove | null>(null);
     const [sent, setSent] = useState<string | null>(null);
@@ -272,7 +274,10 @@ function TableBody() {
 
             {/* This space grows above the local sections, keeping them bottom-anchored. */}
             <View pointerEvents="box-none" style={styles.sharedTable}>
-            {turnPlayer && turnPlayer.id !== me?.id && !myTurn ? (
+            {/* Live play: the whole of someone else's turn, full size, over the
+                table. Opt-in — it is a large panel over the felt, and it covers
+                the very seats it is describing. */}
+            {livePlay && turnPlayer && turnPlayer.id !== me?.id && !myTurn ? (
                 <ActiveBoard key={turnPlayer.id} player={turnPlayer} onOpen={() => setSheetPlayer(turnPlayer.id)} />
             ) : null}
 
@@ -654,6 +659,15 @@ function TableBody() {
             </Sheet>
 
             <Sheet open={menu} onClose={() => setMenu(false)} title={t('table.menu')}>
+                <Toggle
+                    label={t('table.live_play')}
+                    hint={t('table.live_play_hint')}
+                    value={livePlay}
+                    onChange={(on) => {
+                        void Haptics.selectionAsync();
+                        setLivePlay(on);
+                    }}
+                />
                 <Btn
                     label={t('table.end_game')}
                     variant="red"

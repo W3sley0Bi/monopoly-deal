@@ -51,6 +51,8 @@ const table: Catalog = {
 
     // ── Table menu ───────────────────────────────────────────────────────
     'table.menu': 'Table menu',
+    'table.live_play': 'Live play',
+    'table.live_play_hint': 'Show whose turn it is, full size, over the table',
     'table.menu_summary': '{mode} · {turn} · host {host}',
     'table.menu_robots': 'Robots: {difficulty}',
     'table.cancel_seat': 'Cancel seat request',

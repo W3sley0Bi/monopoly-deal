@@ -51,6 +51,8 @@ const table: Catalog = {
 
     // ── Table menu ───────────────────────────────────────────────────────
     'table.menu': 'Menu del tavolo',
+    'table.live_play': 'Gioco dal vivo',
+    'table.live_play_hint': 'Mostra in grande, sopra il tavolo, chi sta giocando',
     'table.menu_summary': '{mode} · {turn} · organizzatore {host}',
     'table.menu_robots': 'Robot: {difficulty}',
     'table.cancel_seat': 'Annulla la richiesta di posto',
