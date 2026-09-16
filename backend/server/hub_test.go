@@ -449,7 +449,6 @@ func TestSpectatorsCanChat(t *testing.T) {
 	})
 }
 
-
 func TestOwnerClosesTableAndEvictsEveryone(t *testing.T) {
 	srv, _ := newTestServer(t)
 	a := dial(t, srv, "a", "Alice")
@@ -510,38 +509,4 @@ func TestAnyoneClosesAbandonedTable(t *testing.T) {
 
 	c.send(ClientMessage{Type: MsgCloseRoom, RoomID: code})
 	c.home("table gone", func(v HomeView) bool { return len(v.Rooms) == 0 })
-}
-
-func TestOnlyOwnerTunesTheRadioAndStreamsMustBeHTTPS(t *testing.T) {
-	srv, _ := newTestServer(t)
-	a := dial(t, srv, "a", "Alice")
-	b := dial(t, srv, "b", "Bob")
-
-	a.send(ClientMessage{Type: MsgCreateRoom})
-	code := a.room("created", func(v RoomView) bool { return v.ID != "" }).ID
-	b.send(ClientMessage{Type: MsgJoinRoom, RoomID: code})
-	b.room("joined", func(v RoomView) bool { return v.YouSeated })
-
-	b.send(ClientMessage{Type: MsgSetRadio, Radio: &RadioState{Name: "Pirate", URL: "https://example.com/stream", Playing: true}})
-	if err := b.expectError("radio rejected for a guest"); !strings.Contains(err, "owner") {
-		t.Fatalf("unexpected error: %q", err)
-	}
-
-	a.send(ClientMessage{Type: MsgSetRadio, Radio: &RadioState{Name: "Insecure", URL: "http://example.com/stream", Playing: true}})
-	if err := a.expectError("http stream rejected"); !strings.Contains(err, "https") {
-		t.Fatalf("unexpected error: %q", err)
-	}
-
-	a.send(ClientMessage{Type: MsgSetRadio, Radio: &RadioState{Name: "Table FM", URL: "https://example.com/stream", Playing: true}})
-	// Everyone at the table hears about the same station, not just the owner.
-	v := b.room("radio tuned", func(v RoomView) bool { return v.Radio.Playing })
-	if v.Radio.URL != "https://example.com/stream" || v.Radio.Name != "Table FM" || v.Radio.ByName != "Alice" {
-		t.Fatalf("unexpected radio state: %+v", v.Radio)
-	}
-
-	a.send(ClientMessage{Type: MsgSetRadio, Radio: &RadioState{}})
-	off := b.room("radio off", func(v RoomView) bool { return !v.Radio.Playing })
-	if off.Radio.URL != "" {
-		t.Fatalf("switching the radio off should clear the station: %+v", off.Radio)
-	}
 }

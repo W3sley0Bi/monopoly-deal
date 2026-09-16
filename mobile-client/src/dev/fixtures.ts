@@ -94,9 +94,18 @@ function wildcard(colors: Color[]): Card {
  * house, and neither can go on a railroad or utility set — a fixture that broke
  * that would be testing a board the server can never send.
  */
-function set(color: Color, count: number, build: 'none' | 'house' | 'hotel' = 'none'): SetView {
+function set(
+    color: Color,
+    count: number,
+    build: 'none' | 'house' | 'hotel' = 'none',
+    /** Cards already standing in for a colour — wildcards, usually. */
+    extra: Card[] = [],
+): SetView {
     const size = SET_SIZES[color] ?? 3;
-    const cards = Array.from({ length: Math.min(count, size) }, (_, i) => property(color, i));
+    const cards = [
+        ...Array.from({ length: Math.min(count, size) }, (_, i) => property(color, i)),
+        ...extra,
+    ];
     const complete = cards.length >= size;
     const table = RENT[color] ?? [1, 2, 3];
     const buildable = complete && color !== 'railroad' && color !== 'utility';
@@ -290,12 +299,88 @@ function buildingBench(youId: string, youName: string): RoomView {
     return room(youId, game, 'Dev · building bench');
 }
 
+/**
+ * Wildcards everywhere: both colours of several pairs in hand to turn, a
+ * ten-way wildcard, and more of them already standing in sets on the board so
+ * moving one between colours can be tried too.
+ */
+function wildcards(youId: string, youName: string): RoomView {
+    serial = 0;
+    const ALL: Color[] = ['brown', 'lightblue', 'pink', 'orange', 'red', 'yellow', 'green', 'blue', 'railroad', 'utility'];
+
+    const you = player(
+        youName || 'You',
+        [
+            // Two-thirds real property, the rest a wildcard holding the place.
+            set('orange', 2, 'none', [wildcard(['orange', 'pink'])]),
+            set('lightblue', 1, 'none', [wildcard(['lightblue', 'brown'])]),
+            set('railroad', 2, 'none', [wildcard(['railroad', 'utility'])]),
+            set('green', 1),
+        ],
+        [money(4), money(2)],
+        6,
+        {
+            bot: false,
+            playerId: youId,
+            hand: [
+                wildcard(['pink', 'orange']),
+                wildcard(['lightblue', 'brown']),
+                wildcard(['green', 'blue']),
+                wildcard(['railroad', 'utility']),
+                // The ten-way one: no pair to turn between, it just goes where
+                // it is told — and it banks for nothing.
+                wildcard(ALL),
+                property('yellow', 0),
+            ],
+        },
+    );
+
+    const otto = player(
+        'Otto',
+        [set('pink', 2, 'none', [wildcard(['pink', 'orange'])]), set('blue', 1), set('utility', 2)],
+        [money(3), money(1)],
+        4,
+    );
+
+    const players = [you, otto];
+    const game: GameView = {
+        id: 'DEV3',
+        you: youId,
+        players,
+        deck_count: 52,
+        discard_count: 5,
+        discard_top: rentCard(['pink', 'orange']),
+        current_turn: 0,
+        state: 'playing',
+        plays_left: 3,
+        pending: null,
+        log: [] as GameView['log'],
+        set_sizes: SET_SIZES,
+        colors: ALL,
+        mode: 'classic',
+        mode_label: 'Classic',
+        turn_seconds: 0,
+        respond_seconds: 0,
+        bot_difficulty: 'normal',
+        deadline_ms: 0,
+        deadline_seconds: 0,
+        now_ms: Date.now(),
+    };
+    return room(youId, game, 'Dev · wildcards');
+}
+
 export const FIXTURES: Fixture[] = [
     {
         id: 'crowded',
         label: 'Five-player table',
         blurb: 'Everyone holding two full sets, money and loose property',
         build: crowdedTable,
+    },
+    {
+        id: 'wildcards',
+        label: 'Two players · wildcards',
+        blurb: 'Pairs to turn in hand, a ten-way, and more standing in sets',
+        build: wildcards,
     },
     {
         id: 'buildings',

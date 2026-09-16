@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { GameView, LogEntry, RadioState } from '../types';
+import type { GameView, LogEntry } from '../types';
 
 /** A deliberately small, original sound palette for the table. */
 export type GameAudioCue =
@@ -27,38 +27,21 @@ export interface GameAudio {
     /** Audio is created only after one of the user's controls calls unlock. */
     unlocked: boolean;
     sfxEnabled: boolean;
-    /** This listener wants to hear the table radio. */
-    radioEnabled: boolean;
     sfxVolume: number;
-    radioVolume: number;
-    /** The station the table is tuned to is loading its first bytes. */
-    radioLoading: boolean;
-    /** The browser refused to start the stream without a gesture. */
-    radioBlocked: boolean;
-    /** The stream itself failed: dead station, geo block, bad URL. */
-    radioFailed: boolean;
     unlock: () => Promise<void>;
     play: (cue: GameAudioCue) => void;
     setSfxEnabled: (enabled: boolean) => void;
-    setRadioEnabled: (enabled: boolean) => void;
     setSfxVolume: (volume: number) => void;
-    setRadioVolume: (volume: number) => void;
 }
 
 interface SavedAudio {
     sfxEnabled: boolean;
-    radioEnabled: boolean;
     sfxVolume: number;
-    radioVolume: number;
 }
 
 const DEFAULTS: SavedAudio = {
     sfxEnabled: true,
-    // The radio is opt-in per listener. Browsers also reject audio that starts
-    // without a gesture, so nothing plays until a control is pressed.
-    radioEnabled: false,
     sfxVolume: 0.58,
-    radioVolume: 0.5,
 };
 
 const STORAGE_KEY = 'md.game.audio';
@@ -68,9 +51,7 @@ function readSaved(): SavedAudio {
         const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') as Partial<SavedAudio>;
         return {
             sfxEnabled: saved.sfxEnabled !== false,
-            radioEnabled: saved.radioEnabled === true,
             sfxVolume: clamp(typeof saved.sfxVolume === 'number' ? saved.sfxVolume : DEFAULTS.sfxVolume),
-            radioVolume: clamp(typeof saved.radioVolume === 'number' ? saved.radioVolume : DEFAULTS.radioVolume),
         };
     } catch {
         return DEFAULTS;
@@ -271,24 +252,14 @@ function cueForLog(key: string): GameAudioCue | undefined {
  * log entries into cues. The first snapshot is intentionally silent, so
  * reconnecting to a lively table does not replay sixty old moves.
  *
- * `radio` is the table's shared station. The stream plays from one plain
- * media element per client: the table agrees on what is on, every listener
- * keeps their own volume, and nothing is mixed through the AudioContext, which
- * would need CORS headers the stations do not send.
  */
-export function useGameAudio(game: GameView | null, radio?: RadioState | null): GameAudio {
+export function useGameAudio(game: GameView | null): GameAudio {
     const [saved, setSaved] = useState<SavedAudio>(readSaved);
     const [unlocked, setUnlocked] = useState(false);
     const engine = useRef<AudioEngine | null>(null);
     const previousGameId = useRef<string | null>(null);
     const previousLog = useRef<string[] | null>(null);
     const sfxEnabled = saved.sfxEnabled;
-    const radioEnabled = saved.radioEnabled;
-    const stream = useRef<HTMLAudioElement | null>(null);
-    const [radioLoading, setRadioLoading] = useState(false);
-    const [radioBlocked, setRadioBlocked] = useState(false);
-    const [radioFailed, setRadioFailed] = useState(false);
-    const stationUrl = radio?.playing ? radio.url : '';
 
     const persist = useCallback((patch: Partial<SavedAudio>) => {
         setSaved(previous => {
@@ -307,12 +278,6 @@ export function useGameAudio(game: GameView | null, radio?: RadioState | null): 
         }
         await engine.current.resume();
         setUnlocked(true);
-        // A gesture reached us, so a stream the browser refused earlier may
-        // start now.
-        const element = stream.current;
-        if (element && element.paused && element.src) {
-            element.play().then(() => setRadioBlocked(false)).catch(() => setRadioBlocked(true));
-        }
     }, [saved.sfxVolume]);
 
     const play = useCallback((cue: GameAudioCue) => {
@@ -324,84 +289,11 @@ export function useGameAudio(game: GameView | null, radio?: RadioState | null): 
         persist({ sfxEnabled: enabled });
         if (enabled) void unlock();
     }, [persist, unlock]);
-    const setRadioEnabled = useCallback((enabled: boolean) => {
-        persist({ radioEnabled: enabled });
-        if (enabled) void unlock();
-    }, [persist, unlock]);
     const setSfxVolume = useCallback((volume: number) => {
         const next = clamp(volume);
         persist({ sfxVolume: next });
         engine.current?.setSfxVolume(next);
     }, [persist]);
-    const setRadioVolume = useCallback((volume: number) => {
-        const next = clamp(volume);
-        persist({ radioVolume: next });
-        if (stream.current) stream.current.volume = next;
-    }, [persist]);
-
-    // One element for the life of the app: re-creating it on every render
-    // would restart the stream, and two of them would play the station twice.
-    useEffect(() => {
-        const element = new Audio();
-        element.preload = 'none';
-        element.volume = clamp(readSaved().radioVolume);
-        stream.current = element;
-        const onPlaying = () => {
-            setRadioLoading(false);
-            setRadioBlocked(false);
-            setRadioFailed(false);
-        };
-        const onWaiting = () => setRadioLoading(true);
-        const onError = () => {
-            setRadioLoading(false);
-            setRadioFailed(true);
-        };
-        element.addEventListener('playing', onPlaying);
-        element.addEventListener('waiting', onWaiting);
-        element.addEventListener('error', onError);
-        return () => {
-            element.removeEventListener('playing', onPlaying);
-            element.removeEventListener('waiting', onWaiting);
-            element.removeEventListener('error', onError);
-            element.pause();
-            element.removeAttribute('src');
-            element.load();
-            stream.current = null;
-        };
-    }, []);
-
-    // The table decides the station; this listener decides whether to hear it.
-    useEffect(() => {
-        const element = stream.current;
-        if (!element) return;
-        const wanted = radioEnabled ? stationUrl : '';
-        if (!wanted) {
-            element.pause();
-            if (element.src) {
-                element.removeAttribute('src');
-                element.load();
-            }
-            setRadioLoading(false);
-            setRadioFailed(false);
-            return;
-        }
-        if (element.src !== wanted) {
-            element.src = wanted;
-            element.load();
-            setRadioFailed(false);
-        }
-        setRadioLoading(true);
-        element.play()
-            .then(() => setRadioBlocked(false))
-            .catch((reason: DOMException) => {
-                setRadioLoading(false);
-                // Autoplay policy, not a dead station: a press on any control
-                // starts it.
-                if (reason?.name === 'NotAllowedError') setRadioBlocked(true);
-                else setRadioFailed(true);
-            });
-    }, [radioEnabled, stationUrl]);
-
     useEffect(() => {
         if (!game) {
             previousGameId.current = null;
@@ -456,17 +348,10 @@ export function useGameAudio(game: GameView | null, radio?: RadioState | null): 
     return {
         unlocked,
         sfxEnabled,
-        radioEnabled,
         sfxVolume: saved.sfxVolume,
-        radioVolume: saved.radioVolume,
-        radioLoading,
-        radioBlocked,
-        radioFailed,
         unlock,
         play,
         setSfxEnabled,
-        setRadioEnabled,
         setSfxVolume,
-        setRadioVolume,
     };
 }

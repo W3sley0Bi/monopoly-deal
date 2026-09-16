@@ -194,10 +194,8 @@ export default function Table({ audio, room, error, skewMs, tutorial, onTutorial
         const onPointerDown = (e: PointerEvent) => {
             const target = e.target as Element | null;
             if (target && (menuRef.current?.contains(target) || menuButtonRef.current?.contains(target))) return;
-            // Dialogs the menu opens — the radio picker — render in a portal
-            // on document.body, so they count as "outside". Tearing the menu
-            // down there would unmount the dialog under the player's finger,
-            // before the click it belongs to ever arrives.
+            // Dialogs opened from the menu render in a portal on document.body,
+            // so they count as "outside" and must keep the menu mounted.
             if (target?.closest?.('[role="dialog"],[data-dialog-overlay]')) return;
             closeMenu();
         };
@@ -1007,7 +1005,7 @@ export default function Table({ audio, room, error, skewMs, tutorial, onTutorial
                         <button type="button" role="menuitemcheckbox" aria-checked={cryReaction} className="block w-full px-3 py-2.5 text-left text-sm hover:bg-white/10" onClick={() => setCryReaction(value => { localStorage.setItem('md.cryreaction', value ? 'off' : 'on'); return !value; })}>
                             {t('table.cry_reaction')}: {t(cryReaction ? 'table.on' : 'table.off')}
                         </button>
-                        <div className="border-t border-white/10 p-3"><GameAudioControls audio={audio} radio={room.radio} canManage={room.is_owner} ownerName={room.owner_name} send={send} /></div>
+                        <div className="border-t border-white/10 p-3"><GameAudioControls audio={audio} /></div>
                         <LanguagePicker variant="menu" />
                     </div>
                 )}

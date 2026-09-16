@@ -65,7 +65,7 @@ export default function RoomLobby({ audio, room, error, send, onLeave }: Props) 
                 </div>
             </header>
 
-            <GameAudioControls audio={audio} radio={room.radio} canManage={room.is_owner} ownerName={room.owner_name} send={send} />
+            <GameAudioControls audio={audio} />
 
             {error && (
                 <p className="animate-shake rounded-lg border border-rose-300/40 bg-rose-600/25 px-3 py-2 text-center text-sm font-semibold text-rose-100">

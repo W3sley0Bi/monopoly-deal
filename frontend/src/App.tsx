@@ -104,7 +104,7 @@ export default function App() {
         sendRaw({ player_id: myId, player_name: name, ...msg });
     }, [myId, name, sendRaw]);
 
-    const audio = useGameAudio(room?.game ?? null, room?.radio ?? null);
+    const audio = useGameAudio(room?.game ?? null);
     const { unlocked: audioUnlocked, unlock: unlockAudio } = audio;
     useEffect(() => {
         if (audioUnlocked) return;

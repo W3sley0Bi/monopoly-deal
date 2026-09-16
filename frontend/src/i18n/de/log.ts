@@ -63,8 +63,6 @@ const log: Catalog = {
     'log.win_deathmatch': '🏆 {name} gewinnt das Deathmatch mit {sets} vollständigen Sätzen!',
 
     // Chat lines the server announces.
-    'chat.radio_on': '{name} hat das Radio auf {station} gestellt',
-    'chat.radio_off': '{name} hat das Radio ausgeschaltet',
     'chat.joined_call': '{name} ist dem Anruf beigetreten',
     'chat.left_call': '{name} hat den Anruf verlassen',
 

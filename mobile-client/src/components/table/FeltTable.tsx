@@ -124,6 +124,22 @@ const DECK_H = 43;
  */
 const MAT = ['#4a5893', '#5b6aa6', '#2f3a69'] as const;
 
+/** The travelling turn lamp. */
+const MARKER = 18;
+
+/** Timing for the lamp's trip round the ring; instant when motion is off. */
+function animateMarker(target: number, animate: boolean) {
+    'worklet';
+    return animate
+        ? withTiming(target, { duration: 520, easing: Easing.inOut(Easing.cubic) })
+        : target;
+}
+
+/** How far inside the table edge the rim line runs. */
+const RIM = 12;
+/** Gap between the solid orbit and the dashed one inside it. */
+const ORBIT_INSET = 14;
+
 /** The room the table stands in: darker, so the mat reads as a lit surface. */
 const ROOM = ['#151a33', '#0e1226'] as const;
 
@@ -157,6 +173,7 @@ export function FeltTable({
     deckCount,
     discardCount,
     discardTop,
+    turnId,
     onSeats,
     onOpenDiscard,
     debugSeats,
@@ -167,6 +184,8 @@ export function FeltTable({
     deckCount: number;
     discardCount: number;
     discardTop: CardT | null;
+    /** Whose turn it is; the live marker rides round to their seat. */
+    turnId?: string;
     onSeats?: (seats: SeatHit[]) => void;
     onOpenDiscard?: () => void;
     /** Dev only: outlines each seat box where the felt itself thinks it is. */
@@ -299,6 +318,39 @@ export function FeltTable({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [players, size.width, motion, reduced]);
 
+    /*
+     * The live marker: one lamp that travels round the ring to whoever is
+     * playing, rather than a badge that blinks out here and in there. Seeing it
+     * *move* is what tells you the turn passed, and which way it went.
+     */
+    const turnIndex = Math.max(0, seats.findIndex(p => p.id === turnId));
+    const turnAngle = Math.PI / 2 + turnIndex * 2 * Math.PI / Math.max(1, seats.length);
+    const marker = useSharedValue(turnAngle);
+    const markerReady = useRef(false);
+    useEffect(() => {
+        if (!size.width) return;
+        if (!markerReady.current) {
+            // First paint: be where the turn already is, do not fly in from 0.
+            markerReady.current = true;
+            marker.value = turnAngle;
+            return;
+        }
+        // Go the short way round: without unwrapping, a turn passing the seam
+        // sends the lamp all the way back across the table.
+        const current = marker.value;
+        let target = turnAngle;
+        while (target - current > Math.PI) target -= 2 * Math.PI;
+        while (current - target > Math.PI) target += 2 * Math.PI;
+        marker.value = animateMarker(target, motion && !reduced);
+    }, [turnAngle, size.width, marker, motion, reduced]);
+
+    const markerStyle = useAnimatedStyle(() => ({
+        transform: [
+            { translateX: centre.x + Math.cos(marker.value) * radiusX - MARKER / 2 },
+            { translateY: centre.y + Math.sin(marker.value) * radiusY - MARKER / 2 },
+        ],
+    }));
+
     return <View style={styles.scene} pointerEvents="box-none"
         onLayout={e => setSize(e.nativeEvent.layout)}>
         <View style={styles.stage} pointerEvents="box-none">
@@ -318,6 +370,10 @@ export function FeltTable({
                 borderRadius: size.width * 0.65,
             }]}
         >
+            {/* The rim line, a hair inside the table edge — `.arena-surface::after`
+                on the web. It is what stops the mat reading as a flat shape:
+                the eye takes the double edge as a moulded lip. */}
+            <View pointerEvents="none" style={[styles.rim, { borderRadius: size.width * 0.65 - RIM }]} />
         </LinearGradient>
 
         {/* The play circle: the path the seats actually sit on.
@@ -328,15 +384,28 @@ export function FeltTable({
             follows the curve itself. */}
         {size.width > 0 ? (
             <Svg pointerEvents="none" style={StyleSheet.absoluteFill} width="100%" height="100%">
+                {/* Two rings, as on the web (`.arena-orbit` and its `::after`):
+                    a continuous one on the path the seats sit on, and a dashed
+                    one just inside it. One ring alone reads as a border; the
+                    pair reads as a marked-out playing field. */}
                 <Ellipse
                     cx={centre.x}
                     cy={centre.y}
                     rx={radiusX}
                     ry={radiusY}
                     fill="none"
-                    stroke="#ccd5ff38"
+                    stroke="#ccd5ff2b"
                     strokeWidth={1}
-                    strokeDasharray="7 9"
+                />
+                <Ellipse
+                    cx={centre.x}
+                    cy={centre.y}
+                    rx={Math.max(8, radiusX - ORBIT_INSET)}
+                    ry={Math.max(8, radiusY - ORBIT_INSET)}
+                    fill="none"
+                    stroke="#ccd5ff26"
+                    strokeWidth={1}
+                    strokeDasharray="6 8"
                     strokeLinecap="round"
                 />
             </Svg>
@@ -390,6 +459,12 @@ export function FeltTable({
                 onDone={() => setFlights(current => current.filter(f => f.key !== flight.key))}
             />
         ))}
+
+        {size.width > 0 ? (
+            <Animated.View pointerEvents="none" style={[styles.marker, markerStyle]}>
+                <View style={styles.markerCore} />
+            </Animated.View>
+        ) : null}
 
         {size.width > 0 && seats.map((player, seat) => {
             const place = seatAt(seat);
@@ -475,6 +550,30 @@ const styles = StyleSheet.create({
     // 2D instead, by scaling each seat with its distance from the near edge.
     stage: { flex: 1 },
     room: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 },
+    marker: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        width: MARKER,
+        height: MARKER,
+        borderRadius: MARKER / 2,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#dce64e2e',
+        borderWidth: 1,
+        borderColor: '#dce64e8c',
+        boxShadow: '0px 0px 12px #dce64e73',
+    },
+    markerCore: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#dce64e' },
+    rim: {
+        position: 'absolute',
+        top: RIM,
+        right: RIM,
+        bottom: RIM,
+        left: RIM,
+        borderWidth: 1,
+        borderColor: '#ccd5ff40',
+    },
     mat: {
         position: 'absolute',
         top: 4,

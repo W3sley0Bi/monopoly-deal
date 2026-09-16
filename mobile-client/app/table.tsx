@@ -13,7 +13,7 @@ import { useStore } from '../lib/store';
 import { brand, ink, line, radius, status, surface } from '../lib/theme';
 import { displayFont, ls, uiFont } from '../lib/fonts';
 import { Btn, Icon, LabelCaps, Panel, Sheet, Toggle } from '../src/ui/kit';
-import { Card } from '../src/ui/card';
+import { Card, WildFlip } from '../src/ui/card';
 import { PlayerChip, PropertySets } from '../src/components/board';
 import { DragLayer, Draggable, DropZone, useDragLayer } from '../src/game/drag';
 import { ActionDialog } from '../src/components/table/ActionDialog';
@@ -63,6 +63,7 @@ function TableBody() {
     const dragLayer = useDragLayer();
 
     const tapTray = useStore((s) => s.tapTray);
+    const setTapTray = useStore((s) => s.setTapTray);
     const setDevRoom = useStore((s) => s.setDevRoom);
     const livePlay = useStore((s) => s.livePlay);
     const setLivePlay = useStore((s) => s.setLivePlay);
@@ -78,6 +79,9 @@ function TableBody() {
     const [bankOpen, setBankOpen] = useState(false);
     const [discardOpen, setDiscardOpen] = useState(false);
     const [seatHits, setSeatHits] = useState<SeatHit[]>([]);
+    // Where your own panels start. The seat hit layer is clipped to stop above
+    // it: your controls always win a contested touch.
+    const [localTop, setLocalTop] = useState<number | null>(null);
     // Dev only: paints the seat tap targets and the overlay band they live in.
     const [showHits, setShowHits] = useState(false);
 
@@ -232,6 +236,7 @@ function TableBody() {
                     discardCount={g.discard_count}
                     discardTop={g.discard_top}
                     onOpenDiscard={() => setDiscardOpen(true)}
+                    turnId={turnPlayer?.id}
                     onSeats={setSeatHits}
                     debugSeats={showHits}
                 />
@@ -292,7 +297,10 @@ function TableBody() {
 
             {me ? <>
             {/* ---- my board ---- */}
-            <GlassPanel style={[styles.board, !boardShown && styles.boardFolded]}>
+            <GlassPanel
+                onLayout={(e) => setLocalTop(e.nativeEvent.layout.y)}
+                style={[styles.board, !boardShown && styles.boardFolded]}
+            >
                 <Pressable style={({ pressed }) => [styles.boardHead, styles.foldHead, pressed && styles.foldHeadPressed]} accessibilityRole="button"
                     accessibilityState={{ expanded: boardShown }} disabled={!!carried}
                     accessibilityLabel={t(boardShown ? 'table.board_fold' : 'table.board_unfold')}
@@ -425,7 +433,9 @@ function TableBody() {
                     {overLimit ? (
                         <Text style={styles.overLimit} numberOfLines={2}>{t('table.over_limit', { count: hand.length - 7 })}</Text>
                     ) : handShown ? (
-                        <Text style={styles.handHint} numberOfLines={2}>{t('table.hand_tap')}</Text>
+                        <Text style={styles.handHint} numberOfLines={2}>
+                            {t(tapTray ? 'table.hand_tap' : 'table.hand_drag_only')}
+                        </Text>
                     ) : null}
                     <DisclosureIcon expanded={handShown} />
                 </Pressable>
@@ -445,14 +455,21 @@ function TableBody() {
                                 enabled={canPlay}
                                 onTap={() => openCard(card)}
                             >
-                                <Card
-                                    card={card}
-                                    size="hand"
-                                    activeColor={wildColor[card.id] ?? null}
-                                    selected={selected?.id === card.id}
-                                    disabled={!canPlay}
-                                    dimmed={!canPlay || carriedCard?.id === card.id}
-                                />
+                                {/* A two-colour wildcard turns rather than
+                                    redrawing: tapping it is the same gesture as
+                                    turning the card round on a real table. */}
+                                <WildFlip active={wildColor[card.id] ?? null}>
+                                    {(shown) => (
+                                        <Card
+                                            card={card}
+                                            size="hand"
+                                            activeColor={shown ?? null}
+                                            selected={selected?.id === card.id}
+                                            disabled={!canPlay}
+                                            dimmed={!canPlay || carriedCard?.id === card.id}
+                                        />
+                                    )}
+                                </WildFlip>
                             </Draggable>
                         </View>
                     ))}
@@ -463,7 +480,10 @@ function TableBody() {
             </> : null}
 
             {/* ---- what can I do with the tapped card ---- */}
-            {selected && handShown ? (
+            {/* The options tray. Opt-in: dragging a card where it goes is the
+                gesture the table is built around, and the tray covers the felt
+                to say the same thing in buttons. */}
+            {tapTray && selected && handShown ? (
                 <Panel style={styles.tray}>
                     <Text style={styles.trayTitle} numberOfLines={1}>
                         {tCard(selected)}
@@ -543,7 +563,24 @@ function TableBody() {
                 shared-table spacer — took the touch first and the piles simply
                 did not answer. These are the same rectangles, last in the tree.
                 `box-none`, so only the rectangles themselves catch anything. */}
-            <View pointerEvents="box-none" style={[styles.feltBackground, { top: feltTop, height: feltHeight }, showHits && styles.hitBand]}>
+            <View
+                pointerEvents="box-none"
+                style={[
+                    styles.feltBackground,
+                    {
+                        top: feltTop,
+                        // Stops short of your own board. A seat rectangle that
+                        // reached under the properties header took the tap that
+                        // was meant to open it — the far seats are scenery, your
+                        // own controls are the game.
+                        height: localTop === null
+                            ? feltHeight
+                            : Math.max(60, Math.min(feltHeight, localTop - feltTop - 6)),
+                    },
+                    showHits && styles.hitBand,
+                    styles.clip,
+                ]}
+            >
                 {seatHits.map((seat) => (
                     <SeatTap
                         key={seat.id}
@@ -666,6 +703,16 @@ function TableBody() {
                     onChange={(on) => {
                         void Haptics.selectionAsync();
                         setLivePlay(on);
+                    }}
+                />
+                <Toggle
+                    label={t('table.tap_tray')}
+                    hint={t('table.hand_drag_only')}
+                    value={tapTray}
+                    onChange={(on) => {
+                        void Haptics.selectionAsync();
+                        setTapTray(on);
+                        if (!on) setSelected(null);
                     }}
                 />
                 <Btn
@@ -914,6 +961,9 @@ const styles = StyleSheet.create({
     overLimit: { fontFamily: uiFont(700), fontSize: 10, color: ink.endTurnHint },
     tray: { flexShrink: 0, padding: 10, gap: 8 },
     bankGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingVertical: 4 },
+    // Touches outside a clipped parent are not delivered, which is exactly the
+    // guarantee wanted here: the layer cannot reach your panels.
+    clip: { overflow: 'hidden' },
     hitBand: { borderWidth: 1, borderColor: '#00e5ff80', backgroundColor: '#00e5ff14' },
     hitBox: { borderWidth: 1.5, borderColor: '#ff2d6f', backgroundColor: '#ff2d6f26' },
     hitLabel: { fontFamily: uiFont(800), fontSize: 8, color: '#ffd7e4' },
