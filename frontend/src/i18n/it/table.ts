@@ -241,8 +241,10 @@ const table: Catalog = {
     'pending.forced_deal': 'Scambio Forzato',
     'pending.deal_breaker': 'Affare Rotto',
     'table.tap_tray': 'Tocca per le opzioni carta',
+    'table.hand_peek': 'Anteprima carta in mano',
     'table.hand_drag_only': 'Trascina una carta in alto per giocarla',
     'inspect.hand_hint_drag': 'Passa sopra per vedere / trascina per giocare',
+    'inspect.hand_hint_click': 'Clicca per scegliere · trascina per giocare',
 };
 
 export default table;

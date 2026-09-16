@@ -54,6 +54,17 @@ interface Props {
     onLeave: () => void;
 }
 
+// Where each panel slot sits on a wide table. `.seats-N .opponent-seat:nth-child()`
+// in the stylesheet does not run round the table — it fills the top of the
+// arena first and the sides after — while the felt does, clockwise from
+// your own edge. SEAT_SLOTS[n][slot] is the seat, counted the felt's way, that
+// belongs in that slot, so a rival's panel sits over their own cards.
+const SEAT_SLOTS: Record<number, number[]> = {
+    3: [1, 0, 2],
+    4: [1, 2, 0, 3],
+    5: [2, 1, 3, 0, 4],
+};
+
 // A turn with no plays left has nothing else to give, so it closes itself
 // after a short beat. Long enough to read the table, short enough to keep the
 // game moving.
@@ -123,6 +134,12 @@ export default function Table({ audio, room, error, skewMs, tutorial, onTutorial
     const [panelOpen, setPanelOpen] = useState(false);
     const [boardOpen, setBoardOpen] = useState(true);
     const [motion, setMotion] = useState(() => localStorage.getItem('md.motion') !== 'off');
+    // The inspection panel over a card in your own hand. It reads well the
+    // first few games and then only gets in the way of the cards behind it, so
+    // a player who already knows the deck can put it away. The cards in play
+    // keep theirs either way: those are the ones whose set and rent you are
+    // actually looking up.
+    const [handPeek, setHandPeek] = useState(() => localStorage.getItem('md.handpeek') !== 'off');
     // A hand laid across the bottom of a wide screen costs the table a quarter
     // of its height for cards that are just as readable standing on end. Which
     // side suits depends on the room and the player, so it is theirs to pick.
@@ -230,7 +247,17 @@ export default function Table({ audio, room, error, skewMs, tutorial, onTutorial
     const turnPlayer = g.players[g.current_turn];
     const myTurn = turnPlayer?.id === g.you && !spectating;
     const pending = g.pending;
-    const foes = g.players.filter(p => p.id !== g.you);
+    // Seat order, not array order: the felt lays each player's cards out going
+    // round the table from your own edge (`FeltCards`), so the panels have to
+    // run the same way. Filtering the raw list left them in deal order, which
+    // put a rival's cards in front of somebody else's face whenever you were
+    // not the first player in it.
+    const foes = (() => {
+        const start = g.players.findIndex(p => p.id === g.you);
+        const seated = start < 0 ? g.players : [...g.players.slice(start), ...g.players.slice(0, start)];
+        const round = seated.filter(p => p.id !== g.you);
+        return narrow ? round : (SEAT_SLOTS[round.length] ?? round.map((_, i) => i)).map(i => round[i]);
+    })();
     const handSize = me?.hand?.length ?? 0;
     const overLimit = handSize > 7;
     const canPlay = myTurn && !pending && g.plays_left > 0;
@@ -960,6 +987,20 @@ export default function Table({ audio, room, error, skewMs, tutorial, onTutorial
                         >
                             {t('table.tap_tray')}: {t(tapTray ? 'table.on' : 'table.off')}
                         </button>
+                        {!narrow && (
+                            <button
+                                type="button"
+                                role="menuitemcheckbox"
+                                aria-checked={handPeek}
+                                className="block w-full px-3 py-2.5 text-left text-sm hover:bg-white/10"
+                                onClick={() => setHandPeek(value => {
+                                    localStorage.setItem('md.handpeek', value ? 'off' : 'on');
+                                    return !value;
+                                })}
+                            >
+                                {t('table.hand_peek')}: {t(handPeek ? 'table.on' : 'table.off')}
+                            </button>
+                        )}
                         <button type="button" role="menuitemcheckbox" aria-checked={motion} className="block w-full px-3 py-2.5 text-left text-sm hover:bg-white/10" onClick={() => setMotion(value => { localStorage.setItem('md.motion', value ? 'off' : 'on'); return !value; })}>
                             {t('table.motion')}: {t(motion ? 'table.on' : 'table.off')}
                         </button>
@@ -1146,7 +1187,9 @@ export default function Table({ audio, room, error, skewMs, tutorial, onTutorial
                                         {t(
                                             narrow
                                                 ? tapOpens ? 'table.hand_tap' : 'table.hand_drag_only'
-                                                : tapOpens ? 'inspect.hand_hint' : 'inspect.hand_hint_drag',
+                                                : handPeek
+                                                    ? tapOpens ? 'inspect.hand_hint' : 'inspect.hand_hint_drag'
+                                                    : tapOpens ? 'inspect.hand_hint_click' : 'table.hand_drag_only',
                                         )}
                                     </p>
                                 )}
@@ -1172,6 +1215,7 @@ export default function Table({ audio, room, error, skewMs, tutorial, onTutorial
                                         activeColor={wildColor[c.id]}
                                         draggable={myTurn && !pending}
                                         dragAxis={narrow ? 'vertical' : 'free'}
+                                        inspectable={handPeek}
                                         dragging={drag?.card.id === c.id || inFlight === c.id}
                                         onDragStart={() => setDrag({ card: c, from: 'hand' })}
                                         onDragEnd={() => setDrag(null)}

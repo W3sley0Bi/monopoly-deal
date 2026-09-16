@@ -3829,15 +3829,36 @@ body.is-dragging .board-targets > .bank-zone:not(.drop-zone-live) {
         transform: translateY(-5px) scale(0.98);
     }
 }
-/* The seat sits against the top of the felt, so its bubble hangs underneath
-   rather than off the edge of the table. */
+/* The seats along the top of the arena have nothing above them, and hanging
+   the bubble underneath them put it flat on the cards in play — the one thing
+   at the table you are never allowed to hide. So it goes out sideways instead:
+   past the panel into the rim, off the felt, still beside the face that spoke.
+   No transform here: `seat-play-life` animates that property, and centring the
+   bubble with one would be wiped by the first frame. */
 .seats-1 .seat-play,
 .seats-3 .opponent-seat:first-child .seat-play,
-.seats-4 .opponent-seat:first-child .seat-play,
-.seats-4 .opponent-seat:nth-child(2) .seat-play {
-    top: auto;
-    bottom: -14px;
-    border-radius: 12px 12px 4px 12px;
+.seats-4 .opponent-seat:nth-child(2) .seat-play,
+.seats-5 .opponent-seat:first-child .seat-play {
+    top: 6px;
+    bottom: auto;
+    left: calc(100% + 8px);
+    right: auto;
+    margin: 0;
+    width: max-content;
+    max-width: min(9.5rem, 22vw);
+    border-radius: 4px 12px 12px 12px;
+}
+/* The left-hand one of a pair goes out its own way, so neither bubble crosses
+   the middle of the table. */
+.seats-4 .opponent-seat:first-child .seat-play {
+    top: 6px;
+    bottom: auto;
+    left: auto;
+    right: calc(100% + 8px);
+    margin: 0;
+    width: max-content;
+    max-width: min(9.5rem, 22vw);
+    border-radius: 12px 4px 12px 12px;
 }
 /* On a phone the seats are a sideways rail with no room above them, so the
    bubble sits over the chip it belongs to. */
@@ -3848,6 +3869,7 @@ body.is-dragging .board-targets > .bank-zone:not(.drop-zone-live) {
     right: 2px;
     margin: 0;
     width: auto;
+    max-width: none;
     font-size: 10px;
     padding: 3px 7px;
     border-radius: 9px;

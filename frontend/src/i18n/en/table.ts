@@ -241,8 +241,10 @@ const table: Catalog = {
     'pending.forced_deal': 'Forced Deal',
     'pending.deal_breaker': 'Deal Breaker',
     'table.tap_tray': 'Tap for card options',
+    'table.hand_peek': 'Card preview in hand',
     'table.hand_drag_only': 'Drag a card up to play it',
     'inspect.hand_hint_drag': 'Hover to inspect / Drag to play',
+    'inspect.hand_hint_click': 'Click to choose · Drag to play',
 };
 
 export default table;
