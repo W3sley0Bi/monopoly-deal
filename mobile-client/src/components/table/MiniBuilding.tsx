@@ -127,10 +127,11 @@ export const MiniBuilding = memo(function MiniBuilding({ kind, color, seatRotati
         glass: '#b3dad8', door: color, shadow: '#071b22',
     }), [color]);
     const m = MODELS[kind];
-    return <View pointerEvents="none" style={[styles.root, {
+    return <View pointerEvents="none" style={[styles.root, styles.orientation, {
         // Parent is rotation × uniform depth × squash. Invert squash then
         // rotation so upright walls and lighting share one camera at all seats.
-        // The base stays planted in its slot; distance scaling is preserved.
+        // Rotate around the visual centre so the model remains centred on the
+        // card stack it replaces, including at the side seats.
         transform: [{ scaleY: 1 / seatSquash }, { rotate: `${-seatRotation}deg` }],
     }]}>
         <Animated.View style={[styles.root, animated]}>
@@ -147,5 +148,6 @@ export const MiniBuilding = memo(function MiniBuilding({ kind, color, seatRotati
 
 const styles = StyleSheet.create({
     root: { alignItems: 'center', justifyContent: 'flex-end', transformOrigin: 'center bottom' },
+    orientation: { transformOrigin: 'center' },
 });
 export default MiniBuilding;
