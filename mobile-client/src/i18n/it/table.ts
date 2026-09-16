@@ -75,6 +75,7 @@ const table: Catalog = {
     'table.discard_empty': 'vuoto',
     'table.play_it': 'Giocala',
     'table.action_space': 'Spazio azioni',
+    'table.action_hint': 'Trascina per giocare',
 
     // ── Bank ─────────────────────────────────────────────────────────────
     'table.bank': 'Banca',

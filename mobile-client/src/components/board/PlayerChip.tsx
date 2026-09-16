@@ -86,8 +86,8 @@ function PlayerChipImpl({
 
 const styles = StyleSheet.create({
     chip: {
-        minWidth: 132,
-        minHeight: 44,
+        minWidth: 145,
+        minHeight: 72,
         padding: 7,
         borderRadius: radius.panel,
         backgroundColor: surface.panelOverlay,
@@ -99,7 +99,7 @@ const styles = StyleSheet.create({
     targeted: { borderColor: status.dangerSeat },
     head: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     names: { flex: 1 },
-    name: { fontFamily: uiFont(700), fontSize: 12, color: ink.body },
+    name: { fontFamily: uiFont(700), fontSize: 14, color: ink.body },
     away: { fontFamily: uiFont(700), fontSize: 9, color: ink.muted45 },
     stats: { flexDirection: 'row', alignItems: 'center', gap: 8 },
     bank: { fontFamily: uiFont(800), fontSize: 11, color: status.bank },

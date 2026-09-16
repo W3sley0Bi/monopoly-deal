@@ -1,29 +1,70 @@
-import { memo } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { Modal as RNModal, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Animated, {
+    Easing,
+    interpolate,
+    runOnJS,
+    useAnimatedStyle,
+    useReducedMotion,
+    useSharedValue,
+    withTiming,
+} from 'react-native-reanimated';
 
 import type { SheetProps } from '../../../lib/contracts';
 import { ink, line, radius, surface } from '../../../lib/theme';
 import { displayFont, ls, uiFont } from '../../../lib/fonts';
 
+const SHEET_EASING = Easing.bezier(0.16, 1, 0.3, 1);
+
 /**
  * The phone's answer to every desktop popover (DESIGN-TOKENS §6.1) — a bottom
  * sheet capped at 78% of the screen, dismissed by the backdrop or the swipe
  * handle. RN's own `Modal` supplies the presentation and the Android back
- * button; the entrance is its `slide` animation rather than a hand-rolled one,
- * because a native sheet that lags its own gesture reads as broken.
+ * button. The backdrop fades in place while the sheet keeps the familiar
+ * bottom-up movement. Both use GPU properties and finish before unmounting.
  */
 function SheetImpl({ open, onClose, title, children, tabs, activeTab, onTabChange }: SheetProps) {
     const { height } = useWindowDimensions();
     const insets = useSafeAreaInsets();
+    const reducedMotion = useReducedMotion();
+    const [mounted, setMounted] = useState(open);
+    const progress = useSharedValue(0);
+    const duration = reducedMotion ? 0 : 220;
+    const travel = Math.min(height * 0.78, height - 80) + 40;
+
+    useEffect(() => {
+        if (open) setMounted(true);
+    }, [open]);
+
+    useEffect(() => {
+        if (!mounted) return;
+        if (open) {
+            progress.value = withTiming(1, { duration, easing: SHEET_EASING });
+            return;
+        }
+        progress.value = withTiming(0, { duration, easing: SHEET_EASING }, (finished) => {
+            if (finished) runOnJS(setMounted)(false);
+        });
+    }, [duration, mounted, open, progress]);
+
+    const backdropStyle = useAnimatedStyle(() => ({
+        opacity: progress.value,
+    }));
+    const sheetStyle = useAnimatedStyle(() => ({
+        transform: [{ translateY: interpolate(progress.value, [0, 1], [travel, 0]) }],
+    }));
 
     return (
-        <RNModal visible={open} transparent animationType="slide" onRequestClose={onClose}>
+        <RNModal visible={mounted} transparent animationType="none" onRequestClose={onClose}>
             <View style={styles.root}>
-                <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="Close" />
-                <View
+                <Animated.View style={[styles.backdrop, backdropStyle]}>
+                    <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close" />
+                </Animated.View>
+                <Animated.View
                     style={[
                         styles.sheet,
+                        sheetStyle,
                         { maxHeight: Math.min(height * 0.78, height - 80), paddingBottom: Math.max(12, insets.bottom) },
                     ]}
                 >
@@ -56,7 +97,7 @@ function SheetImpl({ open, onClose, title, children, tabs, activeTab, onTabChang
                     >
                         {children}
                     </ScrollView>
-                </View>
+                </Animated.View>
             </View>
         </RNModal>
     );

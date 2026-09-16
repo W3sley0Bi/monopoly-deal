@@ -1,22 +1,29 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
+import { BlurTargetView } from 'expo-blur';
+import { SymbolView } from 'expo-symbols';
+import { FeltTable } from '../src/components/table/FeltTable';
+import { GlassPanel, TableGlassProvider } from '../src/components/table/TableGlass';
 
 import { useGameConnectionContext } from '../lib/net/messages';
 import { useStore } from '../lib/store';
 import { brand, ink, line, radius, status, surface } from '../lib/theme';
 import { displayFont, ls, uiFont } from '../lib/fonts';
 import { Btn, LabelCaps, Panel, Sheet } from '../src/ui/kit';
-import { Card } from '../src/ui/card';
+import { Card, CardBack } from '../src/ui/card';
 import { PlayerChip, PropertySets } from '../src/components/board';
 import { DragLayer, Draggable, DropZone, useDragLayer } from '../src/game/drag';
 import { ActionDialog } from '../src/components/table/ActionDialog';
+import { ActiveBoard } from '../src/components/board/ActiveBoard';
+import { usePlayBubbles } from '../src/game/usePlayBubbles';
 import { PendingPanel } from '../src/components/table/PendingPanel';
 import { useI18n } from '../src/i18n';
 import {
     assets,
+    colorMeta,
     isPlayableAction,
     isYourTurn,
     myTarget,
@@ -27,8 +34,10 @@ import {
     you as youOf,
 } from '../src/game/meta';
 import { applyOptimistic, moveSettled, type PendingMove } from '../src/game/optimistic';
-import type { Card as CardT, Color, RoomView } from '../src/types';
+import type { Card as CardT, Color, LogEntry, RoomView } from '../src/types';
 import type { ActionDialogIntent, PendingViewerRole } from '../lib/contracts';
+
+const EMPTY_LOG: LogEntry[] = [];
 
 export default function TableScreen() {
     // The body has to live inside the layer to read what is being carried.
@@ -43,6 +52,12 @@ function TableBody() {
     const { t, tCard, tLog } = useI18n();
     const router = useRouter();
     const insets = useSafeAreaInsets();
+    const feltTarget = useRef<View>(null);
+    const { height: windowHeight } = useWindowDimensions();
+    // The felt belongs to the viewport, not to the accordion's remaining space.
+    const feltTop = insets.top + 132;
+    const feltHeight = Math.max(180, windowHeight - feltTop - insets.bottom - 60);
+    const cardAreaHeight = Math.max(120, feltHeight * 0.55);
     const { room: live, send, leave, notice } = useGameConnectionContext();
     const dragLayer = useDragLayer();
 
@@ -56,6 +71,7 @@ function TableBody() {
     const [talk, setTalk] = useState(false);
     const [menu, setMenu] = useState(false);
     const [sheetPlayer, setSheetPlayer] = useState<string | null>(null);
+    const [bankOpen, setBankOpen] = useState(false);
 
     useEffect(() => {
         if (!live) router.replace('/');
@@ -85,6 +101,14 @@ function TableBody() {
         if (!live) return null;
         return guess ? applyOptimistic(live, guess) : live;
     }, [live, guess]);
+
+    const ownTurn = room ? isYourTurn(room.game) : false;
+    const hasPending = Boolean(room?.game.pending);
+    const [boardOpen, setBoardOpen] = useState(true);
+    const [handOpen, setHandOpen] = useState(true);
+    const plays = usePlayBubbles(room?.game.log ?? EMPTY_LOG, room?.id);
+    useEffect(() => { setBoardOpen(ownTurn); }, [ownTurn, room?.id]);
+    useEffect(() => { setHandOpen(ownTurn || hasPending); }, [ownTurn, hasPending, room?.id]);
 
     const act = useCallback(
         (msg: Parameters<typeof send>[0], cardId?: string, optimistic?: PendingMove) => {
@@ -166,6 +190,9 @@ function TableBody() {
     // never re-aimed mid-drag — a target that moves under a thumb is worse
     // than a small one.
     const carried = dragLayer.dragging;
+    const boardShown = boardOpen || Boolean(carried);
+    const handShown = handOpen || carried?.from === 'hand';
+    const turnPlayer = g.players[g.current_turn % g.players.length];
     const carriedCard = carried?.card ?? null;
     const carriedTargets = carriedCard ? dropTargets(carriedCard, g.colors) : null;
 
@@ -175,14 +202,31 @@ function TableBody() {
     const actionActive =
         !!carried && canPlay && carried.from === 'hand' && !!carriedCard && isPlayableAction(carriedCard);
 
-    const growFor = (active: boolean) => (!carried ? 1 : active ? 1.72 : 0.28);
+    // The eligible zone still leans towards the thumb, but the other one keeps
+    // enough width to stay readable — a crushed tile looked broken, not inert.
+    const growFor = (active: boolean) => (!carried ? 1 : active ? 1.45 : 0.55);
 
     const payable = me
         ? assets(me).map((a) => ({ card: a.card, source: (a.fromColor ?? 'bank') as 'bank' | Color }))
         : [];
 
     return (
-        <View style={[styles.root, { paddingTop: insets.top + 4, paddingBottom: Math.max(6, insets.bottom) }]}>
+        <TableGlassProvider target={feltTarget}>
+        {/* The bar is a floating pill now, so it sits in the home-indicator
+            gutter rather than above it — the indicator is its bottom padding. */}
+        <View style={[styles.root, { paddingTop: insets.top + 4, paddingBottom: Math.max(6, insets.bottom - 14) }]}>
+            <BlurTargetView ref={feltTarget} pointerEvents="box-none" style={[styles.feltBackground, { top: feltTop, height: feltHeight }]}>
+                <FeltTable
+                    players={g.players}
+                    you={room.you}
+                    cardAreaHeight={cardAreaHeight}
+                    onOpenPlayer={setSheetPlayer}
+                    onPreviewPlayer={setSheetPlayer}
+                    onPreviewEnd={(playerId) =>
+                        setSheetPlayer((current) => (current === playerId ? null : current))
+                    }
+                />
+            </BlurTargetView>
             {/* ---- header ---- */}
             <View style={styles.header}>
                 <Pressable onPress={leave} style={styles.iconBtn} accessibilityLabel={t('table.back_to_tables')}>
@@ -202,10 +246,14 @@ function TableBody() {
             ) : null}
 
             {/* ---- opponents ---- */}
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rail}>
+            <ScrollView horizontal style={styles.opponentRail} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rail}>
                 <View style={styles.deckChip}>
-                    <Text style={styles.deckCount}>{g.deck_count}</Text>
-                    <LabelCaps size={10}>{t('table.deck')}</LabelCaps>
+                    <CardBack width={30} height={43} borderWidth={2} radius={7} />
+                    <View>
+                        <Text style={styles.deckLabel}>{t('table.deck')} <Text style={styles.deckCount}>{g.deck_count}</Text></Text>
+                        <Text style={styles.deckLabel}>{t('table.discard_count', { count: g.discard_count })}</Text>
+                    </View>
+                    {g.discard_top ? <View style={styles.discardThumb}><View style={styles.discardScale}><Card card={g.discard_top} size="xs" /></View></View> : null}
                 </View>
                 {rivals.map((p) => (
                     <PlayerChip
@@ -215,24 +263,43 @@ function TableBody() {
                         isTargeted={!!pending?.targets?.some((x) => !x.settled && x.player_id === p.id)}
                         isOwner={p.id === room.owner_id}
                         isYou={false}
+                        playBubbleText={plays[p.name] ? tLog(plays[p.name].entry) : null}
                         onPress={() => setSheetPlayer(p.id)}
                     />
                 ))}
             </ScrollView>
 
+            {/* This space grows above the local sections, keeping them bottom-anchored. */}
+            <View pointerEvents="box-none" style={styles.sharedTable}>
+            {turnPlayer && turnPlayer.id !== me?.id && !myTurn ? (
+                <ActiveBoard key={turnPlayer.id} player={turnPlayer} onOpen={() => setSheetPlayer(turnPlayer.id)} />
+            ) : null}
+
             {/* ---- what just happened ---- */}
-            <Text style={styles.event} numberOfLines={2}>
+            <Text style={styles.event} numberOfLines={2} accessibilityLiveRegion="polite">
                 {lastEvent ? tLog(lastEvent) : t('table.shared_space')}
             </Text>
+            </View>
 
+            {me ? <>
             {/* ---- my board ---- */}
-            <Panel style={styles.board}>
-                <View style={styles.boardHead}>
+            <GlassPanel style={[styles.board, !boardShown && styles.boardFolded]}>
+                <Pressable style={({ pressed }) => [styles.boardHead, styles.foldHead, pressed && styles.foldHeadPressed]} accessibilityRole="button"
+                    accessibilityState={{ expanded: boardShown }} disabled={!!carried}
+                    accessibilityLabel={t(boardShown ? 'table.board_fold' : 'table.board_unfold')}
+                    onPress={() => {
+                        void Haptics.selectionAsync();
+                        setBoardOpen(open => !open);
+                    }}>
                     <LabelCaps>{t('table.your_properties')}</LabelCaps>
+                {!boardShown ? <View style={[styles.swatches, styles.inlineSwatches]} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+                    {me?.sets.map(set => <View key={set.color} style={[styles.swatch, { backgroundColor: colorMeta(set.color).hex, flex: set.cards.length, opacity: set.complete ? 1 : 0.55 }]} />)}
+                </View> : null}
                     <Text style={styles.progress}>
-                        {t('table.sets_progress', { count: me?.complete_sets ?? 0, need: 3 })}
+                        {t('table.sets_progress', { done: me?.complete_sets ?? 0 })}
                     </Text>
-                </View>
+                    <DisclosureIcon expanded={boardShown} />
+                </Pressable>
                 <DropZone
                     id="properties"
                     active={propertyActive}
@@ -247,7 +314,7 @@ function TableBody() {
                         }
                         placeProperty(card);
                     }}
-                    style={styles.propertyZone}
+                    style={[styles.propertyZone, !boardShown && styles.hidden]}
                 >
                 <ScrollView style={styles.boardScroll}>
                     <PropertySets
@@ -267,10 +334,13 @@ function TableBody() {
                 </ScrollView>
                 </DropZone>
 
+            </GlassPanel>
+
                 {/* The two landing places a card can go that are not a set. */}
                 <View style={styles.dropRow}>
                     <DropZone
                         id="bank"
+                        glass
                         active={bankActive}
                         grow={growFor(bankActive)}
                         hint={t('table.bank_drop', { amount: carriedCard?.value ?? 0 })}
@@ -280,44 +350,80 @@ function TableBody() {
                                 cardId: card.id,
                             })
                         }
+                        style={styles.zoneTile}
                     >
-                        {!carried ? (
-                            <View style={styles.bankRow}>
-                                <Text style={styles.bankLabel}>{t('table.bank')}</Text>
-                                <Text style={styles.bankTotal}>${me?.bank_total ?? 0}M</Text>
-                                <Text style={styles.bankCount}>
+                        {/* Tapping the tile opens the pile; dragging still drops
+                            onto it, because the drag gesture lives on the card. */}
+                        <Pressable
+                            style={styles.zoneHead}
+                            accessibilityRole="button"
+                            accessibilityLabel={`${t('table.bank')}: ${t('table.bank_cards', { count: me?.bank.length ?? 0 })}`}
+                            disabled={!!carried}
+                            onPress={() => {
+                                void Haptics.selectionAsync();
+                                setBankOpen(true);
+                            }}
+                        >
+                            <ZoneGlyph name="banknote" fallback="$" />
+                            <View style={styles.zoneText}>
+                                <LabelCaps>{t('table.bank')}</LabelCaps>
+                                <Text style={styles.zoneMeta} numberOfLines={1}>
                                     {t('table.bank_cards', { count: me?.bank.length ?? 0 })}
                                 </Text>
                             </View>
-                        ) : (
-                            <Text style={styles.zoneLabel}>{t('table.bank')}</Text>
-                        )}
+                            <Text style={styles.bankTotal}>${me?.bank_total ?? 0}M</Text>
+                        </Pressable>
                     </DropZone>
 
                     <DropZone
                         id="action"
+                        glass
                         active={actionActive}
                         grow={growFor(actionActive)}
                         hint={t('table.play_it')}
                         onDrop={(card) => playAction(card)}
+                        style={styles.zoneTile}
                     >
-                        <Text style={styles.zoneLabel}>✦ {t('table.action_space')}</Text>
+                        <View style={styles.zoneHead}>
+                            <ZoneGlyph name="sparkles" fallback="✦" />
+                            <View style={styles.zoneText}>
+                                <LabelCaps>{t('table.action_space')}</LabelCaps>
+                                <Text style={styles.zoneMeta} numberOfLines={1}>{t('table.action_hint')}</Text>
+                            </View>
+                        </View>
                     </DropZone>
                 </View>
-            </Panel>
 
             {/* ---- hand ---- */}
-            <View style={styles.handZone}>
-                <View style={styles.handHead}>
-                    <LabelCaps>{t('table.hand', { count: hand.length })}</LabelCaps>
-                    {overLimit ? (
-                        <Text style={styles.overLimit}>{t('table.over_limit', { count: hand.length - 7 })}</Text>
-                    ) : (
-                        <Text style={styles.handHint}>{t('table.hand_tap')}</Text>
-                    )}
+            <GlassPanel style={styles.handZone}>
+                {/* The hand folds like the board does, and a bare header row did
+                    not read as something you could collapse. */}
+                <View style={styles.grabberRow} pointerEvents="none">
+                    <View style={styles.grabber} />
                 </View>
+                <Pressable style={({ pressed }) => [styles.handHead, styles.foldHead, pressed && styles.foldHeadPressed]} accessibilityRole="button"
+                    accessibilityState={{ expanded: handShown }} disabled={!!carried}
+                    accessibilityLabel={t(handShown ? 'table.hand_fold' : 'table.hand_unfold')}
+                    onPress={() => {
+                        void Haptics.selectionAsync();
+                        setHandOpen(open => !open);
+                        setSelected(null);
+                    }}>
+                    <LabelCaps>{t('table.hand', { count: hand.length })}</LabelCaps>
+                {!handShown ? <View style={[styles.swatches, styles.inlineSwatches]} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+                    {hand.map(card => <View key={card.id} style={[styles.swatch, { backgroundColor: card.type === 'money' ? '#69cba5' : card.type === 'action' || card.type === 'rent' ? '#a855f7' : colorMeta(card.colors?.[0]).hex }]} />)}
+                </View> : null}
+                    {overLimit ? (
+                        <Text style={styles.overLimit} numberOfLines={2}>{t('table.over_limit', { count: hand.length - 7 })}</Text>
+                    ) : handShown ? (
+                        <Text style={styles.handHint} numberOfLines={2}>{t('table.hand_tap')}</Text>
+                    ) : null}
+                    <DisclosureIcon expanded={handShown} />
+                </Pressable>
+
 
                 <ScrollView
+                    style={[styles.handScroll, !handShown && styles.hidden]}
                     horizontal
                     showsHorizontalScrollIndicator={false}
                     contentContainerStyle={styles.handFan}
@@ -343,10 +449,12 @@ function TableBody() {
                     ))}
                     {hand.length === 0 ? <Text style={styles.handHint}>{t('table.hand_empty')}</Text> : null}
                 </ScrollView>
-            </View>
+            </GlassPanel>
+
+            </> : null}
 
             {/* ---- what can I do with the tapped card ---- */}
-            {selected ? (
+            {selected && handShown ? (
                 <Panel style={styles.tray}>
                     <Text style={styles.trayTitle} numberOfLines={1}>
                         {tCard(selected)}
@@ -363,6 +471,7 @@ function TableBody() {
                         {selected.type !== 'property' && selected.type !== 'property_wildcard' && (
                             <Btn
                                 label={t('table.bank_card', { amount: selected.value })}
+                                variant="blue"
                                 onPress={() =>
                                     act({ type: 'play_bank', card_id: selected.id }, selected.id, {
                                         type: 'play_bank',
@@ -392,9 +501,9 @@ function TableBody() {
             ) : null}
 
             {/* ---- bottom bar ---- */}
-            <View style={styles.controls}>
+            <GlassPanel style={styles.controls}>
                 <View style={styles.turnChip}>
-                    <Text style={styles.turnText}>
+                    <Text style={styles.turnText} numberOfLines={1}>
                         {spectating
                             ? t('table.watching')
                             : myTurn
@@ -403,17 +512,19 @@ function TableBody() {
                                     name: g.players[g.current_turn % g.players.length]?.name ?? '',
                                 })}
                     </Text>
-                    {myTurn ? <Text style={styles.plays}>{t('table.plays', { count: g.plays_left })}</Text> : null}
+                    {myTurn ? <View style={styles.plays} accessibilityLabel={`${t('table.plays_hint')}: ${g.plays_left}`}>
+                        {Array.from({ length: 3 }, (_, i) => <View key={i} style={[styles.play, i < g.plays_left && styles.playLeft]} />)}
+                    </View> : null}
                 </View>
 
-                <Pressable onPress={() => setTalk(true)} style={styles.iconBtn} accessibilityLabel={t('table.talk')}>
+                <Pressable onPress={() => setTalk(true)} style={({ pressed }) => [styles.talkBtn, pressed && styles.talkBtnPressed]} accessibilityRole="button" accessibilityLabel={t('table.talk')}>
                     <Text style={styles.icon}>💬</Text>
                 </Pressable>
 
                 {myTurn && !pending && !spectating ? (
-                    <Btn label={t('table.end_turn')} variant="gold" onPress={() => act({ type: 'end_turn' })} />
+                    <Btn label={t('table.end_turn')} variant="red" onPress={() => act({ type: 'end_turn' })} style={styles.endTurn} />
                 ) : null}
-            </View>
+            </GlassPanel>
 
             {/* ---- overlays ---- */}
             {dialog ? (
@@ -452,7 +563,7 @@ function TableBody() {
             <Sheet
                 open={!!sheetPlayer}
                 onClose={() => setSheetPlayer(null)}
-                title={rivals.find((p) => p.id === sheetPlayer)?.name}
+                title={g.players.find((p) => p.id === sheetPlayer)?.name}
             >
                 {(() => {
                     const p = g.players.find((x) => x.id === sheetPlayer);
@@ -466,6 +577,19 @@ function TableBody() {
                         </>
                     );
                 })()}
+            </Sheet>
+
+            <Sheet open={bankOpen} onClose={() => setBankOpen(false)} title={t('table.bank')}>
+                <Text style={styles.sheetStat}>
+                    ${me?.bank_total ?? 0}M · {t('table.bank_cards', { count: me?.bank.length ?? 0 })}
+                </Text>
+                {me?.bank.length ? (
+                    <View style={styles.bankGrid}>
+                        {me.bank.map((card) => <Card key={card.id} card={card} size="bank" />)}
+                    </View>
+                ) : (
+                    <Text style={styles.trayHint}>{t('table.bank_empty')}</Text>
+                )}
             </Sheet>
 
             <Sheet open={talk} onClose={() => setTalk(false)} title={t('panel.log')}>
@@ -518,10 +642,43 @@ function TableBody() {
                 </View>
             ) : null}
         </View>
+        </TableGlassProvider>
+    );
+}
+
+/** SF Symbol with a text fallback, sized for the drop-zone tiles. */
+function ZoneGlyph({ name, fallback }: { name: string; fallback: string }) {
+    return (
+        <View style={styles.zoneGlyph} pointerEvents="none">
+            <SymbolView
+                name={name as never}
+                size={14}
+                weight="semibold"
+                tintColor={ink.muted60}
+                fallback={<Text style={styles.zoneGlyphFallback}>{fallback}</Text>}
+                style={styles.zoneGlyphSymbol}
+            />
+        </View>
+    );
+}
+
+function DisclosureIcon({ expanded }: { expanded: boolean }) {
+    return (
+        <View style={styles.disclosure} pointerEvents="none">
+            <SymbolView
+                name={expanded ? 'chevron.down' : 'chevron.up'}
+                size={12}
+                weight="semibold"
+                tintColor={ink.muted60}
+                fallback={<Text style={styles.disclosureFallback}>{expanded ? '⌄' : '⌃'}</Text>}
+                style={styles.disclosureSymbol}
+            />
+        </View>
     );
 }
 
 const styles = StyleSheet.create({
+    feltBackground: { position: 'absolute', left: 0, right: 0 },
     root: { flex: 1, backgroundColor: surface.bodyBase, paddingHorizontal: 8, gap: 5 },
     header: { flexDirection: 'row', alignItems: 'center', gap: 7, paddingBottom: 6 },
     roomName: { flex: 1, fontFamily: uiFont(700), fontSize: 14, color: ink.headerTitle },
@@ -529,9 +686,45 @@ const styles = StyleSheet.create({
     iconBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
     icon: { fontSize: 18, color: ink.body },
     notice: { fontFamily: uiFont(700), fontSize: 12, color: status.danger },
+    opponentRail: { flexGrow: 0, flexShrink: 0, maxHeight: 128 },
+    // Gives up height faster than your own board does: when the tray opens, the
+    // shared table is the part you are least likely to be reading.
+    sharedTable: { flex: 1, flexShrink: 1.6, minHeight: 104, gap: 5, justifyContent: 'flex-start', overflow: 'hidden' },
+    handScroll: { flexGrow: 0, flexShrink: 0 },
+    hidden: { display: 'none' },
+    boardFolded: { flex: 0, minHeight: 0, paddingVertical: 3 },
+    foldHead: {
+        minHeight: 48,
+        gap: 8,
+        paddingHorizontal: 11,
+        borderRadius: 16,
+        borderCurve: 'continuous',
+    },
+    foldHeadPressed: { backgroundColor: '#d8fff00d' },
+    disclosure: {
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        borderCurve: 'continuous',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#d8fff012',
+        borderWidth: 1,
+        borderColor: '#d8fff01f',
+    },
+    disclosureSymbol: { width: 14, height: 14 },
+    disclosureFallback: { fontSize: 13, lineHeight: 14, color: ink.muted60, textAlign: 'center' },
+    swatches: { flexDirection: 'row', gap: 3, height: 6 },
+    swatch: { flex: 1, borderRadius: 3 },
+    inlineSwatches: { flex: 1, marginHorizontal: 4 },
+    deckLabel: { fontFamily: uiFont(700), fontSize: 11, color: ink.muted60 },
+    discardThumb: { width: 30, height: 43 },
+    discardScale: { width: 56, height: 80, transform: [{ scale: 0.54 }], transformOrigin: 'top left' },
     rail: { gap: 6, paddingVertical: 4, alignItems: 'stretch' },
     deckChip: {
-        minWidth: 56,
+        minWidth: 145,
+        flexDirection: 'row',
+        gap: 9,
         alignItems: 'center',
         justifyContent: 'center',
         borderRadius: radius.panel,
@@ -552,7 +745,10 @@ const styles = StyleSheet.create({
         paddingVertical: 6,
         paddingHorizontal: 10,
     },
-    board: { flex: 1, padding: 8, gap: 6, minHeight: 125 },
+    // The board is the only panel that gives up height when the tray opens, and
+    // it clips: a squeezed ScrollView would otherwise paint its cards straight
+    // through the bank row below it.
+    board: { flex: 1, flexShrink: 1, padding: 4, gap: 6, minHeight: 96, overflow: 'hidden' },
     boardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     boardScroll: { flex: 1 },
     progress: { fontFamily: uiFont(700), fontSize: 11, color: ink.muted60 },
@@ -560,53 +756,78 @@ const styles = StyleSheet.create({
     // this style would be applied last and win.
     propertyZone: {
         flex: 1,
+        flexShrink: 1,
         alignItems: 'stretch',
         justifyContent: 'flex-start',
-        minHeight: 90,
+        minHeight: 64,
+        overflow: 'hidden',
     },
     dropRow: { flexDirection: 'row', gap: 6 },
-    zoneLabel: {
-        fontFamily: uiFont(800),
-        fontSize: 9,
-        letterSpacing: 0.9,
-        textTransform: 'uppercase',
-        color: ink.muted60,
-        textAlign: 'center',
-    },
-    bankRow: {
-        flexDirection: 'row',
+    // The two tiles read as the same material as the board and hand panels, so
+    // their contents follow the same head geometry as the fold headers.
+    zoneTile: { minHeight: 56, minWidth: 104, alignItems: 'stretch', justifyContent: 'center', paddingHorizontal: 10, paddingVertical: 6 },
+    zoneHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    zoneText: { flex: 1, gap: 1 },
+    zoneMeta: { fontFamily: uiFont(700), fontSize: 10, color: ink.muted45 },
+    zoneGlyph: {
+        width: 26,
+        height: 26,
+        borderRadius: 13,
+        borderCurve: 'continuous',
         alignItems: 'center',
-        gap: 8,
-        borderTopWidth: 1,
-        borderTopColor: line.hairlineWhite10,
-        paddingTop: 6,
+        justifyContent: 'center',
+        backgroundColor: '#d8fff012',
+        borderWidth: 1,
+        borderColor: '#d8fff01f',
     },
-    bankLabel: { fontFamily: uiFont(800), fontSize: 11, color: ink.muted55, textTransform: 'uppercase' },
-    bankTotal: { flex: 1, fontFamily: displayFont(900), fontSize: 16, color: status.bank },
-    bankCount: { fontFamily: uiFont(700), fontSize: 11, color: ink.muted45 },
-    handZone: { gap: 4 },
+    zoneGlyphSymbol: { width: 14, height: 14 },
+    zoneGlyphFallback: { fontSize: 12, lineHeight: 14, color: ink.muted60, textAlign: 'center' },
+    bankTotal: { fontFamily: displayFont(900), fontSize: 16, color: status.bank },
+    handZone: { flexShrink: 0, gap: 2, paddingHorizontal: 4, paddingBottom: 4, paddingTop: 2, overflow: 'hidden' },
+    grabberRow: { alignItems: 'center', paddingTop: 2 },
+    grabber: { width: 34, height: 4, borderRadius: 2, backgroundColor: '#d8fff033' },
     handFan: { paddingVertical: 8, paddingHorizontal: 8, alignItems: 'center' },
     handOverlap: { marginLeft: -12 },
     handHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-    handHint: { fontFamily: uiFont(700), fontSize: 10, color: ink.muted45 },
+    handHint: { flex: 1, textAlign: 'right', fontFamily: uiFont(700), fontSize: 10, color: ink.muted45 },
     overLimit: { fontFamily: uiFont(700), fontSize: 10, color: ink.endTurnHint },
-    tray: { padding: 10, gap: 8 },
+    tray: { flexShrink: 0, padding: 10, gap: 8 },
+    bankGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingVertical: 4 },
     trayTitle: { fontFamily: uiFont(800), fontSize: 13, color: ink.body },
     trayRow: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
     trayHint: { fontFamily: uiFont(700), fontSize: 11, color: ink.muted45 },
     flex: { flex: 1 },
     controls: {
+        flexShrink: 0,
         flexDirection: 'row',
         alignItems: 'center',
         gap: 8,
-        backgroundColor: surface.mobileControls,
-        borderRadius: radius.panel,
-        paddingHorizontal: 8,
-        paddingVertical: 4,
+        borderRadius: 22,
+        paddingHorizontal: 10,
+        paddingVertical: 7,
     },
-    turnChip: { flex: 1 },
+    turnChip: { flex: 1, gap: 4 },
     turnText: { fontFamily: uiFont(800), fontSize: 13, color: ink.body },
-    plays: { fontFamily: uiFont(700), fontSize: 11, color: ink.muted60 },
+    // Dots rather than glyphs: ●/○ sit on different baselines in the UI face
+    // and the row jittered as plays were spent.
+    plays: { flexDirection: 'row', gap: 5, alignItems: 'center' },
+    play: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#d8fff02e' },
+    playLeft: { backgroundColor: brand.brass },
+    talkBtn: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        borderCurve: 'continuous',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#d8fff012',
+        borderWidth: 1,
+        borderColor: '#d8fff01f',
+    },
+    talkBtnPressed: { backgroundColor: '#d8fff026' },
+    // Concentric with the bar: the bar's radius minus its padding, so the red
+    // edge never crosses the glass border behind it.
+    endTurn: { borderRadius: 15, paddingHorizontal: 18, minHeight: 42 },
     sheetStat: { fontFamily: uiFont(700), fontSize: 13, color: ink.muted60 },
     logLine: { fontFamily: uiFont(700), fontSize: 12, color: ink.muted60, lineHeight: 18 },
     winOverlay: {

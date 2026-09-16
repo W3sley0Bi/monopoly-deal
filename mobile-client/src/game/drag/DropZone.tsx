@@ -13,6 +13,7 @@ import Animated, {
 
 import { useDragLayer } from './registry';
 import { useDragShared } from './DragLayer';
+import { GlassLayer } from '../../components/table/TableGlass';
 import { ink, radius, status, surface } from '../../../lib/theme';
 import { uiFont } from '../../../lib/fonts';
 import type { Card } from '../../types';
@@ -29,9 +30,13 @@ interface Props {
     grow?: number;
     children?: React.ReactNode;
     style?: object;
+    /** Renders the table's glass fill behind the zone's own state tint, so a
+     *  zone can sit next to the board and hand panels without reading as a
+     *  different material. */
+    glass?: boolean;
 }
 
-export function DropZone({ id, active, onDrop, hint, grow, children, style }: Props) {
+export function DropZone({ id, active, onDrop, hint, grow, children, style, glass }: Props) {
     const layer = useDragLayer();
     const shared = useDragShared();
     const ref = useRef<View>(null);
@@ -66,17 +71,21 @@ export function DropZone({ id, active, onDrop, hint, grow, children, style }: Pr
 
     const over = useDerivedValue(() => (shared.hoveredId.value === id ? 1 : 0));
     const eligible = useSharedValue(0);
+    const inert = useSharedValue(0);
     const pulse = useSharedValue(0);
 
     useEffect(() => {
         const live = carrying && active;
         eligible.value = withTiming(live ? 1 : 0, { duration: 160 });
+        // Carries the "not this one" signal, so the zone can say it in tone
+        // rather than by shrinking itself out of legibility.
+        inert.value = withTiming(carrying && !active ? 1 : 0, { duration: 160 });
         // A slow breath while a zone is merely available — enough to read as
         // "this one will take it" without competing with the card in the air.
         pulse.value = live
             ? withRepeat(withTiming(1, { duration: 900, easing: Easing.inOut(Easing.quad) }), -1, true)
             : withTiming(0, { duration: 160 });
-    }, [carrying, active, eligible, pulse]);
+    }, [carrying, active, eligible, inert, pulse]);
 
     const animated = useAnimatedStyle(() => {
         const o = over.value;
@@ -88,14 +97,23 @@ export function DropZone({ id, active, onDrop, hint, grow, children, style }: Pr
                 [0, 1, 2],
                 ['#ffffff14', status.dropLive, status.dropOver],
             ),
-            backgroundColor: interpolateColor(
-                e + o,
-                [0, 1, 2],
-                [surface.dropSlot, '#e5cc8914', '#f9d46029'],
-            ),
+            // A glass zone paints its state on top of the blur instead: a colour
+            // on the container would sit behind it and never be seen.
+            backgroundColor: glass
+                ? surface.dropSlot
+                : interpolateColor(e + o, [0, 1, 2], [surface.dropSlot, '#e5cc8914', '#f9d46029']),
+            opacity: 1 - 0.45 * inert.value,
             transform: [{ scale: withTiming(o ? 1.06 : 1, { duration: 140 }) }],
         };
     });
+
+    const fill = useAnimatedStyle(() => ({
+        backgroundColor: interpolateColor(
+            eligible.value + over.value,
+            [0, 1, 2],
+            ['transparent', '#e5cc8914', '#f9d46029'],
+        ),
+    }));
 
     const hintStyle = useAnimatedStyle(() => ({
         opacity: withTiming(eligible.value ? 1 : 0, { duration: 140 }),
@@ -106,8 +124,12 @@ export function DropZone({ id, active, onDrop, hint, grow, children, style }: Pr
         <Animated.View
             ref={ref}
             collapsable={false}
-            style={[styles.zone, { flexGrow: grow ?? 1 }, animated, style]}
+            style={[styles.zone, glass && styles.glassZone, { flexGrow: grow ?? 1 }, animated, style]}
         >
+            {glass ? <>
+                <GlassLayer radius={radius.lg - 1} />
+                <Animated.View pointerEvents="none" style={[styles.glassFill, fill]} />
+            </> : null}
             {children}
             {hint ? (
                 <Animated.Text style={[styles.hint, hintStyle]} numberOfLines={1}>
@@ -129,6 +151,22 @@ const styles = StyleSheet.create({
         // Anchors the scale to the bottom edge, so a zone growing under a thumb
         // never moves out from under it.
         transformOrigin: 'center bottom',
+    },
+    glassZone: {
+        borderCurve: 'continuous',
+        borderColor: '#d8fff044',
+        boxShadow: '0 8px 24px #00181f52',
+        // The reduced-transparency fallback: GlassLayer renders nothing then.
+        backgroundColor: 'transparent',
+    },
+    glassFill: {
+        position: 'absolute',
+        top: 0,
+        right: 0,
+        bottom: 0,
+        left: 0,
+        borderRadius: radius.lg - 1,
+        borderCurve: 'continuous',
     },
     hint: {
         fontFamily: uiFont(800),

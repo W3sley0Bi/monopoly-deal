@@ -75,6 +75,7 @@ const table: Catalog = {
     'table.discard_empty': 'leer',
     'table.play_it': 'Ausspielen',
     'table.action_space': 'Aktionsfeld',
+    'table.action_hint': 'Zum Ausspielen ablegen',
 
     // ── Bank ─────────────────────────────────────────────────────────────
     'table.bank': 'Bank',

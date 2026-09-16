@@ -6,6 +6,7 @@ import type { CardSizeKey } from '../../../lib/theme';
 import { brand, ink, radius } from '../../../lib/theme';
 import { colorMeta } from '../../game/meta';
 import { Card } from '../../ui/card';
+import { money } from '../../i18n/format';
 import { useI18n } from '../../i18n';
 import { uiFont } from '../../../lib/fonts';
 
@@ -48,15 +49,18 @@ function PropertySetsImpl({
                         key={set.color}
                         style={[
                             styles.stack,
+                            size === 'activeBoard' && { backgroundColor: `${cm.hex}18`, borderColor: '#b9eee326', padding: 6 },
                             set.complete && styles.complete,
                             live && styles.live,
                         ]}
                     >
                         <View style={styles.stackHead}>
                             <View style={[styles.swatch, { backgroundColor: cm.hex }]} />
+                            {size === 'activeBoard' ? <Text style={styles.colorName}>{tColor(set.color).toUpperCase()}</Text> : null}
                             <Text style={styles.count}>
                                 {set.cards.length}/{set.size}
                             </Text>
+                            {size === 'activeBoard' ? <Text style={styles.rent}>{money(t, set.rent)}</Text> : null}
                         </View>
 
                         <View style={styles.cards}>
@@ -94,6 +98,8 @@ function PropertySetsImpl({
 }
 
 const styles = StyleSheet.create({
+    colorName: { fontFamily: uiFont(900), fontSize: 9, color: ink.body },
+    rent: { fontFamily: uiFont(800), fontSize: 10, color: '#74e8bd' },
     wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
     stack: {
         padding: 4,
