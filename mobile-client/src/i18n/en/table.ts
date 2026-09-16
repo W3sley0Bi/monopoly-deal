@@ -62,6 +62,7 @@ const table: Catalog = {
     'table.tutorial_stop': 'Stop the tutorial',
     'table.tutorial_start': '🎓 Show me how to play',
     'table.leave': 'Leave table',
+    'table.leave_confirm': 'This ends the game for everyone at the table.',
 
     // ── Spectator bar ────────────────────────────────────────────────────
     'table.watching': '👁 Watching',

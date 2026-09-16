@@ -62,6 +62,7 @@ const table: Catalog = {
     'table.tutorial_stop': 'Tutorial beenden',
     'table.tutorial_start': '🎓 Zeig mir, wie es geht',
     'table.leave': 'Tisch verlassen',
+    'table.leave_confirm': 'Damit endet das Spiel für alle am Tisch.',
 
     // ── Spectator bar ────────────────────────────────────────────────────
     'table.watching': '👁 Zuschauen',

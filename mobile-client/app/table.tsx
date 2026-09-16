@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions, type StyleProp, type ViewStyle } from 'react-native';
+import { Alert, Pressable, ScrollView, Share, StyleSheet, Text, View, useWindowDimensions, type StyleProp, type ViewStyle } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
+import * as Clipboard from 'expo-clipboard';
 import { BlurTargetView } from 'expo-blur';
 import { SymbolView } from 'expo-symbols';
 import { FeltTable, type SeatHit } from '../src/components/table/FeltTable';
@@ -18,8 +19,9 @@ import { PlayerChip, PropertySets } from '../src/components/board';
 import { DragLayer, Draggable, DropZone, useDragLayer } from '../src/game/drag';
 import { ActionDialog } from '../src/components/table/ActionDialog';
 import { ActiveBoard } from '../src/components/board/ActiveBoard';
-import { usePlayBubbles } from '../src/game/usePlayBubbles';
+import { useChatBubbles } from '../src/game/useChatBubbles';
 import { PendingPanel } from '../src/components/table/PendingPanel';
+import { ChatPanel } from '../src/components/table/ChatPanel';
 import { useI18n } from '../src/i18n';
 import { FIXTURES } from '../src/dev/fixtures';
 import {
@@ -35,10 +37,10 @@ import {
     you as youOf,
 } from '../src/game/meta';
 import { applyOptimistic, moveSettled, type PendingMove } from '../src/game/optimistic';
-import type { Card as CardT, Color, LogEntry, RoomView } from '../src/types';
+import type { Card as CardT, ChatMessage, Color, RoomView } from '../src/types';
 import type { ActionDialogIntent, PendingViewerRole } from '../lib/contracts';
 
-const EMPTY_LOG: LogEntry[] = [];
+const EMPTY_CHAT: ChatMessage[] = [];
 
 export default function TableScreen() {
     // The body has to live inside the layer to read what is being carried.
@@ -56,7 +58,10 @@ function TableBody() {
     const feltTarget = useRef<View>(null);
     const { height: windowHeight } = useWindowDimensions();
     // The felt belongs to the viewport, not to the accordion's remaining space.
-    const feltTop = insets.top + 132;
+    // Just the rail now (~64, the chips being one row shorter) plus the top
+    // padding. It has to clear the rail rather than merely start near it: the
+    // rail is a ScrollView and would take the taps meant for the seats beneath.
+    const feltTop = insets.top + 72;
     const feltHeight = Math.max(180, windowHeight - feltTop - insets.bottom - 60);
     const cardAreaHeight = Math.max(120, feltHeight * 0.55);
     const { room: live, send, leave, notice } = useGameConnectionContext();
@@ -74,6 +79,7 @@ function TableBody() {
     const [dialog, setDialog] = useState<{ card: CardT; intent: ActionDialogIntent; fromColor?: Color } | null>(null);
     const [wildColor, setWildColor] = useState<Record<string, Color>>({});
     const [talk, setTalk] = useState(false);
+    const [logOpen, setLogOpen] = useState(false);
     const [menu, setMenu] = useState(false);
     const [sheetPlayer, setSheetPlayer] = useState<string | null>(null);
     const [bankOpen, setBankOpen] = useState(false);
@@ -84,6 +90,7 @@ function TableBody() {
     const [localTop, setLocalTop] = useState<number | null>(null);
     // Dev only: paints the seat tap targets and the overlay band they live in.
     const [showHits, setShowHits] = useState(false);
+    const [copied, setCopied] = useState(false);
 
     useEffect(() => {
         if (!live) router.replace('/');
@@ -118,7 +125,9 @@ function TableBody() {
     const hasPending = Boolean(room?.game.pending);
     const [boardOpen, setBoardOpen] = useState(true);
     const [handOpen, setHandOpen] = useState(true);
-    const plays = usePlayBubbles(room?.game.log ?? EMPTY_LOG, room?.id);
+    // Bubbles carry what players *said*. What they did is on the felt and in
+    // the log; narrating it over their head as well made the table chatter.
+    const said = useChatBubbles(room?.chat ?? EMPTY_CHAT, room?.id);
     useEffect(() => { setBoardOpen(ownTurn); }, [ownTurn, room?.id]);
     useEffect(() => { setHandOpen(ownTurn || hasPending); }, [ownTurn, hasPending, room?.id]);
 
@@ -237,45 +246,35 @@ function TableBody() {
                     discardTop={g.discard_top}
                     onOpenDiscard={() => setDiscardOpen(true)}
                     turnId={turnPlayer?.id}
+                    playsLeft={g.plays_left}
                     onSeats={setSeatHits}
                     debugSeats={showHits}
                 />
             </BlurTargetView>
-            {/* ---- header ---- */}
-            <View style={styles.header}>
-                <Pressable onPress={leave} style={styles.iconBtn} accessibilityLabel={t('table.back_to_tables')}>
-                    <Icon name="chevron.left" fallback="‹" size={20} />
-                </Pressable>
-                <Text style={styles.roomName} numberOfLines={1}>
-                    {room.name}
-                </Text>
-                <Text style={styles.code}>{room.id}</Text>
-                <Pressable onPress={() => setMenu(true)} style={styles.iconBtn} accessibilityLabel={t('table.menu')}>
-                    <Icon name="gearshape.fill" fallback="☰" size={20} color={ink.muted60} />
-                </Pressable>
-            </View>
-
             {notice ? (
                 <Text style={styles.notice}>{notice.key ? t(notice.key, notice.args) : notice.text}</Text>
             ) : null}
 
-            {/* ---- opponents ---- */}
-            <ScrollView horizontal style={styles.opponentRail} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rail}>
-                {/* The deck and discard live on the felt now, where they read as
-                    piles people draw from rather than as a status chip. */}
+            {/* ---- opponents ----
+                A row, not a rail: four opponents is the most this game can seat
+                (`game.MaxPlayers` is five), and they all belong on screen at
+                once. Scrolling hid a player behind a gesture, which is a poor
+                way to learn somebody just completed a set. */}
+            <View style={styles.opponentRail}>
                 {rivals.map((p) => (
-                    <PlayerChip
-                        key={p.id}
-                        player={p}
-                        isTurn={g.players[g.current_turn % g.players.length]?.id === p.id}
-                        isTargeted={!!pending?.targets?.some((x) => !x.settled && x.player_id === p.id)}
-                        isOwner={p.id === room.owner_id}
-                        isYou={false}
-                        playBubbleText={plays[p.name] ? tLog(plays[p.name].entry) : null}
-                        onPress={() => setSheetPlayer(p.id)}
-                    />
+                    <View key={p.id} style={styles.railSlot}>
+                        <PlayerChip
+                            player={p}
+                            isTurn={g.players[g.current_turn % g.players.length]?.id === p.id}
+                            isTargeted={!!pending?.targets?.some((x) => !x.settled && x.player_id === p.id)}
+                            isOwner={p.id === room.owner_id}
+                            isYou={false}
+                            playBubbleText={said[p.id]?.text ?? null}
+                            onPress={() => setSheetPlayer(p.id)}
+                        />
+                    </View>
                 ))}
-            </ScrollView>
+            </View>
 
             {/* This space grows above the local sections, keeping them bottom-anchored. */}
             <View pointerEvents="box-none" style={styles.sharedTable}>
@@ -531,6 +530,17 @@ function TableBody() {
 
             {/* ---- bottom bar ---- */}
             <GlassPanel style={styles.controls}>
+                {/* Table-level controls, all in one bar: the header above was a
+                    36pt strip carrying a single button, and the felt wanted
+                    those points more than the gear did. */}
+                <Pressable onPress={() => setMenu(true)} style={({ pressed }) => [styles.talkBtn, pressed && styles.talkBtnPressed]} accessibilityRole="button" accessibilityLabel={t('table.menu')}>
+                    <Icon name="gearshape.fill" fallback="☰" size={18} color={ink.muted60} />
+                </Pressable>
+
+                <Pressable onPress={() => setLogOpen(true)} style={({ pressed }) => [styles.talkBtn, pressed && styles.talkBtnPressed]} accessibilityRole="button" accessibilityLabel={t('panel.log')}>
+                    <Icon name="list.bullet.rectangle" fallback="≡" size={18} color={ink.muted60} />
+                </Pressable>
+
                 <View style={styles.turnChip}>
                     <Text style={styles.turnText} numberOfLines={1}>
                         {spectating
@@ -546,7 +556,7 @@ function TableBody() {
                     </View> : null}
                 </View>
 
-                <Pressable onPress={() => setTalk(true)} style={({ pressed }) => [styles.talkBtn, pressed && styles.talkBtnPressed]} accessibilityRole="button" accessibilityLabel={t('table.talk')}>
+                <Pressable onPress={() => setTalk(true)} style={({ pressed }) => [styles.talkBtn, pressed && styles.talkBtnPressed]} accessibilityRole="button" accessibilityLabel={t('panel.chat')}>
                     <Icon name="bubble.left.and.bubble.right.fill" fallback="…" size={18} color={ink.muted60} />
                 </Pressable>
 
@@ -684,7 +694,17 @@ function TableBody() {
                 ) : null}
             </Sheet>
 
-            <Sheet open={talk} onClose={() => setTalk(false)} title={t('panel.log')}>
+            {/* `scroll={false}`: the chat scrolls itself, and a ScrollView
+                inside the sheet's own would collapse its list to nothing. */}
+            <Sheet open={talk} onClose={() => setTalk(false)} title={t('panel.chat')} scroll={false}>
+                <ChatPanel
+                    chat={room.chat}
+                    you={room.you}
+                    onSend={(text) => send({ type: 'chat', text })}
+                />
+            </Sheet>
+
+            <Sheet open={logOpen} onClose={() => setLogOpen(false)} title={t('panel.log')}>
                 {g.log
                     .slice(-40)
                     .reverse()
@@ -695,7 +715,33 @@ function TableBody() {
                     ))}
             </Sheet>
 
-            <Sheet open={menu} onClose={() => setMenu(false)} title={t('table.menu')}>
+            <Sheet open={menu} onClose={() => setMenu(false)} title={room.name || t('table.menu')}>
+                <View style={styles.codeRow}>
+                    <View style={styles.codeText}>
+                        <LabelCaps>{t('invite.code')}</LabelCaps>
+                        <Text style={styles.codeBig} selectable>{room.id}</Text>
+                    </View>
+                    <Pressable
+                        onPress={async () => {
+                            await Clipboard.setStringAsync(`deal://join/${room.id}`);
+                            setCopied(true);
+                        }}
+                        accessibilityRole="button"
+                        accessibilityLabel={t('invite.copy')}
+                        style={({ pressed }) => [styles.talkBtn, pressed && styles.talkBtnPressed]}
+                    >
+                        <Icon name={copied ? 'checkmark' : 'doc.on.doc'} fallback={copied ? '✓' : '⧉'} size={16} color={copied ? brand.brass : ink.muted60} />
+                    </Pressable>
+                    <Pressable
+                        onPress={() => Share.share({ message: `deal://join/${room.id}` })}
+                        accessibilityRole="button"
+                        accessibilityLabel={t('invite.open')}
+                        style={({ pressed }) => [styles.talkBtn, pressed && styles.talkBtnPressed]}
+                    >
+                        <Icon name="square.and.arrow.up" fallback="↥" size={16} color={ink.muted60} />
+                    </Pressable>
+                </View>
+
                 <Toggle
                     label={t('table.live_play')}
                     hint={t('table.live_play_hint')}
@@ -715,24 +761,31 @@ function TableBody() {
                         if (!on) setSelected(null);
                     }}
                 />
+                {/* Leaving *is* quitting: a seat that walks away mid-hand ends
+                    the game for everyone anyway, so the two buttons that used
+                    to say that separately are one. */}
                 <Btn
-                    label={t('table.end_game')}
+                    label={t('table.leave')}
                     variant="red"
                     onPress={() =>
-                        Alert.alert(t('table.end_game_confirm'), '', [
+                        Alert.alert(t('table.leave'), t('table.leave_confirm'), [
                             { text: t('common.cancel'), style: 'cancel' },
                             {
-                                text: t('table.end_game'),
+                                text: t('table.leave'),
                                 style: 'destructive',
                                 onPress: () => {
                                     setMenu(false);
-                                    send({ type: 'terminate_game' });
+                                    // Only the owner may end it; everyone else
+                                    // just stands up and the server decides.
+                                    if (room.is_owner && g.state === 'playing') {
+                                        send({ type: 'terminate_game' });
+                                    }
+                                    leave();
                                 },
                             },
                         ])
                     }
                 />
-                <Btn label={t('table.leave')} onPress={leave} />
 
                 {/* Dev only: swap this table for a hand-built one. English on
                     purpose — these strings never reach a player. */}
@@ -864,13 +917,14 @@ function DisclosureIcon({ expanded }: { expanded: boolean }) {
 const styles = StyleSheet.create({
     feltBackground: { position: 'absolute', left: 0, right: 0 },
     root: { flex: 1, backgroundColor: surface.bodyBase, paddingHorizontal: 8, gap: 5 },
-    header: { flexDirection: 'row', alignItems: 'center', gap: 7, paddingBottom: 6 },
-    roomName: { flex: 1, fontFamily: uiFont(700), fontSize: 14, color: ink.headerTitle },
-    code: { fontFamily: displayFont(900), fontSize: 13, color: brand.inviteCode, letterSpacing: ls(0.1, 13) },
-    iconBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-    icon: { fontSize: 18, color: ink.body },
+    codeRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingBottom: 4 },
+    codeText: { flex: 1, gap: 1 },
+    codeBig: { fontFamily: displayFont(900), fontSize: 20, color: brand.inviteCode, letterSpacing: ls(0.1, 20) },
     notice: { fontFamily: uiFont(700), fontSize: 12, color: status.danger },
-    opponentRail: { flexGrow: 0, flexShrink: 0, maxHeight: 128 },
+    opponentRail: { flexGrow: 0, flexShrink: 0, flexDirection: 'row', gap: 5 },
+    // Equal shares, and `minWidth: 0` so a long name shrinks the slot instead
+    // of pushing its neighbours off the screen.
+    railSlot: { flex: 1, minWidth: 0 },
     // Gives up height faster than your own board does: when the tray opens, the
     // shared table is the part you are least likely to be reading.
     sharedTable: { flex: 1, flexShrink: 1.6, minHeight: 104, gap: 5, justifyContent: 'flex-start', overflow: 'hidden' },
@@ -901,7 +955,6 @@ const styles = StyleSheet.create({
     swatches: { flexDirection: 'row', gap: 3, height: 6 },
     swatch: { flex: 1, borderRadius: 3 },
     inlineSwatches: { flex: 1, marginHorizontal: 4 },
-    rail: { gap: 6, paddingVertical: 4, alignItems: 'stretch' },
     event: {
         textAlign: 'center',
         fontFamily: uiFont(700),
@@ -976,22 +1029,22 @@ const styles = StyleSheet.create({
         flexShrink: 0,
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 8,
+        gap: 6,
         borderRadius: 22,
-        paddingHorizontal: 10,
+        paddingHorizontal: 8,
         paddingVertical: 7,
     },
     turnChip: { flex: 1, gap: 4 },
-    turnText: { fontFamily: uiFont(800), fontSize: 13, color: ink.body },
+    turnText: { fontFamily: uiFont(800), fontSize: 12, color: ink.body },
     // Dots rather than glyphs: ●/○ sit on different baselines in the UI face
     // and the row jittered as plays were spent.
     plays: { flexDirection: 'row', gap: 5, alignItems: 'center' },
     play: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#d8fff02e' },
     playLeft: { backgroundColor: brand.brass },
     talkBtn: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
+        width: 38,
+        height: 38,
+        borderRadius: 19,
         borderCurve: 'continuous',
         alignItems: 'center',
         justifyContent: 'center',
@@ -1002,7 +1055,7 @@ const styles = StyleSheet.create({
     talkBtnPressed: { backgroundColor: '#d8fff026' },
     // Concentric with the bar: the bar's radius minus its padding, so the red
     // edge never crosses the glass border behind it.
-    endTurn: { borderRadius: 15, paddingHorizontal: 18, minHeight: 42 },
+    endTurn: { borderRadius: 15, paddingHorizontal: 14, minHeight: 40 },
     sheetStat: { fontFamily: uiFont(700), fontSize: 13, color: ink.muted60 },
     logLine: { fontFamily: uiFont(700), fontSize: 12, color: ink.muted60, lineHeight: 18 },
     winOverlay: {

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Ellipse } from 'react-native-svg';
-import Animated, { Easing, runOnJS, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from 'react-native-reanimated';
+import Animated, { Easing, runOnJS, useAnimatedStyle, useReducedMotion, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
 import type { Card as CardT, PlayerView, SetView } from '../../types';
 import { Card } from '../../ui/card';
 import { MiniBuilding, type BuildingKind } from './MiniBuilding';
@@ -124,8 +124,11 @@ const DECK_H = 43;
  */
 const MAT = ['#4a5893', '#5b6aa6', '#2f3a69'] as const;
 
-/** The travelling turn lamp. */
-const MARKER = 18;
+/** The travelling turn lamp: three dots, the plays left in the current turn. */
+const MARKER_W = 34;
+const MARKER_H = 14;
+/** How far outside the seat ring it rides, clear of everyone's cards. */
+const MARKER_OUT = 26;
 
 /** Timing for the lamp's trip round the ring; instant when motion is off. */
 function animateMarker(target: number, animate: boolean) {
@@ -174,6 +177,7 @@ export function FeltTable({
     discardCount,
     discardTop,
     turnId,
+    playsLeft = 3,
     onSeats,
     onOpenDiscard,
     debugSeats,
@@ -186,6 +190,8 @@ export function FeltTable({
     discardTop: CardT | null;
     /** Whose turn it is; the live marker rides round to their seat. */
     turnId?: string;
+    /** Plays the active player has left, drawn as the marker's three dots. */
+    playsLeft?: number;
     onSeats?: (seats: SeatHit[]) => void;
     onOpenDiscard?: () => void;
     /** Dev only: outlines each seat box where the felt itself thinks it is. */
@@ -344,10 +350,23 @@ export function FeltTable({
         marker.value = animateMarker(target, motion && !reduced);
     }, [turnAngle, size.width, marker, motion, reduced]);
 
+    // A slow breath, so the marker reads as live without competing with the
+    // cards. It is the quietest thing on the table that still moves.
+    const pulse = useSharedValue(0);
+    useEffect(() => {
+        pulse.value = motion && !reduced
+            ? withRepeat(withTiming(1, { duration: 1500, easing: Easing.inOut(Easing.quad) }), -1, true)
+            : 0;
+    }, [pulse, motion, reduced]);
+
     const markerStyle = useAnimatedStyle(() => ({
+        opacity: 0.55 + 0.3 * pulse.value,
         transform: [
-            { translateX: centre.x + Math.cos(marker.value) * radiusX - MARKER / 2 },
-            { translateY: centre.y + Math.sin(marker.value) * radiusY - MARKER / 2 },
+            // Outside the seats, not among them: at the seats' own radius the
+            // marker sat on top of somebody's cards.
+            { translateX: centre.x + Math.cos(marker.value) * (radiusX + MARKER_OUT) - MARKER_W / 2 },
+            { translateY: centre.y + Math.sin(marker.value) * (radiusY + MARKER_OUT) - MARKER_H / 2 },
+            { scale: 1 + 0.05 * pulse.value },
         ],
     }));
 
@@ -462,7 +481,11 @@ export function FeltTable({
 
         {size.width > 0 ? (
             <Animated.View pointerEvents="none" style={[styles.marker, markerStyle]}>
-                <View style={styles.markerCore} />
+                {/* The same three dots as the bottom bar: whose turn it is and
+                    how much of it is left, in one mark. */}
+                {Array.from({ length: 3 }, (_, i) => (
+                    <View key={i} style={[styles.markerDot, i < playsLeft && styles.markerDotLeft]} />
+                ))}
             </Animated.View>
         ) : null}
 
@@ -554,17 +577,19 @@ const styles = StyleSheet.create({
         position: 'absolute',
         top: 0,
         left: 0,
-        width: MARKER,
-        height: MARKER,
-        borderRadius: MARKER / 2,
+        width: MARKER_W,
+        height: MARKER_H,
+        borderRadius: MARKER_H / 2,
+        flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: '#dce64e2e',
+        gap: 4,
+        backgroundColor: '#dce64e14',
         borderWidth: 1,
-        borderColor: '#dce64e8c',
-        boxShadow: '0px 0px 12px #dce64e73',
+        borderColor: '#dce64e3d',
     },
-    markerCore: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#dce64e' },
+    markerDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: '#dce64e2e' },
+    markerDotLeft: { backgroundColor: '#dce64ec4' },
     rim: {
         position: 'absolute',
         top: RIM,

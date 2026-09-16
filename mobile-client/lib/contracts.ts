@@ -211,6 +211,9 @@ export interface SheetProps {
     tabs?: { key: string; label: string }[];
     activeTab?: string;
     onTabChange?: (key: string) => void;
+    /** False when the content scrolls itself — nesting the sheet's own
+     *  ScrollView around another one collapses the inner list to nothing. */
+    scroll?: boolean;
 }
 
 export interface ModalProps {
@@ -431,8 +434,9 @@ export interface PlayerChipProps {
     isTargeted: boolean;
     isOwner: boolean;
     isYou: boolean;
-    /** Their last log line, translated — suppressed while a reaction bubble
-     *  shows (usePlayBubbles / Reactions, SHELL-SPEC §6). */
+    /** The last thing they said in chat — not a log line: a bubble over a
+     *  player's head is speech (useChatBubbles). Suppressed while a reaction
+     *  bubble shows. */
     playBubbleText?: string | null;
     /** A reaction emoji live for 5s of server time. */
     reactionEmoji?: string | null;

@@ -35,7 +35,7 @@ function PlayerChipImpl({
             style={[styles.chip, isTurn && styles.turn, isTargeted && styles.targeted]}
         >
             <View style={styles.head}>
-                <Avatar id={player.id} name={player.name} size={26} active={isTurn} dimmed={!player.connected} />
+                <Avatar id={player.id} name={player.name} size={20} active={isTurn} dimmed={!player.connected} />
                 <View style={styles.names}>
                     <Text style={styles.name} numberOfLines={1}>
                         {player.name}
@@ -43,19 +43,20 @@ function PlayerChipImpl({
                         {player.bot ? ' 🤖' : ''}
                     </Text>
                     {!player.connected && !player.bot ? (
-                        <Text style={styles.away}>{t('opponent.away')}</Text>
+                        <Text style={styles.away} numberOfLines={1}>{t('opponent.away')}</Text>
                     ) : null}
                 </View>
             </View>
 
             <View style={styles.stats}>
-                <Text style={styles.bank}>${player.bank_total}M</Text>
-                <Text style={styles.stat}>🂠 {player.hand_count}</Text>
-                <Text style={styles.stat}>◼ {player.complete_sets}</Text>
+                <Text style={styles.bank} numberOfLines={1}>${player.bank_total}M</Text>
+                <Text style={styles.stat} numberOfLines={1}>🂠{player.hand_count}</Text>
+                <Text style={styles.stat} numberOfLines={1}>◼{player.complete_sets}</Text>
             </View>
 
             {/* The colours they already hold — the only board information that
-                survives at this size. */}
+                survives at this size. Back on a line of its own: at a quarter
+                of the screen it had no room beside the numbers. */}
             <View style={styles.swatches}>
                 {player.sets.map((s) => (
                     <View
@@ -86,35 +87,43 @@ function PlayerChipImpl({
 
 const styles = StyleSheet.create({
     chip: {
-        minWidth: 145,
-        minHeight: 72,
-        padding: 7,
+        // No minimum: the slot decides the width, and a minimum here would push
+        // the last chip off the screen rather than making them all narrower.
+        minHeight: 54,
+        paddingHorizontal: 5,
+        paddingVertical: 5,
+        justifyContent: 'center',
         borderRadius: radius.panel,
         backgroundColor: surface.panelOverlay,
         borderWidth: 1,
         borderColor: line.seat,
-        gap: 4,
+        gap: 3,
     },
     turn: { borderColor: brand.brass, backgroundColor: brand.brassGlow12 },
     targeted: { borderColor: status.dangerSeat },
-    head: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-    names: { flex: 1 },
-    name: { fontFamily: uiFont(700), fontSize: 14, color: ink.body },
-    away: { fontFamily: uiFont(700), fontSize: 9, color: ink.muted45 },
-    stats: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-    bank: { fontFamily: uiFont(800), fontSize: 11, color: status.bank },
-    stat: { fontFamily: uiFont(700), fontSize: 10, color: ink.muted60 },
-    swatches: { flexDirection: 'row', gap: 2 },
-    swatch: { width: 12, height: 5, borderRadius: radius.xs },
+    head: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+    names: { flex: 1, minWidth: 0 },
+    name: { fontFamily: uiFont(700), fontSize: 11, color: ink.body },
+    away: { fontFamily: uiFont(700), fontSize: 8, color: ink.muted45 },
+    stats: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 3 },
+    bank: { fontFamily: uiFont(800), fontSize: 10, color: status.bank },
+    stat: { fontFamily: uiFont(700), fontSize: 9, color: ink.muted60 },
+    // Share the width: eight colours at a fixed size would overflow a quarter
+    // of the screen, so each one takes an equal slice of whatever there is.
+    swatches: { flexDirection: 'row', gap: 2, height: 4 },
+    swatch: { flex: 1, height: 4, borderRadius: radius.xs },
     swatchComplete: { borderWidth: 1, borderColor: brand.brass },
     bubble: {
-        marginTop: 2,
-        paddingHorizontal: 7,
+        position: 'absolute',
+        left: 4,
+        right: 4,
+        bottom: 4,
+        paddingHorizontal: 5,
         paddingVertical: 3,
         borderRadius: 9,
         backgroundColor: '#f6f2e3',
     },
-    bubbleText: { fontFamily: uiFont(700), fontSize: 10, color: ink.seatPlay, lineHeight: 13 },
+    bubbleText: { fontFamily: uiFont(700), fontSize: 9, color: ink.seatPlay, lineHeight: 12 },
     reaction: { position: 'absolute', right: 3, top: 3 },
     reactionText: { fontSize: 20 },
 });

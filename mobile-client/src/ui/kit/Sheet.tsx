@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useState } from 'react';
-import { Modal as RNModal, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Keyboard, Modal as RNModal, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, {
@@ -25,7 +25,30 @@ const SHEET_EASING = Easing.bezier(0.16, 1, 0.3, 1);
  * button. The backdrop fades in place while the sheet keeps the familiar
  * bottom-up movement. Both use GPU properties and finish before unmounting.
  */
-function SheetImpl({ open, onClose, title, children, tabs, activeTab, onTabChange }: SheetProps) {
+/**
+ * How much of the screen the keyboard is currently covering.
+ *
+ * `KeyboardAvoidingView` solves this for a normal screen, but a sheet is a
+ * separate modal window whose own height is the thing that has to change —
+ * padding it from below only pushes it off the top of the screen.
+ */
+function useKeyboardInset(): number {
+    const [inset, setInset] = useState(0);
+    useEffect(() => {
+        const show = Keyboard.addListener(
+            Platform.OS === 'ios' ? 'keyboardWillChangeFrame' : 'keyboardDidShow',
+            (e) => setInset(e.endCoordinates?.height ?? 0),
+        );
+        const hide = Keyboard.addListener(
+            Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+            () => setInset(0),
+        );
+        return () => { show.remove(); hide.remove(); };
+    }, []);
+    return inset;
+}
+
+function SheetImpl({ open, onClose, title, children, tabs, activeTab, onTabChange, scroll = true }: SheetProps) {
     const { height } = useWindowDimensions();
     const insets = useSafeAreaInsets();
     const reducedMotion = useReducedMotion();
@@ -38,7 +61,12 @@ function SheetImpl({ open, onClose, title, children, tabs, activeTab, onTabChang
      */
     const progress = useSharedValue(0);
     const duration = reducedMotion ? 0 : 220;
-    const travel = Math.min(height * 0.78, height - 80) + 40;
+    const keyboard = useKeyboardInset();
+    // The sheet rides above the keyboard rather than under it, and gives up
+    // whatever height that costs — a composer you cannot see is the one part
+    // of a chat that has to work.
+    const room = Math.min(height * 0.78, height - 80 - keyboard);
+    const travel = room + 40;
 
     useEffect(() => {
         if (open) setMounted(true);
@@ -93,7 +121,10 @@ function SheetImpl({ open, onClose, title, children, tabs, activeTab, onTabChang
                     style={[
                         styles.sheet,
                         sheetStyle,
-                        { maxHeight: Math.min(height * 0.78, height - 80), paddingBottom: Math.max(12, insets.bottom) },
+                        {
+                            maxHeight: room,
+                            paddingBottom: Math.max(12, insets.bottom) + keyboard,
+                        },
                     ]}
                 >
                     <GestureDetector gesture={pan}>
@@ -123,13 +154,18 @@ function SheetImpl({ open, onClose, title, children, tabs, activeTab, onTabChang
                         </View>
                     ) : null}
 
-                    <ScrollView
-                        style={styles.body}
-                        contentContainerStyle={styles.bodyContent}
-                        keyboardShouldPersistTaps="handled"
-                    >
-                        {children}
-                    </ScrollView>
+                    {scroll ? (
+                        <ScrollView
+                            style={styles.body}
+                            contentContainerStyle={styles.bodyContent}
+                            keyboardShouldPersistTaps="handled"
+                        >
+                            {children}
+                        </ScrollView>
+                    ) : (
+                        <View style={styles.bodyOwn}>{children}</View>
+                    )}
+
                 </Animated.View>
             </GestureHandlerRootView>
         </RNModal>
@@ -178,6 +214,8 @@ const styles = StyleSheet.create({
     tabLabel: { fontFamily: uiFont(700), fontSize: 13, color: ink.muted60 },
     tabLabelOn: { color: ink.body },
     body: { flexGrow: 0 },
+    // The child scrolls itself and wants every point the sheet can give it.
+    bodyOwn: { flexShrink: 1, flexGrow: 1 },
     bodyContent: { paddingBottom: 8, gap: 8 },
 });
 
