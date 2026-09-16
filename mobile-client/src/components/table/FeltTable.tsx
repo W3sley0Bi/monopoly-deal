@@ -541,6 +541,8 @@ export function FeltTable({
                                 key={built(set)}
                                 kind={built(set) as 'house' | 'hotel'}
                                 color={colorMeta(set.color).hex}
+                                seatRotation={rotation}
+                                seatSquash={1 - DEPTH * 0.5 * (0.5 - Math.sin(angle) * 0.5)}
                             />
                         ) : set.cards.map((card, i) => <MiniCard key={card.id} color={colorMeta(set.color).hex}
                             left={Math.min(i, FAN_STEPS) * 2 + scatter(card.id, 0, 1)}

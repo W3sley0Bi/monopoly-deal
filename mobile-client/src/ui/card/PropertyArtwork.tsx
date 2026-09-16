@@ -11,7 +11,7 @@ export function PropertyArtwork({ color, size }: { color?: Color; size: number }
             <Svg
                 viewBox="0 0 80 64"
                 width={size} height={size * 0.8}
-                accessible={false}
+                aria-hidden
             >
                 <Ellipse
                     cx="40"
@@ -46,7 +46,7 @@ export function PropertyArtwork({ color, size }: { color?: Color; size: number }
             <Svg
                 viewBox="0 0 80 64"
                 width={size} height={size * 0.8}
-                accessible={false}
+                aria-hidden
             >
                 <Circle
                     cx="40"
@@ -75,7 +75,7 @@ export function PropertyArtwork({ color, size }: { color?: Color; size: number }
         <Svg
             viewBox="0 0 80 64"
             width={size} height={size * 0.8}
-            accessible={false}
+            aria-hidden
         >
             <Ellipse
                 cx="40"

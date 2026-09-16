@@ -7,6 +7,10 @@ const GlassContext = createContext<{ target: RefObject<View | null>; reduced: bo
 export function TableGlassProvider({ target, children }: { target: RefObject<View | null>; children: ReactNode }) {
     const [reduced, setReduced] = useState(false);
     useEffect(() => {
+        // react-native-web implements only part of AccessibilityInfo: the
+        // reduce-transparency query and its event do not exist there, and the
+        // web has no equivalent media query either. Treat it as off.
+        if (!AccessibilityInfo.isReduceTransparencyEnabled) return;
         let live = true;
         void AccessibilityInfo.isReduceTransparencyEnabled().then(value => { if (live) setReduced(value); });
         const subscription = AccessibilityInfo.addEventListener('reduceTransparencyChanged', setReduced);
