@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { Easing, runOnJS, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from 'react-native-reanimated';
 import type { Card as CardT, PlayerView, SetView } from '../../types';
@@ -99,9 +99,17 @@ const COL = STACK_W + GAP;
 const ROW = STACK_H + GAP;
 const COLS = 3;
 
-// A seat's box has to clear three stacks plus the bank stack beside them.
-const SEAT_W = 3 * COL + STACK_W;
-const SEAT_H = 2 * ROW + 12;
+/**
+ * A seat's box: square, and as wide as the *diagonal* of the widest pile it can
+ * hold (three stacks plus the bank stack, two rows deep). A block turned to an
+ * arbitrary angle sweeps that diagonal, so anything smaller would let a pile
+ * swing outside the rectangle its taps are measured from.
+ */
+const PILE_W = 3 * COL + STACK_W;
+const PILE_H = 2 * ROW - GAP;
+const SEAT = Math.ceil(Math.hypot(PILE_W, PILE_H));
+/** Clear space between two neighbouring blocks on the ring. */
+const SEAT_GAP = 14;
 
 // The two piles at the middle of the felt.
 const DECK_W = 30;
@@ -118,14 +126,21 @@ const MAT = ['#4a5893', '#5b6aa6', '#2f3a69'] as const;
 /** The room the table stands in: darker, so the mat reads as a lit surface. */
 const ROOM = ['#151a33', '#0e1226'] as const;
 
-/** How flat a circle on the table looks from a player's chair. */
-const FLATTEN = 0.46;
-
 /**
  * How much smaller the far side of the table is than the near side. Shallow
  * enough that the far seats stay tappable where they look.
  */
 const DEPTH = 0.16;
+
+/** A seat's tap target, in coordinates local to the felt. */
+export interface SeatHit {
+    id: string;
+    name: string;
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+}
 
 interface Flight {
     key: string;
@@ -141,10 +156,9 @@ export function FeltTable({
     deckCount,
     discardCount,
     discardTop,
-    onOpenPlayer,
-    onPreviewPlayer,
-    onPreviewEnd,
+    onSeats,
     onOpenDiscard,
+    debugSeats,
 }: {
     players: PlayerView[];
     you: string;
@@ -152,10 +166,10 @@ export function FeltTable({
     deckCount: number;
     discardCount: number;
     discardTop: CardT | null;
-    onOpenPlayer: (id: string) => void;
-    onPreviewPlayer: (id: string) => void;
-    onPreviewEnd: (id: string) => void;
+    onSeats?: (seats: SeatHit[]) => void;
     onOpenDiscard?: () => void;
+    /** Dev only: outlines each seat box where the felt itself thinks it is. */
+    debugSeats?: boolean;
 }) {
     const { t } = useI18n();
     const reduced = useReducedMotion();
@@ -168,18 +182,90 @@ export function FeltTable({
     const start = players.findIndex(p => p.id === you);
     const seats = start < 0 ? players : [...players.slice(start), ...players.slice(0, start)];
 
+    /*
+     * One ring, one centre.
+     *
+     * The centre is the deck and the discard — that is what the table is built
+     * around — and every seat block sits on the circumference at the same
+     * radius, so no player's cards are nearer the middle than another's. The
+     * ring is an ellipse rather than a circle only because the table is seen
+     * at an angle; the angular spacing is still equal.
+     */
+    const field = Math.max(90, cardAreaHeight);
+    const centre = { x: size.width / 2, y: field * 0.54 };
+
+    // Radius: as wide as the felt allows, then pulled in until adjacent blocks
+    // clear each other. The chord between two neighbours is 2·R·sin(π/n), so
+    // that is what has to exceed a block plus its breathing room.
+    const spread = seats.length > 1
+        ? (SEAT + SEAT_GAP) / (2 * Math.sin(Math.PI / seats.length))
+        : 0;
+    const radiusX = Math.max(spread, (size.width - SEAT) / 2 - 6);
+    // 0.86, not the 0.78 the perspective would suggest: a flatter ring pushed
+    // the two lower-side seats into each other at a full five-player table,
+    // which is the most this game ever seats (`game.MaxPlayers`).
+    const radiusY = Math.min(radiusX * 0.86, centre.y - SEAT / 2 - 4);
+
+    /**
+     * Everything about one seat: where it sits on the ring, how it is turned,
+     * and the box that holds it.
+     *
+     * The box is the pile's own bounding box *after* the turn, not a worst-case
+     * square — a turned rectangle covers `w·|cos| + h·|sin|` — so a player with
+     * two colours does not reserve the space of a player with nine, and five
+     * seats still fit without their boxes colliding.
+     */
     const seatAt = (index: number) => {
+        // Seat 0 — you — is at the bottom of the ring, facing up the table.
         const angle = Math.PI / 2 + index * 2 * Math.PI / seats.length;
-        // Your own pile sits further out than the others: it is the one you
-        // read constantly, and at the shared radius it crowded the deck.
-        const reach = index === 0 ? 0.34 : 0.23;
+        const turn = angle - Math.PI / 2;
+        const player = seats[index];
+
+        const columns = Math.min(COLS, player?.sets.length ?? 0);
+        const rows = Math.max(1, Math.ceil((player?.sets.length ?? 0) / COLS));
+        const hasBank = (player?.bank.length ?? 0) > 0;
+        const propertyWidth = columns ? (columns - 1) * COL + STACK_W + GAP : 0;
+        const pileWidth = Math.max(STACK_W, propertyWidth + (hasBank ? STACK_W : 0));
+        const pileHeight = Math.max(STACK_H, rows * ROW - GAP);
+
+        const c = Math.abs(Math.cos(turn));
+        const sn = Math.abs(Math.sin(turn));
+        const w = pileWidth * c + pileHeight * sn;
+        const h = pileWidth * sn + pileHeight * c;
+
         return {
-            x: size.width * (0.5 + Math.cos(angle) * 0.26) - SEAT_W / 2,
-            y: Math.max(90, cardAreaHeight) * (0.56 + Math.sin(angle) * reach) - SEAT_H / 3,
+            x: centre.x + Math.cos(angle) * radiusX - w / 2,
+            y: centre.y + Math.sin(angle) * radiusY - h / 2,
+            w,
+            h,
+            pileWidth,
+            pileHeight,
             angle,
         };
     };
-    const centre = { x: size.width * 0.5 - DECK_W - 4, y: Math.max(90, cardAreaHeight) * 0.56 - DECK_H / 2 };
+
+    // The seat rectangles, in felt-local coordinates, for the hit layer the
+    // table screen renders on top of everything.
+    const hits: SeatHit[] = size.width > 0
+        ? seats
+              .map((player, index) => ({ player, place: seatAt(index) }))
+              .filter(({ player }) => player.sets.length > 0 || player.bank.length > 0)
+              .map(({ player, place }) => ({
+                  id: player.id,
+                  name: player.name,
+                  x: place.x,
+                  y: place.y,
+                  w: place.w,
+                  h: place.h,
+              }))
+        : [];
+    const hitsKey = hits.map(h => `${h.id}:${Math.round(h.x)}:${Math.round(h.y)}`).join('|');
+    useEffect(() => {
+        onSeats?.(hits);
+        // `hitsKey` collapses the rectangles to a string: the array is rebuilt
+        // every render and would otherwise loop.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [hitsKey]);
 
     // Cards leaving the deck for a seat. Driven by hand counts rather than by
     // the deck count alone: that is what says *who* drew, and it covers Pass Go
@@ -201,7 +287,7 @@ export function FeltTable({
             for (let i = 0; i < Math.min(drawn, 2); i++) {
                 next.push({
                     key: `f${flightId.current++}`,
-                    to: { x: seat.x + SEAT_W / 3, y: seat.y + 16 },
+                    to: { x: seat.x + seat.w / 2 - DECK_W / 2, y: seat.y + seat.h / 2 - DECK_H / 2 },
                     spin: scatter(`${player.id}${i}`, 0, 12),
                 });
             }
@@ -234,16 +320,19 @@ export function FeltTable({
             {/* The play circle reads as a circle lying on the table only if it
                 is drawn as the ellipse a circle becomes at this angle. */}
             <View style={[styles.orbit, {
-                width: size.width * 0.66,
-                height: size.width * 0.66 * FLATTEN,
-                left: size.width * 0.32,
-                top: Math.max(24, Math.max(90, cardAreaHeight) * 0.56 - size.width * 0.33 * FLATTEN),
-                borderRadius: size.width * 0.33,
+                width: radiusX * 1.3,
+                height: radiusY * 1.3,
+                left: centre.x - radiusX * 0.65,
+                top: centre.y - radiusY * 0.65,
+                borderRadius: radiusX,
             }]} />
         </LinearGradient>
 
         {size.width > 0 ? (
-            <View style={[styles.centre, { left: centre.x, top: centre.y }]} pointerEvents="box-none">
+            <View style={[styles.centre, {
+                left: centre.x - DECK_W - 4,
+                top: centre.y - DECK_H / 2,
+            }]} pointerEvents="box-none">
                 {/* The draw pile: a few backs, each sitting slightly off true. */}
                 <View style={styles.pile} pointerEvents="none">
                     {Array.from({ length: Math.min(4, Math.max(1, Math.ceil(deckCount / 14))) }, (_, i) => (
@@ -281,7 +370,7 @@ export function FeltTable({
         {flights.map(flight => (
             <DrawFlight
                 key={flight.key}
-                from={{ x: centre.x + 2, y: centre.y + 2 }}
+                from={{ x: centre.x - DECK_W, y: centre.y - DECK_H / 2 }}
                 to={flight.to}
                 spin={flight.spin}
                 onDone={() => setFlights(current => current.filter(f => f.key !== flight.key))}
@@ -291,28 +380,33 @@ export function FeltTable({
         {size.width > 0 && seats.map((player, seat) => {
             const place = seatAt(seat);
             const angle = place.angle;
-            const rotation = Math.round((angle * 180 / Math.PI - 90) / 90) * 90;
+            // Turned to face the middle — the actual angle, not the nearest
+            // quarter. Snapping sent a seat at 162° to a 90° turn, so its cards
+            // pointed across the table instead of at the deck.
+            const rotation = angle * 180 / Math.PI - 90;
             const bank = [...player.bank].sort((a, b) => a.value - b.value).slice(-4);
             const columns = Math.min(COLS, player.sets.length);
-            const rows = Math.ceil(player.sets.length / COLS);
             const propertyWidth = columns ? (columns - 1) * COL + STACK_W + GAP : 0;
-            const pileWidth = Math.max(14, propertyWidth + (bank.length ? STACK_W : 0));
-            const pileHeight = Math.max(STACK_H, rows * ROW - GAP);
+            // `seatAt` already sized the box around these, turn included.
+            const { pileWidth, pileHeight } = place;
             if (!player.sets.length && !bank.length) return null;
-            return <CardPileButton
+            // Visuals only. The taps are handled by `SeatHits`, rendered above
+            // every panel — down here a pile sat under whatever the layout put
+            // on top of the felt and could not be reached at all.
+            return <View
                 key={player.id}
-                playerId={player.id}
-                onOpen={onOpenPlayer}
-                onPreview={onPreviewPlayer}
-                onPreviewEnd={onPreviewEnd}
-                accessibilityLabel={`${player.name}: ${t('inspect.open_board')}`}
-                style={[styles.seat, { left: place.x, top: place.y }]}>
+                pointerEvents="none"
+                style={[styles.seat, { left: place.x, top: place.y, width: place.w, height: place.h }, debugSeats && styles.debugSeat]}>
                 {/* Depth: a seat across the table is further away, so its cards
                     are smaller and sit a little flatter than your own. */}
                 <View pointerEvents="none" style={[styles.piles, {
                     width: pileWidth,
                     height: pileHeight,
-                    transformOrigin: 'center top',
+                    // Centre, not 'center top': the quarter-turns below pivot
+                    // about this point, and about the top edge they swung the
+                    // whole pile out of its own seat box — which is why the
+                    // cards and their tap target were nowhere near each other.
+                    transformOrigin: 'center',
                     transform: [
                         { rotate: `${rotation}deg` },
                         { scale: 1 - DEPTH * (0.5 - Math.sin(angle) * 0.5) },
@@ -349,63 +443,18 @@ export function FeltTable({
                         rotate={scatter(card.id, 6, 6)}
                         fresh={fresh(card.id)} />)}
                 </View>
-            </CardPileButton>;
+            </View>;
         })}
         </View>
     </View>;
 }
 
-function CardPileButton({
-    playerId,
-    onOpen,
-    onPreview,
-    onPreviewEnd,
-    children,
-    style,
-    accessibilityLabel,
-}: {
-    playerId: string;
-    onOpen: (id: string) => void;
-    onPreview: (id: string) => void;
-    onPreviewEnd: (id: string) => void;
-    children: React.ReactNode;
-    style: StyleProp<ViewStyle>;
-    accessibilityLabel: string;
-}) {
-    const holding = useRef(false);
-    const suppressTap = useRef(false);
-
-    return (
-        <Pressable
-            style={style}
-            accessibilityRole="button"
-            accessibilityLabel={accessibilityLabel}
-            delayLongPress={260}
-            onLongPress={() => {
-                holding.current = true;
-                suppressTap.current = true;
-                onPreview(playerId);
-            }}
-            onPressOut={() => {
-                if (!holding.current) return;
-                holding.current = false;
-                onPreviewEnd(playerId);
-            }}
-            onPress={() => {
-                if (suppressTap.current) {
-                    suppressTap.current = false;
-                    return;
-                }
-                onOpen(playerId);
-            }}
-        >
-            {children}
-        </Pressable>
-    );
-}
-
 const styles = StyleSheet.create({
     scene: { flex: 1 },
+    // Dev only: where the felt itself places a seat. Compare against the pink
+    // tap targets the table screen draws — if they disagree, the two layers
+    // are not in the same coordinate space.
+    debugSeat: { borderWidth: 1, borderColor: '#7cff5a', backgroundColor: '#7cff5a1f' },
     // No `rotateX` here, however much it would suit: the felt is the subtree
     // the glass panels blur, and a 3D-transformed layer inside that snapshot
     // does not render on iOS — the whole table disappears. Depth is faked in
@@ -422,8 +471,12 @@ const styles = StyleSheet.create({
         boxShadow: '0px 10px 26px #05081c8f, inset 0px 2px 0px #e3e9ff2e',
     },
     orbit: { position: 'absolute', borderWidth: 1, borderColor: '#ccd5ff2b', borderStyle: 'dashed' },
-    seat: { position: 'absolute', width: SEAT_W, height: SEAT_H, gap: 7 },
-    piles: { width: SEAT_W, height: SEAT_H - 20 },
+    // The pile is centred in the box so a half turn keeps it inside, and the
+    // box is exactly what `SeatHit` reports to the tap layer.
+    // Width and height come from the seat itself; the pile is centred in it so
+    // the turn happens about the middle of the box the taps use.
+    seat: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
+    piles: { width: PILE_W, height: PILE_H },
     card: { position: 'absolute', width: CARD_W, height: CARD_H, backgroundColor: '#f7f2df', borderWidth: 1, borderRadius: 2, overflow: 'hidden', boxShadow: '0px 2px 3px #12173866' },
     value: { fontFamily: uiFont(900), fontSize: 10, color: '#183139', textAlign: 'center' },
     // The two centre piles lie on the table like everything else, so they are

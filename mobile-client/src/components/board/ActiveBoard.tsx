@@ -15,7 +15,10 @@ export function ActiveBoard({ player, onOpen }: { player: PlayerView; onOpen: ()
     const { t } = useI18n();
     const [fanned, setFanned] = useState(false);
     const backs = Math.min(player.hand_count, 7);
-    return <Panel style={styles.panel}>
+    // `box-none`: the panel covers the far seats while it is on screen, and a
+    // tap on its own background did nothing anyway. Only its real controls
+    // take touches; everything else falls through to the table behind it.
+    return <Panel pointerEvents="box-none" style={styles.panel}>
         <View style={styles.header}>
             <Pressable style={styles.identity} onPress={onOpen} accessibilityRole="button"
                 accessibilityLabel={`${player.name}: ${t('table.their_board')}`}>
@@ -49,14 +52,16 @@ export function ActiveBoard({ player, onOpen }: { player: PlayerView; onOpen: ()
 }
 
 const styles = StyleSheet.create({
-    panel: { flex: 1, minHeight: 104, padding: 8, borderColor: brand.brassGlow65, gap: 6, overflow: 'hidden' },
+    panel: { flex: 1, minHeight: 92, padding: 8, borderColor: brand.brassGlow65, gap: 6, overflow: 'hidden' },
     header: { flexDirection: 'row', alignItems: 'center', gap: 10 },
     identity: { flex: 1, minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 6 },
     title: { flex: 1 },
     name: { fontFamily: uiFont(800), fontSize: 12, color: ink.body },
     bank: { fontFamily: uiFont(700), fontSize: 10, color: ink.muted60 },
     hand: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 4 },
-    content: { flex: 1 },
+    // Only as tall as its cards: a flex:1 ScrollView filled the panel and went
+    // on swallowing touches meant for the seats behind it.
+    content: { flexGrow: 0, flexShrink: 1 },
     contents: { gap: 8, paddingBottom: 6 },
     bankCards: { gap: 4, paddingVertical: 6 },
 });

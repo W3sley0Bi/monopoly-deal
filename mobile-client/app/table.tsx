@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions, type StyleProp, type ViewStyle } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { BlurTargetView } from 'expo-blur';
 import { SymbolView } from 'expo-symbols';
-import { FeltTable } from '../src/components/table/FeltTable';
+import { FeltTable, type SeatHit } from '../src/components/table/FeltTable';
 import { GlassPanel, TableGlassProvider } from '../src/components/table/TableGlass';
 
 import { useGameConnectionContext } from '../lib/net/messages';
@@ -75,6 +75,9 @@ function TableBody() {
     const [sheetPlayer, setSheetPlayer] = useState<string | null>(null);
     const [bankOpen, setBankOpen] = useState(false);
     const [discardOpen, setDiscardOpen] = useState(false);
+    const [seatHits, setSeatHits] = useState<SeatHit[]>([]);
+    // Dev only: paints the seat tap targets and the overlay band they live in.
+    const [showHits, setShowHits] = useState(false);
 
     useEffect(() => {
         if (!live) router.replace('/');
@@ -227,11 +230,8 @@ function TableBody() {
                     discardCount={g.discard_count}
                     discardTop={g.discard_top}
                     onOpenDiscard={() => setDiscardOpen(true)}
-                    onOpenPlayer={setSheetPlayer}
-                    onPreviewPlayer={setSheetPlayer}
-                    onPreviewEnd={(playerId) =>
-                        setSheetPlayer((current) => (current === playerId ? null : current))
-                    }
+                    onSeats={setSeatHits}
+                    debugSeats={showHits}
                 />
             </BlurTargetView>
             {/* ---- header ---- */}
@@ -277,7 +277,10 @@ function TableBody() {
             ) : null}
 
             {/* ---- what just happened ---- */}
-            <Text style={styles.event} numberOfLines={2} accessibilityLiveRegion="polite">
+            {/* Not interactive, and it sits directly over the far seats: left
+                tappable it swallowed every tap and long-press aimed at the two
+                piles across the table. */}
+            <Text pointerEvents="none" style={styles.event} numberOfLines={2} accessibilityLiveRegion="polite">
                 {lastEvent ? tLog(lastEvent) : t('table.shared_space')}
             </Text>
             </View>
@@ -527,6 +530,33 @@ function TableBody() {
                 ) : null}
             </GlassPanel>
 
+            {/* ---- seat taps ----
+                Above every panel, deliberately. The piles are painted inside
+                the felt, which is the first child of the screen and therefore
+                the bottom layer: anything the layout puts over the middle of
+                the table — the event line, an opponent's board panel, the
+                shared-table spacer — took the touch first and the piles simply
+                did not answer. These are the same rectangles, last in the tree.
+                `box-none`, so only the rectangles themselves catch anything. */}
+            <View pointerEvents="box-none" style={[styles.feltBackground, { top: feltTop, height: feltHeight }, showHits && styles.hitBand]}>
+                {seatHits.map((seat) => (
+                    <SeatTap
+                        key={seat.id}
+                        style={[
+                            { position: 'absolute', left: seat.x, top: seat.y, width: seat.w, height: seat.h },
+                            showHits && styles.hitBox,
+                        ]}
+                        label={showHits ? `${seat.name} ${Math.round(seat.x)},${Math.round(seat.y)}` : undefined}
+                        accessibilityLabel={`${seat.name}: ${t('inspect.open_board')}`}
+                        onOpen={() => setSheetPlayer(seat.id)}
+                        onPreview={() => setSheetPlayer(seat.id)}
+                        onPreviewEnd={() =>
+                            setSheetPlayer((current) => (current === seat.id ? null : current))
+                        }
+                    />
+                ))}
+            </View>
+
             {/* ---- overlays ---- */}
             {dialog ? (
                 <ActionDialog
@@ -648,6 +678,13 @@ function TableBody() {
                 {__DEV__ ? (
                     <View style={styles.dev}>
                         <LabelCaps>Dev tables</LabelCaps>
+                        <Btn
+                            label={showHits ? 'Hide hitboxes' : 'Show hitboxes'}
+                            onPress={() => {
+                                setShowHits((on) => !on);
+                                setMenu(false);
+                            }}
+                        />
                         {FIXTURES.map((fixture) => (
                             <Btn
                                 key={fixture.id}
@@ -684,6 +721,51 @@ function TableBody() {
             ) : null}
         </View>
         </TableGlassProvider>
+    );
+}
+
+/**
+ * One seat's tap target: a tap opens that player's board, a hold previews it
+ * and releases back. Transparent — it sits over the pile painted on the felt.
+ */
+function SeatTap({ style, accessibilityLabel, label, onOpen, onPreview, onPreviewEnd }: {
+    style: StyleProp<ViewStyle>;
+    accessibilityLabel: string;
+    /** Dev only: drawn inside the box so a hit target can be seen and named. */
+    label?: string;
+    onOpen: () => void;
+    onPreview: () => void;
+    onPreviewEnd: () => void;
+}) {
+    const holding = useRef(false);
+    const suppressTap = useRef(false);
+
+    return (
+        <Pressable
+            style={style}
+            accessibilityRole="button"
+            accessibilityLabel={accessibilityLabel}
+            delayLongPress={260}
+            onLongPress={() => {
+                holding.current = true;
+                suppressTap.current = true;
+                onPreview();
+            }}
+            onPressOut={() => {
+                if (!holding.current) return;
+                holding.current = false;
+                onPreviewEnd();
+            }}
+            onPress={() => {
+                if (suppressTap.current) {
+                    suppressTap.current = false;
+                    return;
+                }
+                onOpen();
+            }}
+        >
+            {label ? <Text style={styles.hitLabel} numberOfLines={1}>{label}</Text> : null}
+        </Pressable>
     );
 }
 
@@ -818,6 +900,9 @@ const styles = StyleSheet.create({
     overLimit: { fontFamily: uiFont(700), fontSize: 10, color: ink.endTurnHint },
     tray: { flexShrink: 0, padding: 10, gap: 8 },
     bankGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingVertical: 4 },
+    hitBand: { borderWidth: 1, borderColor: '#00e5ff80', backgroundColor: '#00e5ff14' },
+    hitBox: { borderWidth: 1.5, borderColor: '#ff2d6f', backgroundColor: '#ff2d6f26' },
+    hitLabel: { fontFamily: uiFont(800), fontSize: 8, color: '#ffd7e4' },
     dev: { gap: 8, marginTop: 8, borderTopWidth: 1, borderTopColor: line.seat, paddingTop: 12 },
     trayTitle: { fontFamily: uiFont(800), fontSize: 13, color: ink.body },
     trayRow: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
