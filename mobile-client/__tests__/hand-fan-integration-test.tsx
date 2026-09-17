@@ -20,8 +20,12 @@ jest.mock('../src/ui/card', () => {
 });
 
 jest.mock('../src/game/drag/Draggable', () => {
-    const { View: V } = require('react-native');
-    return { Draggable: ({ children }: { children: React.ReactNode }) => <V>{children}</V> };
+    const { Pressable: P } = require('react-native');
+    return {
+        Draggable: ({ children, onTap }: { children: React.ReactNode; onTap?: () => void }) => (
+            <P onPress={onTap}>{children}</P>
+        ),
+    };
 });
 
 const hand = (count: number): CardT[] =>
@@ -91,6 +95,28 @@ describe('<HandFan />', () => {
         await fireEvent.press(screen.getByTestId('hand-strip-c2'));
 
         expect(onTapCard).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps the remaining cards interactive after a played card leaves the hand', async () => {
+        const cards = hand(5);
+        const onTapCard = jest.fn();
+        const props: React.ComponentProps<typeof HandFan> = {
+            cards,
+            width: 359,
+            selectedId: null,
+            carriedId: null,
+            wildColor: {},
+            isPlayable: () => true,
+            onTapCard: onTapCard as unknown as (card: CardT) => void,
+            onDragStart: () => {},
+        };
+        const screen = await render(<HandFan {...props} />);
+
+        await screen.rerender(<HandFan {...props} cards={cards.slice(1)} />);
+        await fireEvent.press(screen.getByTestId('hand-strip-c1'));
+
+        expect(onTapCard).toHaveBeenCalledTimes(1);
+        expect((onTapCard.mock.calls as unknown as [CardT][])[0][0].id).toBe('c1');
     });
 
     it('gives each card a strip as wide as the part of it you can see', async () => {

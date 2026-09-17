@@ -1,5 +1,5 @@
 import type { Ref } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import { Draggable } from '../../game/drag/Draggable';
 import {
@@ -110,16 +110,17 @@ export function HandFan({
                             // The strip is the handle; the card that flies is the
                             // whole card, which starts below the pop's headroom.
                             ghost={{ dx: 0, dy: FAN_HEADROOM, w: HAND_CARD_WIDTH, h: HAND_CARD_HEIGHT }}
+                            onTap={() => onTapCard(card)}
                             onDragStart={onDragStart}
                         >
-                            {/* A plain press, not a tap gesture: a card that cannot
-                                be played is still one you may need to read, and the
-                                press has to answer even where the pan is switched
-                                off. */}
-                            <Pressable
+                            {/* The strip remains readable when its pan is disabled:
+                                Draggable enables tap and pan independently. */}
+                            <View
                                 testID={`hand-strip-${card.id}`}
+                                accessible
                                 accessibilityRole="button"
-                                onPress={() => onTapCard(card)}
+                                accessibilityLabel={card.name}
+                                accessibilityState={{ selected: card.id === selectedId }}
                                 style={{ width: row.strip[index], height: row.height }}
                             />
                         </Draggable>

@@ -11,6 +11,8 @@ interface Props {
     /** `vertical` for hand cards; `free` for a wildcard on the board. */
     axis?: 'vertical' | 'free';
     enabled?: boolean;
+    /** Fires when the handle is released without becoming a drag. */
+    onTap?: () => void;
     /** Fires as the card leaves its resting place, before the ghost is shown. */
     onDragStart?: () => void;
     /**
@@ -30,7 +32,7 @@ interface Props {
  * never hands the gesture to another interaction: the hand is a fixed fan, so
  * a quick diagonal lift must still pick up the card rather than cancel it.
  */
-export function Draggable({ state, axis = 'vertical', enabled = true, onDragStart, ghost, children }: Props) {
+export function Draggable({ state, axis = 'vertical', enabled = true, onTap, onDragStart, ghost, children }: Props) {
     const layer = useDragLayer();
     const shared = useDragShared();
     const ref = useAnimatedRef<View>();
@@ -117,12 +119,23 @@ export function Draggable({ state, axis = 'vertical', enabled = true, onDragStar
             if (!success) runOnJS(shared.cancel)();
         });
 
-    // Taps belong to whatever the caller puts inside: a gesture-handler tap
-    // composed with this pan only fired on part of an overlapping hand, and a
-    // plain `Pressable` answers wherever it is drawn. The pan still wins once
-    // the finger moves, because activating it cancels the touch below.
+    const tap = Gesture.Tap()
+        // Reading a card is allowed even when picking it up is not.
+        .enabled(!!onTap)
+        .onEnd((_e, success) => {
+            'worklet';
+            if (success && onTap) runOnJS(onTap)();
+        });
+
+    // Keep tap and pan in the same native gesture state machine. Nesting a
+    // React Native Pressable under the pan leaves two responders competing for
+    // the strip; after a successful drag and the ensuing hand re-layout, that
+    // can leave the next strip unable to begin a pan. The strips themselves no
+    // longer overlap, so native composition now has an unambiguous hit target.
+    const gesture = Gesture.Exclusive(pan, tap);
+
     return (
-        <GestureDetector gesture={pan}>
+        <GestureDetector gesture={gesture}>
             <View
                 ref={(node) => {
                     ref(node);
