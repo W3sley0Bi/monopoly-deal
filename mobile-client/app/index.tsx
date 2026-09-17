@@ -17,6 +17,7 @@ import { useStore } from '../lib/store';
 import { brand, ink, line, radius, status, surface } from '../lib/theme';
 import { displayFont, ls, uiFont } from '../lib/fonts';
 import { Avatar, Btn, Icon, LabelCaps, LanguagePicker, Panel, Sheet } from '../src/ui/kit';
+import { GameSoundSettings } from '../src/components/settings/GameSoundSettings';
 import { useI18n } from '../src/i18n';
 import { formatTurn } from '../src/i18n/format';
 import { FIXTURES } from '../src/dev/fixtures';
@@ -318,6 +319,7 @@ export default function HomeScreen() {
                     }}
                 />
                 <LanguagePicker />
+                <GameSoundSettings />
 
                 {/* Dev only: frozen tables for looking at the UI without
                     playing a game to get there. English on purpose — these

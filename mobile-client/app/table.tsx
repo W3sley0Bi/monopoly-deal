@@ -24,6 +24,7 @@ import { ChatPanel } from '../src/components/table/ChatPanel';
 import { TutorialCoach, TutorialDone, type TutorialAnchors } from '../src/components/table/TutorialCoach';
 import { CountdownTimer } from '../src/components/table/CountdownTimer';
 import { StartWheel } from '../src/components/table/StartWheel';
+import { GameSoundSettings } from '../src/components/settings/GameSoundSettings';
 import { useI18n } from '../src/i18n';
 import { useGameAudio } from '../src/game/useGameAudio';
 import { FIXTURES } from '../src/dev/fixtures';
@@ -961,12 +962,7 @@ function TableBody() {
                     </Pressable>
                 </View>
 
-                <Toggle
-                    label={t('audio.sounds')}
-                    hint={t(audio.sfxEnabled ? 'audio.mute_sounds' : 'audio.enable_sounds')}
-                    value={audio.sfxEnabled}
-                    onChange={audio.setSfxEnabled}
-                />
+                <GameSoundSettings />
                 <Toggle
                     label={t('table.live_play')}
                     hint={t('table.live_play_hint')}
