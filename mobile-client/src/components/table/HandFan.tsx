@@ -1,5 +1,5 @@
 import type { Ref } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
 import { Draggable } from '../../game/drag/Draggable';
 import {
@@ -27,6 +27,13 @@ interface Props {
     anchorCardId?: string | null;
     anchorRef?: Ref<View>;
     onAnchorLayout?: () => void;
+    /**
+     * Paints every touch strip and reports where the platform actually put it.
+     * The hand has had a run of bugs where a card was drawn in one place and
+     * answered in another, or stopped answering at all mid-session; guessing at
+     * that from the outside has not worked, so the strips can be made visible.
+     */
+    debug?: boolean;
 }
 
 /**
@@ -51,6 +58,7 @@ export function HandFan({
     anchorCardId,
     anchorRef,
     onAnchorLayout,
+    debug,
 }: Props) {
     return <>
         {fanLayout(cards, width).map((row, rowIndex) => {
@@ -107,6 +115,18 @@ export function HandFan({
                             state={{ card, from: 'hand' }}
                             axis="vertical"
                             enabled={isPlayable(card)}
+                            testID={`hand-drag-${card.id}`}
+                            // GestureDetector attaches to Draggable's own native
+                            // view, not to this component's child. Size that host
+                            // explicitly so later strips cannot stretch across and
+                            // steal touches from cards to their left.
+                            style={{
+                                position: 'absolute',
+                                left: row.left[index] + FAN_NUDGE,
+                                top: 0,
+                                width: row.strip[index],
+                                height: row.height,
+                            }}
                             // The strip is the handle; the card that flies is the
                             // whole card, which starts below the pop's headroom.
                             ghost={{ dx: 0, dy: FAN_HEADROOM, w: HAND_CARD_WIDTH, h: HAND_CARD_HEIGHT }}
@@ -121,8 +141,19 @@ export function HandFan({
                                 accessibilityRole="button"
                                 accessibilityLabel={card.name}
                                 accessibilityState={{ selected: card.id === selectedId }}
-                                style={{ width: row.strip[index], height: row.height }}
-                            />
+                                style={[{ width: row.strip[index], height: row.height }, debug && styles.debugStrip]}
+                                onLayout={debug ? (event) => {
+                                    const box = event.nativeEvent.layout;
+                                    // eslint-disable-next-line no-console
+                                    console.log(
+                                        `[hand] strip ${index} ${card.name}`,
+                                        `laid out at x=${Math.round(box.x)} w=${Math.round(box.width)}`,
+                                        `expected x=${Math.round(row.left[index] + FAN_NUDGE)} w=${Math.round(row.strip[index])}`,
+                                    );
+                                } : undefined}
+                            >
+                                {debug ? <Text style={styles.debugLabel}>{index}</Text> : null}
+                            </View>
                         </Draggable>
                     ))}
                 </View>
@@ -132,14 +163,18 @@ export function HandFan({
 }
 
 const styles = StyleSheet.create({
+    debugStrip: {
+        backgroundColor: '#ff00aa33',
+        borderWidth: 1,
+        borderColor: '#ff00aacc',
+    },
+    debugLabel: { color: '#ffffff', fontSize: 10, fontWeight: '700', textAlign: 'center' },
     strips: {
         position: 'absolute',
         top: 0,
         left: 0,
         right: 0,
         bottom: 0,
-        flexDirection: 'row',
-        paddingLeft: FAN_NUDGE,
     },
 });
 

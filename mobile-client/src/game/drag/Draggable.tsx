@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { Platform, View } from 'react-native';
+import { Platform, View, type StyleProp, type ViewStyle } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { measure, runOnJS, useAnimatedRef, useSharedValue } from 'react-native-reanimated';
 
@@ -15,6 +15,9 @@ interface Props {
     onTap?: () => void;
     /** Fires as the card leaves its resting place, before the ghost is shown. */
     onDragStart?: () => void;
+    /** Explicit bounds for the native gesture host. */
+    style?: StyleProp<ViewStyle>;
+    testID?: string;
     /**
      * The card this handle stands for, when the two are not the same box. A
      * hand card is touched through a strip the width of the sliver you can see,
@@ -32,7 +35,17 @@ interface Props {
  * never hands the gesture to another interaction: the hand is a fixed fan, so
  * a quick diagonal lift must still pick up the card rather than cancel it.
  */
-export function Draggable({ state, axis = 'vertical', enabled = true, onTap, onDragStart, ghost, children }: Props) {
+export function Draggable({
+    state,
+    axis = 'vertical',
+    enabled = true,
+    onTap,
+    onDragStart,
+    ghost,
+    style,
+    testID,
+    children,
+}: Props) {
     const layer = useDragLayer();
     const shared = useDragShared();
     const ref = useAnimatedRef<View>();
@@ -46,9 +59,16 @@ export function Draggable({ state, axis = 'vertical', enabled = true, onTap, onD
     const grabY = useSharedValue(0);
     function pickUpFallback(absX: number, absY: number) {
         fallbackRef.current?.measureInWindow((wx, wy, w, h) => {
-            grabX.value = absX - wx;
-            grabY.value = absY - wy;
-            layer.begin(state, { x: wx, y: wy, w, h });
+            const x = wx + (ghost ? ghost.dx : 0);
+            const y = wy + (ghost ? ghost.dy : 0);
+            grabX.value = absX - x;
+            grabY.value = absY - y;
+            layer.begin(state, {
+                x,
+                y,
+                w: ghost ? ghost.w : w,
+                h: ghost ? ghost.h : h,
+            });
         });
     }
 
@@ -142,6 +162,8 @@ export function Draggable({ state, axis = 'vertical', enabled = true, onTap, onD
                     fallbackRef.current = node;
                 }}
                 collapsable={false}
+                testID={testID}
+                style={style}
             >
                 {children}
             </View>

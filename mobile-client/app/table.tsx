@@ -590,6 +590,20 @@ function TableBody() {
                         setFanWidth(e.nativeEvent.layout.width - 12);
                         measureTutorialAnchors();
                     }}
+                    // Capture runs top-down, before any child can claim the
+                    // touch, so this reports a touch that reaches the hand even
+                    // when nothing in the hand ends up answering it. Returning
+                    // false leaves the touch to the strips.
+                    onStartShouldSetResponderCapture={showHits ? (e) => {
+                        const { locationX, locationY, pageX, pageY } = e.nativeEvent;
+                        // eslint-disable-next-line no-console
+                        console.log(
+                            `[hand] touch at local ${Math.round(locationX)},${Math.round(locationY)}`,
+                            `page ${Math.round(pageX)},${Math.round(pageY)}`,
+                            `fan width ${Math.round(handFanWidth)}`,
+                        );
+                        return false;
+                    } : undefined}
                 >
                     <HandFan
                         cards={hand}
@@ -600,6 +614,7 @@ function TableBody() {
                         isPlayable={cardEnabled}
                         onTapCard={openCard}
                         onDragStart={() => setSelected(null)}
+                        debug={showHits}
                         anchorCardId={tutorialSourceCardId}
                         anchorRef={tutorialCardRef}
                         onAnchorLayout={() => requestAnimationFrame(() =>

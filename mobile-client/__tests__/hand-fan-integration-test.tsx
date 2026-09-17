@@ -22,8 +22,13 @@ jest.mock('../src/ui/card', () => {
 jest.mock('../src/game/drag/Draggable', () => {
     const { Pressable: P } = require('react-native');
     return {
-        Draggable: ({ children, onTap }: { children: React.ReactNode; onTap?: () => void }) => (
-            <P onPress={onTap}>{children}</P>
+        Draggable: ({ children, onTap, style, testID }: {
+            children: React.ReactNode;
+            onTap?: () => void;
+            style?: object;
+            testID?: string;
+        }) => (
+            <P onPress={onTap} style={style} testID={testID}>{children}</P>
         ),
     };
 });
@@ -127,8 +132,19 @@ describe('<HandFan />', () => {
             const style = screen.getByTestId(`hand-strip-${card.id}`).props.style;
             return (Array.isArray(style) ? Object.assign({}, ...style.flat()) : style).width as number;
         });
+        const hostRects = cards.map((card) => {
+            const style = screen.getByTestId(`hand-drag-${card.id}`).props.style;
+            const flat = Array.isArray(style) ? Object.assign({}, ...style.flat()) : style;
+            return { left: flat.left as number, width: flat.width as number };
+        });
 
         expect(widths[widths.length - 1]).toBe(HAND_CARD_WIDTH);
+        expect(hostRects.map((rect) => rect.width)).toEqual(widths);
+        for (let index = 1; index < hostRects.length; index++) {
+            expect(hostRects[index].left).toBeCloseTo(
+                hostRects[index - 1].left + hostRects[index - 1].width,
+            );
+        }
         for (const width of widths) expect(width).toBeGreaterThan(0);
         // Uniform overlap: every hidden card gives up the same amount.
         for (const width of widths.slice(0, -1)) expect(width).toBeCloseTo(widths[0]);
