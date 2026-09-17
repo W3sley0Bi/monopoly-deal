@@ -1,11 +1,7 @@
-import Modal from './Modal';
 import { useEffect, useRef, useState } from 'react';
 import type { ChatMessage } from '../types';
 import { useI18n } from '../i18n';
 import Avatar from './Avatar';
-import GifPicker, { type GifResult } from './GifPicker';
-import { gifMessageInfo, GIF_MESSAGE_PREFIX } from './gifMessages';
-import './GifPicker.css';
 
 interface Props {
     chat: ChatMessage[];
@@ -21,50 +17,9 @@ function clock(ms: number): string {
     });
 }
 
-function GifMessage({
-    url,
-    sourceUrl,
-    name,
-}: {
-    url: string;
-    sourceUrl: string;
-    name: string;
-}) {
-    const { t } = useI18n();
-    const [playing, setPlaying] = useState(false);
-    return (
-        <div className="chat-gif-message">
-            <button
-                type="button"
-                className={`chat-gif-poster ${playing ? 'is-playing' : ''}`}
-                onClick={() => setPlaying((value) => !value)}
-                aria-label={playing ? t('gif.pause') : t('gif.play')}
-            >
-                {playing ? (
-                    <img src={url} alt={t('gif.from', { name })} />
-                ) : (
-                    <>
-                        <span className="chat-gif-badge">GIF</span>
-                        <span>{t('gif.click_to_play')}</span>
-                    </>
-                )}
-            </button>
-            <a
-                className="chat-gif-source"
-                href={sourceUrl}
-                target="_blank"
-                rel="noreferrer"
-            >
-                {t('gif.source')}
-            </a>
-        </div>
-    );
-}
-
 export default function ChatBox({ chat, you, onSend, className = '' }: Props) {
     const { t, tChat } = useI18n();
     const [draft, setDraft] = useState('');
-    const [gifOpen, setGifOpen] = useState(false);
     const endRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -122,19 +77,9 @@ export default function ChatBox({ chat, you, onSend, className = '' }: Props) {
                                         {clock(m.at_ms)}
                                     </span>
                                 </p>
-                                {gifMessageInfo(m.text) ? (
-                                    <GifMessage
-                                        url={gifMessageInfo(m.text)!.url}
-                                        sourceUrl={
-                                            gifMessageInfo(m.text)!.sourceUrl
-                                        }
-                                        name={m.name}
-                                    />
-                                ) : (
-                                    <p className="text-xs break-words whitespace-pre-wrap">
-                                        {tChat(m)}
-                                    </p>
-                                )}
+                                <p className="text-xs break-words whitespace-pre-wrap">
+                                    {tChat(m)}
+                                </p>
                             </div>
                         </div>
                     ),
@@ -143,29 +88,6 @@ export default function ChatBox({ chat, you, onSend, className = '' }: Props) {
             </div>
 
             <div className="relative flex items-center gap-1.5 border-t border-white/10 bg-black/25 px-2 py-2">
-                {gifOpen && (
-                    <Modal title={t('gif.aria_picker')} onClose={() => setGifOpen(false)}>
-                    <GifPicker
-                        embedded
-                        onClose={() => setGifOpen(false)}
-                        onSelect={(gif: GifResult) => {
-                            // Send the original GIF URL; tracking parameters were
-                            // removed when the result was fetched to keep it short.
-                            onSend(`${GIF_MESSAGE_PREFIX}${gif.gifUrl}`);
-                            setGifOpen(false);
-                        }}
-                    />
-                    </Modal>
-                )}
-                <button
-                    type="button"
-                    className={`chat-gif-button ${gifOpen ? 'is-active' : ''}`}
-                    onClick={() => setGifOpen((value) => !value)}
-                    aria-label={t('gif.send')}
-                    aria-expanded={gifOpen}
-                >
-                    GIF
-                </button>
                 <input
                     id="chat-input"
                     name="chat-input"

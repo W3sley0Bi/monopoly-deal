@@ -8,6 +8,7 @@ import {
     HAND_CARD_HEIGHT,
     HAND_CARD_WIDTH,
     fanLayout,
+    fanNudge,
 } from '../../game/handFan';
 import type { Card as CardT, Color } from '../../types';
 import { Card, FanSlot, WildFlip } from '../../ui/card';
@@ -69,6 +70,24 @@ export function HandFan({
                 .map((card, index) => ({ card, index }))
                 .sort((a, b) => Number(a.index === popped) - Number(b.index === popped));
 
+            // Precompute physical left/right edges for strips to tile perfectly without overlap
+            const vLeft = row.cards.map((_, i) => row.left[i] + FAN_NUDGE + fanNudge(i, popped));
+            const vRight = vLeft.map((l) => l + HAND_CARD_WIDTH);
+            const dynamicStrips = row.cards.map((_, i) => {
+                let start = vLeft[i];
+                let end = vRight[i];
+                if (i < row.cards.length - 1 && i !== popped) {
+                    end = Math.min(end, vLeft[i + 1]);
+                }
+                if (popped >= 0 && popped < i) {
+                    start = Math.max(start, vRight[popped]);
+                }
+                if (popped >= 0 && popped > i) {
+                    end = Math.min(end, vLeft[popped]);
+                }
+                return { left: start, width: Math.max(0, end - start) };
+            });
+
             return <View
                 key={`hand-row-${rowIndex}`}
                 testID={`hand-row-${rowIndex}`}
@@ -109,7 +128,9 @@ export function HandFan({
                 </View>
 
                 <View style={styles.strips}>
-                    {row.cards.map((card, index) => (
+                    {row.cards.map((card, index) => {
+                        const strip = dynamicStrips[index];
+                        return (
                         <Draggable
                             key={card.id}
                             state={{ card, from: 'hand' }}
@@ -122,9 +143,9 @@ export function HandFan({
                             // steal touches from cards to their left.
                             style={{
                                 position: 'absolute',
-                                left: row.left[index] + FAN_NUDGE,
+                                left: strip.left,
                                 top: 0,
-                                width: row.strip[index],
+                                width: strip.width,
                                 height: row.height,
                             }}
                             // The strip is the handle; the card that flies is the
@@ -141,21 +162,21 @@ export function HandFan({
                                 accessibilityRole="button"
                                 accessibilityLabel={card.name}
                                 accessibilityState={{ selected: card.id === selectedId }}
-                                style={[{ width: row.strip[index], height: row.height }, debug && styles.debugStrip]}
+                                style={[{ width: strip.width, height: row.height }, debug && styles.debugStrip]}
                                 onLayout={debug ? (event) => {
                                     const box = event.nativeEvent.layout;
                                     // eslint-disable-next-line no-console
                                     console.log(
                                         `[hand] strip ${index} ${card.name}`,
                                         `laid out at x=${Math.round(box.x)} w=${Math.round(box.width)}`,
-                                        `expected x=${Math.round(row.left[index] + FAN_NUDGE)} w=${Math.round(row.strip[index])}`,
+                                        `expected x=${Math.round(strip.left)} w=${Math.round(strip.width)}`,
                                     );
                                 } : undefined}
                             >
                                 {debug ? <Text style={styles.debugLabel}>{index}</Text> : null}
                             </View>
                         </Draggable>
-                    ))}
+                    )})}
                 </View>
             </View>;
         })}
