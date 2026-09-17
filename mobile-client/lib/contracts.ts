@@ -340,6 +340,7 @@ export interface PendingPanelProps {
     you: string;
     /** For the corner countdown ring, when `deadline_kind === 'respond'`. */
     deadlineMs?: number;
+    deadlineSeconds?: number;
     skewMs: number;
     /** Scripted lesson copy shown inside the native pending modal, which owns
      *  the whole screen and therefore hides the floating tutorial coach. */
@@ -399,7 +400,7 @@ export interface TalkSheetProps {
 // =====================================================================
 
 export interface StartWheelProps {
-    /** Player ids in randomised seat order. */
+    /** Player ids from the chosen starter, then clockwise around the table. */
     startSequence: string[];
     /** Animate once per new id. */
     startId: string;

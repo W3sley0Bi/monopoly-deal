@@ -10,7 +10,7 @@ import { GlassPanel, TableGlassProvider } from '../src/components/table/TableGla
 
 import { useGameConnectionContext } from '../lib/net/messages';
 import { useStore } from '../lib/store';
-import { brand, ink, line, radius, status, surface } from '../lib/theme';
+import { CARD_SIZES, brand, ink, line, radius, status, surface } from '../lib/theme';
 import { displayFont, ls, uiFont } from '../lib/fonts';
 import { Btn, Icon, LabelCaps, Panel, Sheet, Toggle } from '../src/ui/kit';
 import { Card, WildFlip } from '../src/ui/card';
@@ -19,11 +19,13 @@ import { DragLayer, Draggable, DropZone, useDragLayer } from '../src/game/drag';
 import { ActionDialog } from '../src/components/table/ActionDialog';
 import { ActiveBoard } from '../src/components/board/ActiveBoard';
 import { useChatBubbles } from '../src/game/useChatBubbles';
-import { useRailScroll } from '../src/game/useRailScroll';
 import { PendingPanel } from '../src/components/table/PendingPanel';
 import { ChatPanel } from '../src/components/table/ChatPanel';
 import { TutorialCoach, TutorialDone, type TutorialAnchors } from '../src/components/table/TutorialCoach';
+import { CountdownTimer } from '../src/components/table/CountdownTimer';
+import { StartWheel } from '../src/components/table/StartWheel';
 import { useI18n } from '../src/i18n';
+import { useGameAudio } from '../src/game/useGameAudio';
 import { FIXTURES } from '../src/dev/fixtures';
 import {
     assets,
@@ -42,6 +44,45 @@ import type { Card as CardT, ChatMessage, Color, RoomView, TutorialState } from 
 import type { ActionDialogIntent, PendingViewerRole } from '../lib/contracts';
 
 const EMPTY_CHAT: ChatMessage[] = [];
+const HAND_CARD_WIDTH = CARD_SIZES.hand.w;
+const HAND_CARD_HEIGHT = CARD_SIZES.hand.h;
+const HAND_NATURAL_STEP = HAND_CARD_WIDTH - 12;
+const HAND_MIN_VISIBLE = 30;
+
+function handFanLayout(cards: CardT[], availableWidth: number) {
+    const width = Math.max(240, availableWidth);
+    const cardsPerRow = Math.max(1, Math.floor((width - HAND_CARD_WIDTH) / HAND_MIN_VISIBLE) + 1);
+    const rowCount = Math.max(1, Math.ceil(cards.length / cardsPerRow));
+    const balancedRowSize = Math.max(1, Math.ceil(cards.length / rowCount));
+    const rows: CardT[][] = [];
+    for (let index = 0; index < cards.length; index += balancedRowSize) {
+        rows.push(cards.slice(index, index + balancedRowSize));
+    }
+    return { rows, width };
+}
+
+function handCardSlotStyle(index: number, count: number, availableWidth: number): ViewStyle {
+    const step = count <= 1
+        ? HAND_CARD_WIDTH
+        : Math.min(HAND_NATURAL_STEP, (availableWidth - HAND_CARD_WIDTH) / (count - 1));
+    return {
+        width: index === count - 1 ? HAND_CARD_WIDTH : step,
+        height: HAND_CARD_HEIGHT + 12,
+        zIndex: index + 1,
+    };
+}
+
+function fannedCardStyle(index: number, count: number, selected: boolean): ViewStyle {
+    const middle = (count - 1) / 2;
+    const distance = index - middle;
+    const normalized = middle > 0 ? distance / middle : 0;
+    return {
+        transform: [
+            { translateY: Math.abs(normalized) * 5 - (selected ? 5 : 0) },
+            { rotate: `${normalized * 4}deg` },
+        ],
+    };
+}
 
 export default function TableScreen() {
     // The body has to live inside the layer to read what is being carried.
@@ -58,14 +99,12 @@ function TableBody() {
     const insets = useSafeAreaInsets();
     const feltTarget = useRef<View>(null);
     const tableRootRef = useRef<View>(null);
-    const handScrollRef = useRef<ScrollView>(null);
     const handTutorialRef = useRef<View>(null);
     const propertiesTutorialRef = useRef<View>(null);
     const bankTutorialRef = useRef<View>(null);
     const actionTutorialRef = useRef<View>(null);
     const endTurnTutorialRef = useRef<View>(null);
     const tutorialCardRef = useRef<View>(null);
-    const handCardXs = useRef(new Map<string, number>());
     const { width: windowWidth, height: windowHeight } = useWindowDimensions();
     // The felt belongs to the viewport, not to the accordion's remaining space.
     // Just the rail now (~64, the chips being one row shorter) plus the top
@@ -74,8 +113,9 @@ function TableBody() {
     const feltTop = insets.top + 72;
     const feltHeight = Math.max(180, windowHeight - feltTop - insets.bottom - 60);
     const cardAreaHeight = Math.max(120, feltHeight * 0.55);
-    const { room: live, send, leave, notice } = useGameConnectionContext();
+    const { room: live, send, leave, notice, skewMs } = useGameConnectionContext();
     const dragLayer = useDragLayer();
+    const audio = useGameAudio(live?.game ?? null);
 
     const tapTray = useStore((s) => s.tapTray);
     const setTapTray = useStore((s) => s.setTapTray);
@@ -190,12 +230,9 @@ function TableBody() {
             );
             return;
         }
-        const cardX = handCardXs.current.get(tutorialSourceCardId);
-        if (cardX !== undefined) {
-            handScrollRef.current?.scrollTo({ x: Math.max(0, cardX - 8), animated: false });
-        }
-        // ScrollView applies its offset on the following frame. Measure after
-        // that frame so the ring and hand animation start on the visible card.
+        // The whole hand is visible, but the fan's transforms settle after its
+        // layout pass. Measure on the next two frames so the tutorial ring is
+        // attached to the card's final tilted position.
         let second: ReturnType<typeof requestAnimationFrame> | null = null;
         const first = requestAnimationFrame(() => {
             second = requestAnimationFrame(measureTutorialAnchors);
@@ -213,12 +250,12 @@ function TableBody() {
     // Bubbles carry what players *said*. What they did is on the felt and in
     // the log; narrating it over their head as well made the table chatter.
     const said = useChatBubbles(room?.chat ?? EMPTY_CHAT, room?.id);
-    useRailScroll(handScrollRef, Boolean(room));
     useEffect(() => { setBoardOpen(ownTurn); }, [ownTurn, room?.id]);
     useEffect(() => { setHandOpen(ownTurn || hasPending); }, [ownTurn, hasPending, room?.id]);
 
     const act = useCallback(
         (msg: Parameters<typeof send>[0], cardId?: string, optimistic?: PendingMove) => {
+            audio.play('tap');
             void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             if (cardId) setSent(cardId);
             if (optimistic) setGuess(optimistic);
@@ -226,7 +263,7 @@ function TableBody() {
             setDialog(null);
             send(msg);
         },
-        [send],
+        [audio, send],
     );
 
     const leaveTutorial = useCallback(() => {
@@ -246,6 +283,7 @@ function TableBody() {
     const myTurn = isYourTurn(g);
     const canPlay = myTurn && !pending && g.plays_left > 0 && (!tutorial || (tutorial.task && !tutorial.done));
     const hand = (me?.hand ?? []).filter((c) => c.id !== sent);
+    const handFan = handFanLayout(hand, windowWidth - 34);
     const overLimit = (me?.hand?.length ?? 0) > 7;
 
     // The deck offers Pass Go when playing one is legal right now — `canPlay`
@@ -573,62 +611,59 @@ function TableBody() {
                 </Pressable>
 
 
-                <ScrollView
-                    ref={handScrollRef}
-                    style={[styles.handScroll, !handShown && styles.hidden]}
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.handFan}
+                <View
+                    style={[styles.handFan, !handShown && styles.hidden]}
                     onLayout={measureTutorialAnchors}
-                    onScroll={() => recordTutorialAnchor('card', tutorialCardRef.current)}
-                    scrollEventThrottle={32}
                 >
-                    {hand.map((card, i) => {
-                        const cardEnabled = canPlay && tutorialAllowsCard(card, tutorial) &&
-                            (!tutorial || card.id === tutorialSourceCardId);
-                        return <View
-                            key={card.id}
-                            ref={card.id === tutorialSourceCardId ? tutorialCardRef : undefined}
-                            collapsable={false}
-                            style={i > 0 ? styles.handOverlap : undefined}
-                            onLayout={(e) => {
-                                handCardXs.current.set(card.id, e.nativeEvent.layout.x);
-                                if (card.id !== tutorialSourceCardId) return;
-                                handScrollRef.current?.scrollTo({
-                                    x: Math.max(0, e.nativeEvent.layout.x - 8),
-                                    animated: false,
-                                });
-                                requestAnimationFrame(() =>
-                                    recordTutorialAnchor('card', tutorialCardRef.current),
-                                );
-                            }}
-                        >
-                            <Draggable
-                                state={{ card, from: 'hand' }}
-                                axis="vertical"
-                                enabled={cardEnabled}
-                                onTap={() => openCard(card)}
-                            >
-                                {/* A two-colour wildcard turns rather than
-                                    redrawing: tapping it is the same gesture as
-                                    turning the card round on a real table. */}
-                                <WildFlip active={wildColor[card.id] ?? null}>
-                                    {(shown) => (
-                                        <Card
-                                            card={card}
-                                            size="hand"
-                                            activeColor={shown ?? null}
-                                            selected={selected?.id === card.id}
-                                            disabled={!cardEnabled}
-                                            dimmed={!cardEnabled || carriedCard?.id === card.id}
-                                        />
-                                    )}
-                                </WildFlip>
-                            </Draggable>
+                    {handFan.rows.map((row, rowIndex) => (
+                        <View key={`hand-row-${rowIndex}`} style={styles.handFanRow}>
+                            {row.map((card, cardIndex) => {
+                                const cardEnabled = canPlay && tutorialAllowsCard(card, tutorial) &&
+                                    (!tutorial || card.id === tutorialSourceCardId);
+                                return <View
+                                    key={card.id}
+                                    style={handCardSlotStyle(cardIndex, row.length, handFan.width)}
+                                >
+                                    <View
+                                        ref={card.id === tutorialSourceCardId ? tutorialCardRef : undefined}
+                                        collapsable={false}
+                                        style={fannedCardStyle(cardIndex, row.length, selected?.id === card.id)}
+                                        onLayout={() => {
+                                            if (card.id !== tutorialSourceCardId) return;
+                                            requestAnimationFrame(() =>
+                                                recordTutorialAnchor('card', tutorialCardRef.current),
+                                            );
+                                        }}
+                                    >
+                                        <Draggable
+                                            state={{ card, from: 'hand' }}
+                                            axis="vertical"
+                                            enabled={cardEnabled}
+                                            onTap={() => openCard(card)}
+                                        >
+                                            {/* A two-colour wildcard turns rather than
+                                                redrawing: tapping it is the same gesture as
+                                                turning the card round on a real table. */}
+                                            <WildFlip active={wildColor[card.id] ?? null}>
+                                                {(shown) => (
+                                                    <Card
+                                                        card={card}
+                                                        size="hand"
+                                                        activeColor={shown ?? null}
+                                                        selected={selected?.id === card.id}
+                                                        disabled={!cardEnabled}
+                                                        dimmed={!cardEnabled || carriedCard?.id === card.id}
+                                                    />
+                                                )}
+                                            </WildFlip>
+                                        </Draggable>
+                                    </View>
+                                </View>;
+                            })}
                         </View>
-                    })}
+                    ))}
                     {hand.length === 0 ? <Text style={styles.handHint}>{t('table.hand_empty')}</Text> : null}
-                </ScrollView>
+                </View>
             </GlassPanel>
 
             </> : null}
@@ -710,6 +745,15 @@ function TableBody() {
                         {Array.from({ length: 3 }, (_, i) => <View key={i} style={[styles.play, i < g.plays_left && styles.playLeft]} />)}
                     </View> : null}
                 </View>
+
+                {g.deadline_kind !== 'respond' ? (
+                    <CountdownTimer
+                        deadlineMs={g.deadline_ms}
+                        totalSeconds={g.deadline_seconds}
+                        skewMs={skewMs}
+                        kind={g.deadline_kind === 'starting' ? 'starting' : 'turn'}
+                    />
+                ) : null}
 
                 <Pressable disabled={tutorialActive} onPress={() => setTalk(true)} style={({ pressed }) => [styles.talkBtn, tutorialActive && styles.controlDisabled, pressed && styles.talkBtnPressed]} accessibilityRole="button" accessibilityLabel={t('panel.chat')}>
                     <Icon name="bubble.left.and.bubble.right.fill" fallback="…" size={18} color={ink.muted60} />
@@ -805,7 +849,9 @@ function TableBody() {
                     myTarget={target ?? null}
                     payableCards={role === 'payer' ? payable : undefined}
                     you={room.you}
-                    skewMs={0}
+                    deadlineMs={g.deadline_kind === 'respond' ? g.deadline_ms : 0}
+                    deadlineSeconds={g.deadline_seconds}
+                    skewMs={skewMs}
                     tutorialCopy={tutorial ? {
                         title: t(`lesson.${tutorial.id}.title`),
                         body: t(`lesson.${tutorial.id}.body`),
@@ -915,6 +961,12 @@ function TableBody() {
                     </Pressable>
                 </View>
 
+                <Toggle
+                    label={t('audio.sounds')}
+                    hint={t(audio.sfxEnabled ? 'audio.mute_sounds' : 'audio.enable_sounds')}
+                    value={audio.sfxEnabled}
+                    onChange={audio.setSfxEnabled}
+                />
                 <Toggle
                     label={t('table.live_play')}
                     hint={t('table.live_play_hint')}
@@ -1029,6 +1081,13 @@ function TableBody() {
                     </View>
                 </View>
             ) : null}
+
+            <StartWheel
+                key={g.start_id || g.starts_at_ms || 'no-start'}
+                game={g}
+                skewMs={skewMs}
+                onSpin={() => audio.play('spin')}
+            />
         </View>
         </TableGlassProvider>
     );
@@ -1169,7 +1228,6 @@ const styles = StyleSheet.create({
     // own, so pairing it with `flexShrink` left the faster shrink to whichever
     // of the two the platform happened to apply last.
     sharedTable: { flexGrow: 1, flexShrink: 1.6, flexBasis: 0, minHeight: 104, gap: 5, justifyContent: 'flex-start', overflow: 'hidden' },
-    handScroll: { flexGrow: 0, flexShrink: 0 },
     hidden: { display: 'none' },
     // What `flex: 0` means on native — grow 0, shrink 0, basis auto — written
     // out, so the folded board is sized by its header on both platforms.
@@ -1253,8 +1311,8 @@ const styles = StyleSheet.create({
     handZone: { flexShrink: 0, gap: 2, paddingHorizontal: 4, paddingBottom: 4, paddingTop: 2, overflow: 'hidden' },
     grabberRow: { alignItems: 'center', paddingTop: 2 },
     grabber: { width: 34, height: 4, borderRadius: 2, backgroundColor: '#d8fff033' },
-    handFan: { paddingVertical: 8, paddingHorizontal: 8, alignItems: 'center' },
-    handOverlap: { marginLeft: -12 },
+    handFan: { flexShrink: 0, alignItems: 'center', gap: 3, paddingTop: 5, paddingBottom: 6, paddingHorizontal: 6 },
+    handFanRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'center' },
     handHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     handHint: { flex: 1, textAlign: 'right', fontFamily: uiFont(700), fontSize: 10, color: ink.muted45 },
     overLimit: { fontFamily: uiFont(700), fontSize: 10, color: ink.endTurnHint },

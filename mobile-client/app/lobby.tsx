@@ -11,6 +11,7 @@ import { Avatar, Btn, LabelCaps, Panel, Sheet } from '../src/ui/kit';
 import { useI18n } from '../src/i18n';
 import { formatTurn } from '../src/i18n/format';
 import type { Difficulty, Mode } from '../src/types';
+import { ChatPanel } from '../src/components/table/ChatPanel';
 
 export default function LobbyScreen() {
     const { t } = useI18n();
@@ -18,6 +19,7 @@ export default function LobbyScreen() {
     const insets = useSafeAreaInsets();
     const { room, send, leave, notice } = useGameConnectionContext();
     const [invite, setInvite] = useState(false);
+    const [chatOpen, setChatOpen] = useState(false);
     const [copied, setCopied] = useState(false);
 
     useEffect(() => {
@@ -62,7 +64,10 @@ export default function LobbyScreen() {
                             {room.name}
                         </Text>
                     </View>
-                    <Btn label={t('invite.open')} onPress={() => setInvite(true)} />
+                    <View style={styles.headActions}>
+                        <Btn label={t('lobby.chat')} onPress={() => setChatOpen(true)} />
+                        <Btn label={t('invite.open')} onPress={() => setInvite(true)} />
+                    </View>
                 </View>
 
                 {notice ? (
@@ -253,6 +258,14 @@ export default function LobbyScreen() {
                     onPress={() => Share.share({ message: link })}
                 />
             </Sheet>
+
+            <Sheet open={chatOpen} onClose={() => setChatOpen(false)} title={t('lobby.chat')} scroll={false}>
+                <ChatPanel
+                    chat={room.chat}
+                    you={room.you}
+                    onSend={(text) => send({ type: 'chat', text })}
+                />
+            </Sheet>
         </>
     );
 }
@@ -261,6 +274,7 @@ const styles = StyleSheet.create({
     wrap: { padding: 12, gap: 12 },
     headRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
     headText: { flex: 1 },
+    headActions: { flexDirection: 'row', gap: 6 },
     code: { fontFamily: displayFont(900), fontSize: 22, color: brand.inviteCode, letterSpacing: ls(0.12, 22) },
     name: { fontFamily: uiFont(700), fontSize: 13, color: ink.muted60 },
     card: { padding: 14, gap: 10 },

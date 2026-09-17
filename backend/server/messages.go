@@ -201,7 +201,7 @@ type GameView struct {
 	// NowMS lets the client correct for clock skew when drawing the countdown.
 	NowMS int64 `json:"now_ms"`
 	// StartSequence, StartID and StartsAtMS let clients animate the authoritative
-	// random seat order before the first turn starts.
+	// random starting seat and clockwise order before the first turn starts.
 	StartSequence []string `json:"start_sequence,omitempty"`
 	StartID       string   `json:"start_id,omitempty"`
 	StartsAtMS    int64    `json:"starts_at_ms,omitempty"`

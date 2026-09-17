@@ -545,9 +545,10 @@ func (g *Game) Start() error {
 	return g.start(false, false)
 }
 
-// StartRandom starts a match with a randomized seat order. It is kept
-// separate from Start so the deterministic game-unit helper remains useful,
-// while the server can make every real match fair.
+// StartRandom starts a match from a random seat, then keeps the existing
+// clockwise seat order. It is kept separate from Start so the deterministic
+// game-unit helper remains useful, while every real player has an equal chance
+// to lead without the table changing where everybody sits.
 func (g *Game) StartRandom() error {
 	return g.start(true, false)
 }
@@ -569,10 +570,13 @@ func (g *Game) start(randomize, scheduled bool) error {
 	if !g.Mode.Available() {
 		return fault("err.mode_unavailable", "that mode is not available yet")
 	}
-	if randomize {
-		rand.Shuffle(len(g.Players), func(i, j int) {
-			g.Players[i], g.Players[j] = g.Players[j], g.Players[i]
-		})
+	if randomize && len(g.Players) > 1 {
+		first := rand.IntN(len(g.Players))
+		if first > 0 {
+			clockwise := append([]*Player{}, g.Players[first:]...)
+			clockwise = append(clockwise, g.Players[:first]...)
+			g.Players = clockwise
+		}
 	}
 	g.State = StatePlaying
 	g.CurrentTurn = 0

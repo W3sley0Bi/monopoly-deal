@@ -8,6 +8,7 @@ import { Btn, LabelCaps, Modal } from '../../ui/kit';
 import { Card } from '../../ui/card';
 import { useI18n } from '../../i18n';
 import { uiFont } from '../../../lib/fonts';
+import { CountdownTimer } from './CountdownTimer';
 
 /**
  * The modal that owns the screen while a demand is unresolved.
@@ -23,6 +24,9 @@ export function PendingPanel({
     myTarget,
     payableCards,
     you,
+    deadlineMs = 0,
+    deadlineSeconds = 0,
+    skewMs,
     tutorialCopy,
     onRespond,
 }: PendingPanelProps) {
@@ -57,6 +61,13 @@ export function PendingPanel({
 
     return (
         <Modal open title={title}>
+            <CountdownTimer
+                deadlineMs={deadlineMs}
+                totalSeconds={deadlineSeconds}
+                skewMs={skewMs}
+                kind="respond"
+                compact
+            />
             {tutorialCopy ? (
                 <View style={styles.tutorial}>
                     <View style={styles.tutorialHead}>

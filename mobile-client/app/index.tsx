@@ -20,7 +20,7 @@ import { Avatar, Btn, Icon, LabelCaps, LanguagePicker, Panel, Sheet } from '../s
 import { useI18n } from '../src/i18n';
 import { formatTurn } from '../src/i18n/format';
 import { FIXTURES } from '../src/dev/fixtures';
-import type { Difficulty } from '../src/types';
+import type { Difficulty, Mode } from '../src/types';
 
 export default function HomeScreen() {
     const { t } = useI18n();
@@ -35,6 +35,13 @@ export default function HomeScreen() {
     const [draft, setDraft] = useState(name);
     const [code, setCode] = useState('');
     const [account, setAccount] = useState(false);
+    const [creating, setCreating] = useState(false);
+    const [tableName, setTableName] = useState('');
+    const [privateRoom, setPrivateRoom] = useState(false);
+    const [createMode, setCreateMode] = useState<Mode>('classic');
+    const [turnSeconds, setTurnSeconds] = useState(0);
+    const [createBots, setCreateBots] = useState(0);
+    const [createLevel, setCreateLevel] = useState<Difficulty>('normal');
     const [bots, setBots] = useState(2);
     const [level, setLevel] = useState<Difficulty>('normal');
 
@@ -193,7 +200,10 @@ export default function HomeScreen() {
 
                 {/* ---- join / browse ---- */}
                 <Panel style={styles.card}>
-                    <LabelCaps>{t('home.tables')}</LabelCaps>
+                    <View style={styles.rowBetween}>
+                        <LabelCaps>{t('home.tables')}</LabelCaps>
+                        <Btn label={t('home.new_table')} variant="gold" onPress={() => setCreating(true)} />
+                    </View>
 
                     <View style={styles.joinRow}>
                         <TextInput
@@ -332,6 +342,124 @@ export default function HomeScreen() {
                     </View>
                 ) : null}
             </Sheet>
+
+            <Sheet open={creating} onClose={() => setCreating(false)} title={t('home.new_table')}>
+                <LabelCaps>{t('home.table_name')}</LabelCaps>
+                <TextInput
+                    value={tableName}
+                    onChangeText={setTableName}
+                    placeholder={t('home.table_name_placeholder', { name })}
+                    placeholderTextColor={ink.muted45}
+                    maxLength={28}
+                    autoCapitalize="sentences"
+                    style={styles.input}
+                />
+
+                <LabelCaps>{t('invite.visibility')}</LabelCaps>
+                <View style={styles.segmentWide}>
+                    {[false, true].map((isPrivate) => (
+                        <Pressable
+                            key={String(isPrivate)}
+                            onPress={() => setPrivateRoom(isPrivate)}
+                            style={[styles.seg, styles.segWide, privateRoom === isPrivate && styles.segOn]}
+                        >
+                            <Text style={[styles.segText, privateRoom === isPrivate && styles.segTextOn]}>
+                                {t(isPrivate ? 'invite.private' : 'invite.public')}
+                            </Text>
+                        </Pressable>
+                    ))}
+                </View>
+
+                <LabelCaps>{t('home.game_mode')}</LabelCaps>
+                <View style={styles.segmentWide}>
+                    {(home?.modes ?? []).map((m) => (
+                        <Pressable
+                            key={m.id}
+                            disabled={!m.available}
+                            onPress={() => setCreateMode(m.id)}
+                            style={[
+                                styles.seg,
+                                styles.segWide,
+                                createMode === m.id && styles.segOn,
+                                !m.available && styles.segOff,
+                            ]}
+                        >
+                            <Text style={[styles.segText, createMode === m.id && styles.segTextOn]}>
+                                {t(`mode.${m.id}`)}{!m.available ? ` · ${t('home.mode_soon')}` : ''}
+                            </Text>
+                        </Pressable>
+                    ))}
+                </View>
+
+                <LabelCaps>{t('home.turn_timer')}</LabelCaps>
+                <View style={styles.segmentWide}>
+                    {(home?.turn_options ?? [0, 30, 60, 120]).map((seconds) => (
+                        <Pressable
+                            key={seconds}
+                            onPress={() => setTurnSeconds(seconds)}
+                            style={[styles.seg, styles.segWide, turnSeconds === seconds && styles.segOn]}
+                        >
+                            <Text style={[styles.segText, turnSeconds === seconds && styles.segTextOn]}>
+                                {formatTurn(t, seconds)}
+                            </Text>
+                        </Pressable>
+                    ))}
+                </View>
+                <Text style={styles.hint}>{t('home.turn_hint')}</Text>
+
+                <LabelCaps>{t('home.bots')}</LabelCaps>
+                <View style={styles.segmentWide}>
+                    {[0, 1, 2, 3, 4].map((count) => (
+                        <Pressable
+                            key={count}
+                            onPress={() => setCreateBots(count)}
+                            style={[styles.seg, styles.segWide, createBots === count && styles.segOn]}
+                        >
+                            <Text style={[styles.segText, createBots === count && styles.segTextOn]}>
+                                {count === 0 ? t('home.bots_none') : count}
+                            </Text>
+                        </Pressable>
+                    ))}
+                </View>
+
+                {createBots > 0 ? (
+                    <>
+                        <LabelCaps>{t('home.difficulty')}</LabelCaps>
+                        <View style={styles.segmentWide}>
+                            {(home?.difficulties ?? ['easy', 'normal', 'hard']).map((difficulty) => (
+                                <Pressable
+                                    key={difficulty}
+                                    onPress={() => setCreateLevel(difficulty)}
+                                    style={[styles.seg, styles.segWide, createLevel === difficulty && styles.segOn]}
+                                >
+                                    <Text style={[styles.segText, createLevel === difficulty && styles.segTextOn]}>
+                                        {t(`difficulty.${difficulty}`)}
+                                    </Text>
+                                </Pressable>
+                            ))}
+                        </View>
+                    </>
+                ) : null}
+
+                <Btn
+                    label={t('home.open_table')}
+                    variant="gold"
+                    disabled={!connected}
+                    onPress={() => {
+                        send({
+                            type: 'create_room',
+                            room_name: tableName.trim() || t('home.table_name_placeholder', { name }),
+                            private: privateRoom,
+                            mode: createMode,
+                            turn_seconds: turnSeconds,
+                            bots: createBots,
+                            bot_difficulty: createLevel,
+                        });
+                        setCreating(false);
+                        setTableName('');
+                    }}
+                />
+            </Sheet>
         </>
     );
 }
@@ -373,6 +501,7 @@ const styles = StyleSheet.create({
     },
     segWide: { flex: 1 },
     segOn: { backgroundColor: brand.brassGlow12, borderColor: brand.brass },
+    segOff: { opacity: 0.42 },
     segText: { fontFamily: uiFont(700), fontSize: 13, color: ink.muted60 },
     segTextOn: { color: ink.body },
     joinRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },

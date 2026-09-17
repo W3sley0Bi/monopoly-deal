@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Platform, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { runOnJS, useSharedValue } from 'react-native-reanimated';
+import { measure, runOnJS, useAnimatedRef, useSharedValue } from 'react-native-reanimated';
 
 import { useDragShared } from './DragLayer';
 import { useDragLayer, type DragState } from './registry';
@@ -25,7 +25,8 @@ interface Props {
 export function Draggable({ state, axis = 'vertical', enabled = true, onTap, children }: Props) {
     const layer = useDragLayer();
     const shared = useDragShared();
-    const ref = useRef<View>(null);
+    const ref = useAnimatedRef<View>();
+    const fallbackRef = useRef<View>(null);
 
     // Measured on pickup rather than on layout: the card may be transformed by
     // its hand fan or moved by a scrolling board.
@@ -33,8 +34,8 @@ export function Draggable({ state, axis = 'vertical', enabled = true, onTap, chi
     // on the UI thread, where a React ref is not readable.
     const grabX = useSharedValue(0);
     const grabY = useSharedValue(0);
-    function pickUp(absX: number, absY: number) {
-        ref.current?.measureInWindow((wx, wy, w, h) => {
+    function pickUpFallback(absX: number, absY: number) {
+        fallbackRef.current?.measureInWindow((wx, wy, w, h) => {
             grabX.value = absX - wx;
             grabY.value = absY - wy;
             layer.begin(state, { x: wx, y: wy, w, h });
@@ -46,17 +47,31 @@ export function Draggable({ state, axis = 'vertical', enabled = true, onTap, chi
     // the old slide-versus-drag ambiguity.
     useEffect(() => {
         if (Platform.OS !== 'web') return;
-        const node = ref.current as unknown as HTMLElement | null;
+        const node = fallbackRef.current as unknown as HTMLElement | null;
         if (!node?.style) return;
         node.style.touchAction = 'none';
     }, [axis, enabled]);
 
     const pan = Gesture.Pan()
         .enabled(enabled)
-        .activeOffsetY(axis === 'vertical' ? [-8, 8] : [-8, 8])
+        .activeOffsetY(axis === 'vertical' ? [-6, 6] : [-8, 8])
         .failOffsetX([-10000, 10000])
         .onStart((e) => {
-            runOnJS(pickUp)(e.absoluteX, e.absoluteY);
+            const bounds = measure(ref);
+            if (!bounds) {
+                runOnJS(pickUpFallback)(e.absoluteX, e.absoluteY);
+                return;
+            }
+            grabX.value = e.absoluteX - bounds.pageX;
+            grabY.value = e.absoluteY - bounds.pageY;
+            shared.x.value = bounds.pageX;
+            shared.y.value = bounds.pageY;
+            runOnJS(layer.begin)(state, {
+                x: bounds.pageX,
+                y: bounds.pageY,
+                w: bounds.width,
+                h: bounds.height,
+            });
         })
         .onUpdate((e) => {
             'worklet';
@@ -104,7 +119,13 @@ export function Draggable({ state, axis = 'vertical', enabled = true, onTap, chi
 
     return (
         <GestureDetector gesture={gesture}>
-            <View ref={ref} collapsable={false}>
+            <View
+                ref={(node) => {
+                    ref(node);
+                    fallbackRef.current = node;
+                }}
+                collapsable={false}
+            >
                 {children}
             </View>
         </GestureDetector>

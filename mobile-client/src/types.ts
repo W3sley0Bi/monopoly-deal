@@ -175,7 +175,7 @@ export interface GameView {
     /** Server clock, for skew correction — never compare against the local
      *  clock directly. */
     now_ms: number;
-    /** Player ids in randomised seat order. */
+    /** Player ids from the chosen starter, then clockwise around the table. */
     start_sequence?: string[];
     /** Animate the seat-order wheel once per new id. */
     start_id?: string;

@@ -16,7 +16,7 @@ const invite: Catalog = {
     'invite.public': "Pubblico · tavolo aperto",
     'wheel.eyebrow': "Si parte alla pari",
     'wheel.title': "Chi farà la prima mossa?",
-    'wheel.fair': "Tutti hanno una possibilità. L’intero ordine di gioco è casuale.",
+    'wheel.fair': "Tutti possono iniziare. Poi il gioco prosegue in senso orario.",
     'wheel.winner': "Inizia {name}!",
     'wheel.spinning': "Scelta del primo giocatore…",
     'wheel.order': "Il vostro ordine di gioco",

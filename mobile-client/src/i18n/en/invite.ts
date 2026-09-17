@@ -16,7 +16,7 @@ const invite: Catalog = {
     'invite.public': "Public · open table",
     'wheel.eyebrow': "A fair start",
     'wheel.title': "Who makes the first deal?",
-    'wheel.fair': "Every seat gets a chance. The entire turn order is shuffled.",
+    'wheel.fair': "Every seat gets a chance to start. Play then continues clockwise.",
     'wheel.winner': "{name} starts!",
     'wheel.spinning': "Choosing the first player…",
     'wheel.order': "Your turn order",
