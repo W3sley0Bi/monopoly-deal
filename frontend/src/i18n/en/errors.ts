@@ -11,7 +11,6 @@ const errors: Catalog = {
     // Identity and table ownership
     'err.choose_name': 'Choose a name first.',
     'err.not_owner': 'Only the table owner can do that.',
-    'err.bad_station': 'That station is not a usable https stream.',
     'err.missing_player_id': 'Missing player id.',
     'err.no_such_table': 'No table with code "{code}".',
     'err.close_host_only': 'Only {host} can close that table while people are at it.',
@@ -47,8 +46,6 @@ const errors: Catalog = {
     'err.no_plays_left': 'No plays left this turn.',
     'err.card_not_in_hand': 'That card is not in your hand.',
     'err.card_not_in_play': 'That card is not in play.',
-    'err.discard_first': 'Discard down to {limit} cards first (you have {have}).',
-    'err.discard_only_over_limit': 'You may only discard while over {limit} cards.',
 
     // Playing cards
     'err.no_action': 'That card has no action.',

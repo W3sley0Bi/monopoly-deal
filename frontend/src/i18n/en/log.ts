@@ -22,6 +22,8 @@ const log: Catalog = {
 
     // Turn flow. The em dash marks the turn line, which LogList styles.
     'log.turn': "— {name}'s turn —",
+    // The scripted table rebuilds itself for each lesson; this marks where.
+    'log.tutorial_lesson': '— Lesson: {lesson} —',
     'log.timeout_respond': '{name} ran out of time to respond.',
     'log.timeout_turn': "{name}'s turn timed out.",
 
@@ -30,7 +32,8 @@ const log: Catalog = {
     'log.banked_money': '{name} banked ${amount}M.',
     'log.played_property': '{name} played {card} as {color}.',
     'log.moved_wildcard': '{name} moved {card} to {color}.',
-    'log.discarded': '{name} discarded {card}.',
+    'log.discarded_excess.one': '{name}’s hand was over the limit — 1 card blew away.',
+    'log.discarded_excess.other': '{name}’s hand was over the limit — {count} cards blew away.',
     'log.pass_go.one': '{name} played Pass Go and drew {count} card.',
     'log.pass_go.other': '{name} played Pass Go and drew {count} cards.',
     'log.building': '{name} played {card} on {color} — rent is now ${rent}M.',
@@ -60,8 +63,6 @@ const log: Catalog = {
     'log.win_deathmatch': '🏆 {name} wins the death match with {sets} complete sets!',
 
     // Chat lines the server announces.
-    'chat.radio_on': '{name} tuned the radio to {station}',
-    'chat.radio_off': '{name} switched the radio off',
     'chat.joined_call': '{name} joined the call',
     'chat.left_call': '{name} left the call',
 

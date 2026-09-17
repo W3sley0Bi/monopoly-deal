@@ -11,7 +11,6 @@ const errors: Catalog = {
     // Identity and table ownership
     'err.choose_name': 'Wähl zuerst einen Namen.',
     'err.not_owner': 'Das kann nur der Besitzer des Tisches.',
-    'err.bad_station': 'Dieser Sender ist kein nutzbarer https-Stream.',
     'err.missing_player_id': 'Spieler-ID fehlt.',
     'err.no_such_table': 'Kein Tisch mit dem Code "{code}".',
     'err.close_host_only': 'Solange Leute am Tisch sitzen, kann ihn nur {host} schließen.',
@@ -47,8 +46,6 @@ const errors: Catalog = {
     'err.no_plays_left': 'Keine Züge mehr in dieser Runde.',
     'err.card_not_in_hand': 'Diese Karte ist nicht auf deiner Hand.',
     'err.card_not_in_play': 'Diese Karte ist nicht im Spiel.',
-    'err.discard_first': 'Leg zuerst auf {limit} Karten ab (du hast {have}).',
-    'err.discard_only_over_limit': 'Ablegen geht nur, solange du über {limit} Karten hast.',
 
     // Playing cards
     'err.no_action': 'Diese Karte hat keine Aktion.',

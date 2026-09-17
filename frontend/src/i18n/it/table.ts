@@ -23,6 +23,7 @@ const table: Catalog = {
     'table.reaction_3': "Incredibile",
 
     'table.motion': "Animazione carte",
+    'table.cry_reaction': "Gif di reazione allo scarto",
     'table.on': "Attiva",
     'table.off': "Disattiva",
     'table.turn_of': "Turno di {name}",
@@ -40,9 +41,9 @@ const table: Catalog = {
     'table.plays_hint': 'Giocate rimaste in questo turno',
     'table.end_turn': 'Fine turno',
     'table.end_turn_hint': 'Concludi il tuo turno',
+    'table.end_turn_over_limit': 'Concludendo ora scarti {count} carta/e in più',
     'table.auto_end': 'Turno chiuso tra {seconds}s',
     'table.auto_end_short': '⏱ {seconds}s',
-    'table.discard_first': 'Prima scarta fino a 7 carte',
     'table.deck_hint': 'Carte rimaste nel mazzo',
     'table.discard_hint': 'Scarti',
     'table.bank_hint': 'La tua banca',
@@ -101,11 +102,14 @@ const table: Catalog = {
     'table.properties_drag': 'Trascina qui una carta proprietà per iniziare una serie',
     // The wildcard rule changed: a card already on the table is no longer free
     // to shuffle around, so the mat says what a move now costs.
+    'table.joker_pick_colour': 'Lasciala su un colore, oppure toccala e scegline uno.',
     'table.wildcard_move_cost': 'Spostare un jolly già sul tavolo costa una giocata.',
 
     // ── Hand ─────────────────────────────────────────────────────────────
     'table.hand': 'Mano · {count}',
-    'table.over_limit': 'Più di 7 — scarta {count}',
+    'table.hand_fold': 'Chiudi la tua mano',
+    'table.hand_unfold': 'Mostra la tua mano',
+    'table.over_limit': 'Più di 7 di {count} — le carte in più cadranno a fine turno',
     'table.hand_tap': 'Tocca una carta per le opzioni o trascinala in alto',
     'table.hand_drag': 'Trascina una carta sul tavolo, oppure toccala per le opzioni',
     'table.hand_empty': 'Nessuna carta — ne peschi 5 all’inizio del tuo prossimo turno.',
@@ -117,9 +121,6 @@ const table: Catalog = {
     'table.charge_rent': 'Chiedi l’affitto',
     'table.play_action': 'Gioca l’azione',
     'table.bank_card': 'In banca {amount}',
-    'table.discard_card': 'Scarta',
-    'table.discard_this': 'Scarta questa carta',
-    'table.discard_locked': 'Puoi scartare solo quando superi il limite di 7 carte',
     'table.just_say_no_hint': 'Tienila in mano per bloccare le azioni contro di te.',
     'table.double_rent_hint': 'Sceglila dalla finestra dell’affitto per raddoppiare la richiesta.',
 
@@ -167,6 +168,10 @@ const table: Catalog = {
     'dialog.deal_breaker': 'Affare Rotto',
     'dialog.deal_breaker_blurb': 'Ruba un’intera serie completa',
     'dialog.take_the_set': 'Prendi la serie',
+    'dialog.chosen_take': 'Prendi: {card}',
+    'dialog.chosen_take_none': 'Tocca una delle sue carte per prenderla.',
+    'dialog.chosen_give': 'Dai: {card}',
+    'dialog.chosen_give_none': 'Tocca una delle tue da dare in cambio.',
     'dialog.victim': 'Vittima',
     'dialog.set_to_steal': 'Serie completa da rubare',
     'dialog.no_complete_set': '{name} non ha nessuna serie completa.',
@@ -210,6 +215,9 @@ const table: Catalog = {
 
     'pending.ui.you_target': 'Sei tu il bersaglio',
     'pending.ui.you_target_blurb': 'Bloccala con Dì Solo No, oppure lasciala passare.',
+    'pending.ui.stake_lose': 'Questa te la portano via',
+    'pending.ui.stake_lose_set': 'Si prendono tutta questa serie',
+    'pending.ui.stake_gain': 'Questa la ricevi tu',
     'pending.ui.allow_it': 'Lasciala passare',
 
     'pending.ui.you_owe': 'Devi {amount}',
@@ -232,6 +240,11 @@ const table: Catalog = {
     'pending.sly_deal': 'Furto Furbo',
     'pending.forced_deal': 'Scambio Forzato',
     'pending.deal_breaker': 'Affare Rotto',
+    'table.tap_tray': 'Tocca per le opzioni carta',
+    'table.hand_peek': 'Anteprima carta in mano',
+    'table.hand_drag_only': 'Trascina una carta in alto per giocarla',
+    'inspect.hand_hint_drag': 'Passa sopra per vedere / trascina per giocare',
+    'inspect.hand_hint_click': 'Clicca per scegliere · trascina per giocare',
 };
 
 export default table;

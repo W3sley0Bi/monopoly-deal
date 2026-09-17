@@ -11,7 +11,6 @@ const errors: Catalog = {
     // Identity and table ownership
     'err.choose_name': 'Scegli prima un nome.',
     'err.not_owner': 'Solo chi ha aperto il tavolo può farlo.',
-    'err.bad_station': 'Questa stazione non è uno stream https utilizzabile.',
     'err.missing_player_id': 'Id del giocatore mancante.',
     'err.no_such_table': 'Nessun tavolo con il codice "{code}".',
     'err.close_host_only': 'Solo {host} può chiudere quel tavolo finché c’è gente.',
@@ -47,8 +46,6 @@ const errors: Catalog = {
     'err.no_plays_left': 'Nessuna giocata rimasta in questo turno.',
     'err.card_not_in_hand': 'Quella carta non è nella tua mano.',
     'err.card_not_in_play': 'Quella carta non è in gioco.',
-    'err.discard_first': 'Prima scarta fino a {limit} carte (ne hai {have}).',
-    'err.discard_only_over_limit': 'Puoi scartare solo quando superi le {limit} carte.',
 
     // Playing cards
     'err.no_action': 'Quella carta non ha nessuna azione.',

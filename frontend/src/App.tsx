@@ -1,11 +1,9 @@
 import { useGameAudio } from './game/useGameAudio';
 import StartWheel from './components/StartWheel';
-import CallAudio from './components/CallAudio';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { ClientMessage, HomeView, RoomView, RTCEnvelope, RTCSignal, ServerMessage } from './types';
+import type { ClientMessage, HomeView, RoomView, ServerMessage } from './types';
 import { useI18n } from './i18n';
 import { useJsonSocket } from './game/useJsonSocket';
-import { useWebRTC } from './game/useWebRTC';
 import Home from './components/Home';
 import RoomLobby from './components/RoomLobby';
 import Table from './components/Table';
@@ -56,8 +54,6 @@ export default function App() {
 
     // Room to re-enter after a reconnect or a page refresh.
     const rejoin = useRef<string | null>(inviteCode || localStorage.getItem(ROOM_KEY));
-    // Relayed WebRTC payloads are handed to whoever is listening.
-    const signalListeners = useRef(new Set<(env: RTCEnvelope) => void>());
 
     const onMessage = useCallback((msg: ServerMessage) => {
         switch (msg.type) {
@@ -94,9 +90,6 @@ export default function App() {
                     localStorage.removeItem(ROOM_KEY);
                 }
                 break;
-            case 'rtc_signal':
-                for (const listen of signalListeners.current) listen(msg.payload);
-                break;
             case 'notice':
                 setError({ key: msg.notice_key, args: msg.notice_args, text: msg.notice });
                 break;
@@ -111,28 +104,7 @@ export default function App() {
         sendRaw({ player_id: myId, player_name: name, ...msg });
     }, [myId, name, sendRaw]);
 
-    const sendSignal = useCallback((to: string, signal: RTCSignal) => {
-        sendRaw({ type: 'rtc_signal', player_id: myId, target_player_id: to, signal });
-    }, [myId, sendRaw]);
-
-    const subscribeSignal = useCallback((handler: (env: RTCEnvelope) => void) => {
-        signalListeners.current.add(handler);
-        return () => signalListeners.current.delete(handler);
-    }, []);
-
-    const announceCall = useCallback((joined: boolean) => {
-        sendRaw({ type: joined ? 'rtc_join' : 'rtc_leave', player_id: myId, player_name: name });
-    }, [myId, name, sendRaw]);
-
-    const call = useWebRTC({
-        myId,
-        members: room?.call_members ?? [],
-        sendSignal,
-        subscribe: subscribeSignal,
-        announce: announceCall,
-    });
-
-    const audio = useGameAudio(room?.game ?? null, room?.radio ?? null);
+    const audio = useGameAudio(room?.game ?? null);
     const { unlocked: audioUnlocked, unlock: unlockAudio } = audio;
     useEffect(() => {
         if (audioUnlocked) return;
@@ -142,10 +114,7 @@ export default function App() {
         return () => { window.removeEventListener('pointerdown', unlock); window.removeEventListener('keydown', unlock); };
     }, [audioUnlocked, unlockAudio]);
 
-    // Drop out of the call when we leave the table behind.
-    useEffect(() => {
-        if (!room && (call.status === 'on' || call.status === 'starting')) call.leave();
-    }, [room, call]);
+
 
     // Announce ourselves on every (re)connect, and walk back into our room.
     useEffect(() => {
@@ -187,7 +156,6 @@ export default function App() {
     };
 
     const leaveRoom = () => {
-        call.leave();
         rejoin.current = null;
         localStorage.removeItem(ROOM_KEY);
         send({ type: 'leave_room' });
@@ -205,9 +173,9 @@ export default function App() {
     const errorText = error ? (error.key ? t(error.key, error.args) : error.text) : '';
 
     if (room) {
-        return <><CallAudio call={call} /><StartWheel game={room.game} skewMs={skewMs} audio={audio} />{room.game.state === 'waiting'
-            ? <RoomLobby audio={audio} room={room} error={errorText} call={call} send={send} onLeave={leaveRoom} />
-            : <Table audio={audio} room={room} error={errorText} skewMs={skewMs} call={call} tutorial={tutorial} onTutorial={startTutorial} send={send} onLeave={leaveRoom} />}</>;
+        return <><StartWheel game={room.game} skewMs={skewMs} audio={audio} />{room.game.state === 'waiting'
+            ? <RoomLobby audio={audio} room={room} error={errorText} send={send} onLeave={leaveRoom} />
+            : <Table audio={audio} room={room} error={errorText} skewMs={skewMs} tutorial={tutorial} onTutorial={startTutorial} send={send} onLeave={leaveRoom} />}</>;
     }
 
     return (

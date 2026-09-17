@@ -531,6 +531,7 @@ func TestScheduledRandomStartRevealsBeforeFirstTurn(t *testing.T) {
 	now := time.Unix(1_700_000_000, 0)
 	g := NewGame("t")
 	g.SetClock(func() time.Time { return now })
+	originalOrder := []string{"a", "b", "c"}
 	for _, p := range []struct{ id, name string }{{"a", "Alice"}, {"b", "Bob"}, {"c", "Cara"}} {
 		g.AddPlayer(p.id, p.name)
 	}
@@ -539,6 +540,22 @@ func TestScheduledRandomStartRevealsBeforeFirstTurn(t *testing.T) {
 	}
 	if len(g.StartSequence) != 3 || g.StartID == "" || g.StartAtMS != now.Add(StartRevealDelay).UnixMilli() {
 		t.Fatalf("missing start reveal metadata: %+v", g)
+	}
+	start := -1
+	for i, id := range originalOrder {
+		if id == g.StartSequence[0] {
+			start = i
+			break
+		}
+	}
+	if start < 0 {
+		t.Fatalf("starter %q was not seated", g.StartSequence[0])
+	}
+	for i, id := range g.StartSequence {
+		want := originalOrder[(start+i)%len(originalOrder)]
+		if id != want {
+			t.Fatalf("turn order is not clockwise after the chosen starter: got %v", g.StartSequence)
+		}
 	}
 	if g.PlaysLeft != 0 || g.DeadlineKind != "starting" {
 		t.Fatalf("the turn should be held during the reveal: plays=%d deadline=%q", g.PlaysLeft, g.DeadlineKind)

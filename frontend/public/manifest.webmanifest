@@ -1,7 +1,7 @@
 {
   "name": "Monopoly Deal",
   "short_name": "Deal",
-  "description": "Play Monopoly Deal with friends around one table, with voice, video and a shared radio.",
+  "description": "Play Monopoly Deal with friends around one table, with voice and video.",
   "id": "/",
   "start_url": "/",
   "scope": "/",

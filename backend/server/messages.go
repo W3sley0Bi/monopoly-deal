@@ -1,7 +1,6 @@
 package server
 
 import (
-	"encoding/json"
 	"time"
 
 	"monopoly-deal-backend/game"
@@ -25,22 +24,15 @@ const (
 	MsgTakeSeat    = "take_seat"
 	MsgRequestSeat = "request_seat"
 	MsgCancelSeat  = "cancel_seat"
-	MsgSetRadio    = "set_radio"
 	MsgAddBot      = "add_bot"
 	MsgRemoveBot   = "remove_bot"
 	MsgChat        = "chat"
-
-	// Voice and video: the server only relays, it never inspects the payloads.
-	MsgRTCJoin   = "rtc_join"
-	MsgRTCLeave  = "rtc_leave"
-	MsgRTCSignal = "rtc_signal"
 
 	// Game scope.
 	MsgPlayBank     = "play_bank"
 	MsgPlayProperty = "play_property"
 	MsgPlayAction   = "play_action"
 	MsgMoveWildcard = "move_wildcard"
-	MsgDiscard      = "discard"
 	MsgEndTurn      = "end_turn"
 	MsgRespond      = "respond"
 	// MsgTutorialNext moves a scripted table on to the next lesson.
@@ -82,14 +74,8 @@ type ClientMessage struct {
 	SayNo          bool       `json:"say_no,omitempty"`
 	CardIDs        []string   `json:"card_ids,omitempty"`
 
-	// Radio is the station the table owner tuned to. A nil radio, or one with
-	// an empty URL, switches the table radio off.
-	Radio *RadioState `json:"radio,omitempty"`
-
 	// Chat.
 	Text string `json:"text,omitempty"`
-	// WebRTC offer/answer/candidate, passed through untouched.
-	Signal json.RawMessage `json:"signal,omitempty"`
 }
 
 // ChatMessage is one line in a table's group chat. Player messages carry Text;
@@ -105,12 +91,6 @@ type ChatMessage struct {
 	AtMS     int64          `json:"at_ms"`
 	// System marks server-generated lines rather than player messages.
 	System bool `json:"system,omitempty"`
-}
-
-// RTCEnvelope is one relayed signalling payload.
-type RTCEnvelope struct {
-	From   string          `json:"from"`
-	Signal json.RawMessage `json:"signal"`
 }
 
 // ServerMessage is the single outbound envelope. Errors and notices carry a
@@ -221,7 +201,7 @@ type GameView struct {
 	// NowMS lets the client correct for clock skew when drawing the countdown.
 	NowMS int64 `json:"now_ms"`
 	// StartSequence, StartID and StartsAtMS let clients animate the authoritative
-	// random seat order before the first turn starts.
+	// random starting seat and clockwise order before the first turn starts.
 	StartSequence []string `json:"start_sequence,omitempty"`
 	StartID       string   `json:"start_id,omitempty"`
 	StartsAtMS    int64    `json:"starts_at_ms,omitempty"`
@@ -248,23 +228,7 @@ type RoomView struct {
 	Difficulties   []game.Difficulty `json:"difficulties"`
 	Game           GameView          `json:"game"`
 
-	Radio RadioState `json:"radio"`
-
 	Chat []ChatMessage `json:"chat"`
-	// CallMembers are the player ids currently in the voice/video call.
-	CallMembers []string `json:"call_members"`
-}
-
-// RadioState is the table's shared station. Every client plays the same
-// stream at its own volume; nothing is mixed or relayed by the server.
-type RadioState struct {
-	Name    string `json:"name"`
-	URL     string `json:"url"`
-	Home    string `json:"home,omitempty"`
-	Playing bool   `json:"playing"`
-	// ByName is who tuned it, for the "playing on X's radio" line.
-	ByName string `json:"by_name,omitempty"`
-	AtMS   int64  `json:"at_ms,omitempty"`
 }
 
 // RoomSummary is one row in the home screen's table browser.
@@ -280,7 +244,6 @@ type RoomSummary struct {
 	Players        []Seat          `json:"players"`
 	SpectatorCount int             `json:"spectator_count"`
 	BotCount       int             `json:"bot_count"`
-	CallCount      int             `json:"call_count"`
 	SeatsFree      int             `json:"seats_free"`
 	YouSeated      bool            `json:"you_seated"`
 	YouSpectating  bool            `json:"you_spectating"`

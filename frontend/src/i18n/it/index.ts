@@ -8,7 +8,6 @@ import tutorial from './tutorial';
 import cards from './cards';
 import log from './log';
 import errors from './errors';
-import gif from './gif';
 import audio from './audio';
 
 /** Every string the client shows, merged from one file per area. */
@@ -22,7 +21,6 @@ const catalog: Catalog = {
     ...cards,
     ...log,
     ...errors,
-    ...gif,
     ...audio,
 };
 

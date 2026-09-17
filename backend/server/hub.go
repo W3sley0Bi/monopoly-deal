@@ -256,7 +256,6 @@ func (h *Hub) detachLocked(c *Client) {
 	if !stillHere {
 		r.Game.Disconnect(c.playerID)
 		delete(r.spectators, c.playerID)
-		delete(r.call, c.playerID)
 		r.dropRequest(c.playerID)
 		r.ensureOwner()
 		r.absorbRequests()
@@ -483,28 +482,6 @@ func (h *Hub) handleRoomLocked(c *Client, msg ClientMessage) error {
 		}
 		return g.Configure(mode, msg.TurnSeconds)
 
-	case MsgSetRadio:
-		// One radio per table keeps everyone on the same station; the owner
-		// owns the dial, every listener keeps their own volume.
-		if !owner {
-			return errNotOwner
-		}
-		next, err := tuneRadio(msg.Radio, c.name)
-		if err != nil {
-			return err
-		}
-		playingNow := next.Playing && next.URL != ""
-		changed := playingNow != (r.radio.Playing && r.radio.URL != "") || next.URL != r.radio.URL
-		r.radio = next
-		if changed {
-			if playingNow {
-				r.announce(c.playerID, c.name, "chat.radio_on", map[string]any{"name": c.name, "station": next.Name})
-			} else {
-				r.announce(c.playerID, c.name, "chat.radio_off", map[string]any{"name": c.name})
-			}
-		}
-		return nil
-
 	case MsgStartGame:
 		if !owner {
 			return errNotOwner
@@ -577,23 +554,6 @@ func (h *Hub) handleRoomLocked(c *Client, msg ClientMessage) error {
 		}
 		r.say(c.playerID, c.name, text)
 		return nil
-
-	case MsgRTCJoin:
-		if !r.call[c.playerID] {
-			r.call[c.playerID] = true
-			r.announce(c.playerID, c.name, "chat.joined_call", map[string]any{"name": c.name})
-		}
-		return nil
-
-	case MsgRTCLeave:
-		if r.call[c.playerID] {
-			delete(r.call, c.playerID)
-			r.announce(c.playerID, c.name, "chat.left_call", map[string]any{"name": c.name})
-		}
-		return nil
-
-	case MsgRTCSignal:
-		return h.relaySignalLocked(c, r, msg)
 	}
 
 	// Everything below is a move, so it needs a seat.
@@ -617,39 +577,12 @@ func (h *Hub) handleRoomLocked(c *Client, msg ClientMessage) error {
 		})
 	case MsgMoveWildcard:
 		return g.ReassignWildcard(id, msg.CardID, msg.Color)
-	case MsgDiscard:
-		return g.Discard(id, msg.CardID)
 	case MsgEndTurn:
 		return g.EndTurn(id)
 	case MsgRespond:
 		return g.Respond(id, msg.SayNo, msg.CardIDs)
 	}
 	return game.NewFault("err.unknown_message", fmt.Sprintf("unknown message type %q", msg.Type), "type", msg.Type)
-}
-
-// relaySignalLocked forwards a WebRTC payload to one peer in the same room.
-// The server never looks inside it.
-func (h *Hub) relaySignalLocked(c *Client, r *Room, msg ClientMessage) error {
-	if msg.TargetPlayerID == "" || len(msg.Signal) == 0 {
-		return game.NewFault("err.bad_signal", "malformed signal")
-	}
-	if msg.TargetPlayerID == c.playerID {
-		return game.NewFault("err.no_self_signal", "cannot signal yourself")
-	}
-	delivered := false
-	for other := range h.clients {
-		if other.roomID == r.ID && other.playerID == msg.TargetPlayerID {
-			h.pending = append(h.pending, outbound{other, ServerMessage{
-				Type:    "rtc_signal",
-				Payload: RTCEnvelope{From: c.playerID, Signal: msg.Signal},
-			}})
-			delivered = true
-		}
-	}
-	if !delivered {
-		return game.NewFault("err.peer_offline", "that player is not connected")
-	}
-	return nil
 }
 
 func (h *Hub) kickLocked(r *Room, targetID string) error {
@@ -673,7 +606,6 @@ func (h *Hub) kickLocked(r *Room, targetID string) error {
 
 	r.Game.Remove(targetID)
 	delete(r.spectators, targetID)
-	delete(r.call, targetID)
 	r.dropRequest(targetID)
 	r.Game.Announce("log.removed", "name", name)
 

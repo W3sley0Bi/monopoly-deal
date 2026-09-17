@@ -749,29 +749,6 @@ select:focus-visible {
     place-items: center;
     padding: 8px;
 }
-.table-status {
-    position: absolute;
-    bottom: 35px;
-    left: 50%;
-    transform: translateX(-50%);
-    display: flex;
-    gap: 8px;
-    align-items: center;
-    white-space: nowrap;
-    font-size: 12px;
-    font-weight: 800;
-    text-shadow: 0 2px 6px oklch(10% 0.02 211 / 0.5);
-}
-.status-light {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: oklch(85% 0.04 180);
-}
-.status-light.active {
-    background: var(--color-brass);
-    box-shadow: 0 0 12px var(--color-brass);
-}
 .table-event {
     position: absolute;
     bottom: 12px;
@@ -785,7 +762,10 @@ select:focus-visible {
     text-overflow: ellipsis;
 }
 .my-board {
-    z-index: 5;
+    /* Above the hand (z-index: 10), which sits right below it — a lit bank
+       or action zone grows past its own edge into that boundary, and used
+       to paint underneath the hand panel there instead of over it. */
+    z-index: 13;
     margin: 0 7%;
     min-height: 142px;
     max-height: 175px;
@@ -884,6 +864,31 @@ select:focus-visible {
 .hand-player .label-caps {
     margin-left: 7px;
     color: oklch(81% 0.025 190);
+}
+/* The header doubles as the fold button on a phone; disabled (not an
+ * accordion at all) it just sits there, unclickable, same as any other row. */
+.hand-fold {
+    text-align: left;
+    cursor: pointer;
+}
+.hand-fold:disabled {
+    cursor: default;
+}
+/* Folded, the hand is a strip of colour rather than a row of readable
+ * cards — one dot per card, enough to remember what is still in it. */
+.hand-swatches {
+    display: flex;
+    gap: 2px;
+    flex: 1 1 auto;
+    min-width: 40px;
+    max-width: 160px;
+    height: 7px;
+    overflow: hidden;
+}
+.hand-swatches > span {
+    flex: 1 0 3px;
+    min-width: 3px;
+    border-radius: 99px;
 }
 .hand-fan {
     display: flex;
@@ -1351,9 +1356,15 @@ select:focus-visible {
         max-height: none;
         margin: 6px 0;
         gap: 6px;
+        /* However many sets a player owns, the bank/action/discard row below
+           has to stay reachable. The board itself scrolls, rather than the
+           row being squeezed off the bottom of a screen with no way back. */
+        overflow-y: auto;
+        overscroll-behavior: contain;
     }
     .property-zone {
         min-height: 125px;
+        flex: 0 0 auto;
     }
     .bank-zone {
         width: 100%;
@@ -1412,7 +1423,7 @@ select:focus-visible {
     .mobile-controls {
         z-index: 20;
         background: oklch(20% 0.035 211);
-        padding-bottom: max(6px, env(safe-area-inset-bottom));
+        margin-bottom: max(6px, env(safe-area-inset-bottom));
     }
     .card-action-tray {
         bottom: 212px;
@@ -1905,19 +1916,280 @@ select:focus-visible {
 .inspection-set-cards { display: flex; padding: 3px 0 7px; }.inspection-set-cards .card-face + .card-face { margin-left: -12px; }
 .bank-inspection ul { max-height: 230px; overflow-y: auto; }
 
+/* ── Choosing a set, and seeing what is at stake ──────────────────────────
+   A set is a stack of cards sitting on the table; naming its colour in a
+   button asks the player to translate. These show the stack and ring the one
+   that is chosen, so the choice is made by looking rather than by reading. */
+.set-picker {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+.set-option {
+    padding: 6px;
+    border-radius: 14px;
+    border: 2px solid oklch(100% 0 0 / 0.12);
+    background: oklch(100% 0 0 / 0.04);
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s, transform 0.15s;
+}
+.set-option:hover {
+    border-color: oklch(100% 0 0 / 0.3);
+}
+/* The cards are the picture, not the target: the stack is one choice, and a
+   card answering for itself would be a button inside a button. */
+.set-option > * {
+    pointer-events: none;
+}
+.set-option.is-chosen {
+    border-color: oklch(84% 0.18 150);
+    background: oklch(84% 0.18 150 / 0.12);
+    box-shadow: 0 0 0 4px oklch(84% 0.18 150 / 0.18);
+}
+.set-option:focus-visible {
+    outline: 2px solid var(--color-brass);
+    outline-offset: 2px;
+}
+
+/* What an answer costs, drawn beside the question. */
+.pending-stakes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    justify-content: center;
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid oklch(100% 0 0 / 0.1);
+}
+.stake {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+.stake-label {
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+.stake-label-give {
+    color: oklch(87% 0.16 92);
+}
+.stake-label-take {
+    color: oklch(84% 0.18 150);
+}
+.stake-cards {
+    display: flex;
+    padding: 4px 6px 6px;
+}
+.stake-give {
+    border-radius: 12px;
+    outline: 3px solid oklch(87% 0.16 92);
+    outline-offset: 2px;
+}
+
+/* A colour you have already started, in the joker's colour tray. Ten equal
+   buttons make the player weigh ten equal options; the sets already on the
+   table are almost always what the card is for, so they are the ones the
+   tray puts forward. */
+.wild-swatch-owned {
+    outline: 2px solid oklch(100% 0 0 / 0.9);
+    outline-offset: 2px;
+    box-shadow: 0 0 14px -2px oklch(100% 0 0 / 0.5);
+}
+.wild-swatch-count {
+    margin-left: 4px;
+    font-size: 0.85em;
+    font-weight: 800;
+    opacity: 0.75;
+}
+
+/* ── A chosen card, and what choosing it means ────────────────────────────
+   In a dialog the cards sit in overlapping stacks, where a small lift and a
+   soft glow read as "maybe": a player taps a card and cannot tell whether
+   they hit the one they aimed at or the one in front of it. A chosen card
+   comes clear of its stack and takes a ring in the colour of what is about
+   to happen — green for the card you are taking, amber for the one you are
+   giving up — so a swap says which way round it is without being read. */
+.card-pick {
+    position: relative;
+}
+.card-pick-take {
+    outline: 3px solid oklch(84% 0.18 150);
+    outline-offset: 2px;
+    box-shadow:
+        0 0 0 6px oklch(84% 0.18 150 / 0.2),
+        0 14px 26px -12px oklch(10% 0.02 220 / 0.85);
+}
+.card-pick-give {
+    outline: 3px solid oklch(87% 0.16 92);
+    outline-offset: 2px;
+    box-shadow:
+        0 0 0 6px oklch(87% 0.16 92 / 0.2),
+        0 14px 26px -12px oklch(10% 0.02 220 / 0.85);
+}
+/* Named as well as ringed: the ring says which card, this says which card in
+   words, for the tap that is not sure it landed. */
+.pick-line {
+    margin-top: 8px;
+    font-size: 12px;
+    font-weight: 700;
+}
+.pick-line-take {
+    color: oklch(84% 0.18 150);
+}
+.pick-line-give {
+    color: oklch(87% 0.16 92);
+}
+.pick-line:empty {
+    display: none;
+}
+
+/* The coach drops in from just above rather than popping open in place, and
+   owns its own animation rather than borrowing `pop`: the card is positioned
+   by `left` alone, so `transform` here belongs to the entrance and has
+   nothing to override. */
+@keyframes tour-card-in {
+    from {
+        transform: translateY(-16px) scale(0.97);
+        opacity: 0;
+    }
+    to {
+        transform: none;
+        opacity: 1;
+    }
+}
+.tour-card {
+    animation: tour-card-in 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+    .tour-card {
+        animation: none;
+    }
+}
+
+/* ── The card that rides along ────────────────────────────────────────────
+   Double The Rent is played with a rent card, not after it, so a player who
+   remembers it once the rent is charged has remembered too late. While a
+   rent card is being carried or is sitting chosen, anything in the hand that
+   could double it catches the light — a reminder that arrives while it can
+   still be acted on, and needs no second card to aim at and no line of text.
+   The tour used to ring this card as a target of its own, which taught the
+   wrong move: it is never dragged anywhere itself. */
+@keyframes card-companion-sheen {
+    0% {
+        transform: translateX(-140%) rotate(8deg);
+    }
+    55%, 100% {
+        transform: translateX(260%) rotate(8deg);
+    }
+}
+.card-companion {
+    outline: 2px solid oklch(88% 0.14 92 / 0.6);
+    outline-offset: 2px;
+    box-shadow: 0 0 20px -2px oklch(88% 0.14 92 / 0.55);
+}
+.card-companion::before {
+    content: '';
+    position: absolute;
+    top: -25%;
+    bottom: -25%;
+    left: 0;
+    width: 42%;
+    z-index: 3;
+    pointer-events: none;
+    background: linear-gradient(
+        90deg,
+        transparent,
+        oklch(100% 0 0 / 0.16) 30%,
+        oklch(100% 0 0 / 0.62) 50%,
+        oklch(100% 0 0 / 0.16) 70%,
+        transparent
+    );
+    animation: card-companion-sheen 1.9s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+    .card-companion::before {
+        animation: none;
+        opacity: 0.35;
+    }
+}
+
+/* ── The two ends of a joker are not equal ────────────────────────────────
+   A real wildcard prints its two colours as equal halves, and the card is
+   turned to say which is in play. Split down the middle, though, the card
+   asks to be read twice before it says what it is — worst of all in a hand,
+   at a glance, on a phone.
+
+   So the colour in play takes the card, and the other keeps a strip along
+   the bottom: enough to say what this card could also be, without competing
+   to be what it is. Turning it over swaps which is which, and because the
+   proportions belong to the roles rather than to the halves, the one you
+   turn to is always the big one. Every place a wildcard is drawn uses this
+   — the hand, your own board, and the thumbnail stacks on the table — so a
+   joker reads as a joker wherever it turns up. */
+.wildcard-lead {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+.wildcard-trail {
+    flex: 0 0 26%;
+    min-height: 0;
+}
+/* A strip has room for the colour and nothing else. */
+.wildcard-trail .wildcard-art {
+    display: none;
+}
+.wildcard-lead,
+.wildcard-trail {
+    transition: flex-basis 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* The hinge belongs on the seam, which is no longer the middle of the card.
+   Given in the card's own coordinates: turning the card over carries the
+   badge with it, and the seam lands back under it either way. */
+.wildcard-flipped .wildcard-pivot {
+    top: 26%;
+}
+
 /* A two-ended wildcard reads upright at whichever end is currently in play. */
 .card-face[data-dual] { padding: 0; }
-.card-face > .dual-wildcard:first-child { height: 100%; width: 100%; flex: 1; min-height: 0; font-size: 1em; border-radius: 5px; }
-.dual-wildcard { position: relative; overflow: hidden; }
-.wildcard-rotator { position: absolute; inset: 0; display: flex; flex-direction: column; transform: rotate(0deg); transition: transform .4s cubic-bezier(.16,1,.3,1); }
-.wildcard-flipped .wildcard-rotator { transform: rotate(180deg); }
-.wildcard-half { height: 50%; display: flex; flex-direction: column; overflow: hidden; background: color-mix(in srgb, var(--card-color) 16%, oklch(96% .025 95)); }
+.card-face > .dual-wildcard:first-child { height: 100%; width: 100%; flex: 1; min-height: 0; font-size: 1em; }
+/* The border and shadow used to sit on the static button around this, so
+   tapping to flip only spun the print inside a frame that never moved —
+   a real card's edge turns over with it. They move onto the one piece that
+   actually rotates, and the button itself goes transparent behind it. */
+.card-face[data-dual] {
+    border-color: transparent;
+    background: transparent;
+    box-shadow: none;
+}
+.card-face[data-dual]::after {
+    content: none;
+}
+.dual-wildcard {
+    position: relative;
+    overflow: hidden;
+    border: 3px solid oklch(97% 0.025 95);
+    border-radius: 9px;
+    background: oklch(96% 0.025 95);
+    box-shadow: var(--shadow-card);
+    transform: rotate(0deg);
+    transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.wildcard-flipped {
+    transform: rotate(180deg);
+}
+.wildcard-rotator { position: absolute; inset: 0; display: flex; flex-direction: column; }
+.wildcard-half { display: flex; flex-direction: column; overflow: hidden; background: color-mix(in srgb, var(--card-color) 16%, oklch(96% .025 95)); }
 .wildcard-half-1 { transform: rotate(180deg); }
 .wildcard-color { display: flex; align-items: center; justify-content: space-between; gap: 3px; padding: 4px; background: var(--card-color); color: var(--wild-ink); text-transform: uppercase; font-size: .76em; font-weight: 950; min-height: 22px; }
 .wildcard-color > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.wildcard-color > b { flex-shrink: 0; }
 .wildcard-art { display: flex; flex: 1; justify-content: center; align-items: center; gap: 2px; padding: 3px; }
 .wildcard-art .property-artwork { width: 3.6em; height: 3em; }.wildcard-art > span { font-size: .7em; font-weight: 800; }
-.wildcard-pivot { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); border-radius: 50%; background: oklch(96% .025 95); border: 1px solid oklch(30% .03 211 / .2); width: 20px; height: 20px; display: grid; place-items: center; font-size: 13px; font-weight: 900; box-shadow: 0 2px 5px oklch(10% .02 211 / .2); }
+.wildcard-pivot { position: absolute; top: 74%; left: 50%; transform: translate(-50%, -50%); border-radius: 50%; background: oklch(96% .025 95); border: 1px solid oklch(30% .03 211 / .2); width: 20px; height: 20px; display: grid; place-items: center; font-size: 13px; font-weight: 900; box-shadow: 0 2px 5px oklch(10% .02 211 / .2); }
 .property-zone .wildcard-color, .opponent-properties .wildcard-color { min-height: 12px; padding: 2px; font-size: .7em; }
 .property-zone .wildcard-art .property-artwork { display: block; width: 2.4em; height: 1.8em; }
 .property-zone .wildcard-art > span, .opponent-properties .wildcard-art > span { display: none; }
@@ -1949,7 +2221,7 @@ select:focus-visible {
     .opponent-property-card + .opponent-property-card { margin-left: -17px; }
 }
 @media (max-width: 899px) { .hover-details { width: 300px; }.card-inspection { grid-template-columns: 80px minmax(0, 1fr); gap: 10px; }.inspection-art .card-face { width: 80px; height: 118px; font-size: 9px; } }
-@media (prefers-reduced-motion: reduce) { .wildcard-rotator { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .dual-wildcard, .wildcard-lead, .wildcard-trail { transition: none; } }
 /* Keep public hands separate from property labels and leave the center unobstructed. */
 .seat-cards { height: 43px; }
 /* The seat at the head of the table used to run a second column for its
@@ -2164,6 +2436,74 @@ select:focus-visible {
 @media (max-width: 899px) {
     .property-zone { flex: 1 1 auto; min-height: 0; }
 }
+@media (max-width: 899px) and (orientation: portrait) {
+    /* Upright, `.my-board` itself is the scrolling surface (see the general
+       mobile block above), so the board draws at its full natural height
+       here rather than being squeezed to fit — that squeeze is what pushed
+       the drop zones below it clean off the screen with three or more sets. */
+    .property-zone { flex: 0 0 auto; min-height: 0; }
+    /* Pinned to the bottom of that scroll, not scrolled away with the sets
+       above it — reachable with a card in hand no matter how the board has
+       grown. The backdrop keeps a scrolled-up card from showing through. */
+    .board-targets {
+        position: sticky;
+        bottom: 0;
+        z-index: 3;
+        padding-top: 4px;
+        background: linear-gradient(oklch(24% 0.035 211 / 0), oklch(24% 0.035 211) 18%);
+    }
+
+    /* ── A card in the air rearranges the phone ───────────────────────────
+       Holding a card, the hand is the one thing on screen with nothing left
+       to say: the choice has been made, and the other cards are only in the
+       way of the place this one has to reach. So it gives up its height for
+       as long as the card is up, and the board — which is where the card is
+       going — takes it.
+
+       The row is never lifted out of the document to do this. Positioning it
+       over the hand is what hid it: `position: fixed` measures against the
+       layout viewport, which on iOS runs behind the browser's own toolbar,
+       and the row was posted below the visible screen. Held in flow, the
+       only way for it to move down the screen is for the hand above it to
+       get shorter — which is the same gesture, and cannot miss. */
+    /* Half again as tall the moment a card is up. The row is pinned to the
+       bottom of the board, so this grows it upward: every pixel that was the
+       bank a moment ago still is, and there is simply more of it.
+       The hand used to shrink here too, to hand its height over. It looked
+       generous and aimed terribly — the whole row slid thirty-odd pixels
+       down the screen at the instant the card left the hand, so the player
+       was aiming at where the bank had been. A target may grow under a
+       thumb. It may not move. */
+    .compact-room.is-carrying .board-target-slot {
+        min-height: 74px;
+        font-size: 10px;
+    }
+    .compact-room.is-carrying .board-targets > .bank-zone > .panel {
+        min-height: 74px;
+        max-height: none;
+    }
+    /* The panel's heading is part of the board as far as a thumb is
+       concerned. The drop zone is only the shelf of sets under it, so a card
+       held over "Your properties" landed on nothing — a dead strip exactly
+       where the board begins, and the card had to be walked further up to
+       find an answer. This adds the heading to what the zone answers to; the
+       zone's own box, and everything drawn in it, is untouched. */
+    .compact-room.is-carrying .property-zone > .drop-zone-live::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: -46px;
+        height: 46px;
+    }
+}
+/* A lesson that has locked the bank and the action space out has made them
+   scenery: nothing can land there, and a thumb that tries gets silence. They
+   stand down rather than sit between the hand and the one place the lesson
+   is actually asking for — seventy pixels of road that leads nowhere. */
+body.tour-locked .board-targets:not(:has([data-tour-live])) {
+    display: none;
+}
 .room-invite-button { border: 1px solid #e9cf8230; border-radius: 6px; padding: 3px 6px; background: #071e23aa; color: #eddf70; font-size: 11px; font-weight: 800; letter-spacing: .14em; white-space: nowrap; }
 .room-invite-button:hover { background: #ffffff12; border-color: #eed38b; }
 .invite-content { display: flex; flex-direction: column; gap: 16px; align-items: flex-start; font-size: 14px; }
@@ -2235,13 +2575,159 @@ body.is-dragging {
 }
 /* The zone under the card answers, so a finger that hides the target still
    gets an unambiguous yes. */
+/* ── Zones that want the card ─────────────────────────────────────────────
+   A drop target that only changes colour makes the player aim; one that opens
+   up as the card approaches does the aiming for them. Every eligible zone
+   lifts slightly and breathes while a card is in the air, and the one under
+   the finger swells past its resting size and settles back — the overshoot is
+   what makes it read as something reaching for the card rather than a
+   rectangle changing state.
+
+   It is all transform and shadow, so nothing around a growing zone moves. */
+.drop-zone {
+    position: relative;
+    transition:
+        transform 280ms cubic-bezier(0.22, 1, 0.36, 1),
+        box-shadow 240ms ease,
+        outline-color 160ms ease,
+        outline-offset 240ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.drop-zone-live {
+    outline: 2px dashed oklch(85% 0.09 90 / 0.5);
+    outline-offset: 2px;
+    transform: scale(1.015);
+    animation: drop-zone-invite 2s ease-in-out infinite;
+}
 .drop-zone-over {
-    animation: drop-zone-breathe 1s ease-in-out infinite;
+    z-index: 5;
+    outline-style: solid;
+    outline-color: oklch(88% 0.14 92);
+    outline-offset: 5px;
+    transform: scale(1.06);
+    box-shadow:
+        0 0 0 6px oklch(88% 0.14 92 / 0.1),
+        0 20px 38px -16px oklch(8% 0.03 220 / 0.85),
+        0 0 34px -6px oklch(88% 0.14 92 / 0.55);
+    /* Overshoot on the way in only: a zone that springs as the card leaves
+       looks like it threw it back. */
+    transition-timing-function: cubic-bezier(0.34, 1.5, 0.64, 1);
+    animation: drop-zone-breathe 1.6s ease-in-out infinite;
+}
+/* A phone's zones are a third of the size, so the same proportion of growth
+   is a third of the signal. */
+@media (max-width: 899px) {
+    .drop-zone-over {
+        transform: scale(1.11);
+    }
+}
+@keyframes drop-zone-invite {
+    50% {
+        outline-color: oklch(90% 0.13 92 / 0.9);
+    }
 }
 @keyframes drop-zone-breathe {
     50% {
-        filter: brightness(1.14);
+        filter: brightness(1.08);
     }
+}
+/* The inner slot opens with the zone rather than staying a dashed outline
+   inside a lit one. */
+.drop-zone-over .board-target-slot {
+    border-style: solid;
+    border-color: oklch(90% 0.13 92);
+    background: oklch(24% 0.06 150 / 0.92);
+    color: oklch(96% 0.05 95);
+}
+/* A puff of the excess, not chosen by anyone, drifting off from wherever the
+ * over-limit hand was — spawned straight onto `body` so it travels above
+ * every panel and scroll region it passes over. */
+.discard-dust {
+    position: fixed;
+    left: 0;
+    top: 0;
+    z-index: 85;
+    pointer-events: none;
+    font-size: 22px;
+    transform: translate(-50%, -50%);
+    will-change: transform, opacity;
+}
+/* The reaction at the centre of a discard burst — background stripped so it
+ * reads as a face floating over the table, not a sticker on a white card. */
+.discard-cry {
+    position: fixed;
+    left: 0;
+    top: 0;
+    z-index: 86;
+    width: 64px;
+    height: 64px;
+    object-fit: contain;
+    pointer-events: none;
+    filter: drop-shadow(0 4px 10px oklch(5% 0.02 220 / 0.45));
+    will-change: transform, opacity;
+}
+/* The card itself, thrown clear of the hand before it comes apart — a
+ * simplified stand-in (tint + name), not the full card face, since it only
+ * has to read for the half-second before it dissolves. */
+.discard-ghost {
+    position: fixed;
+    left: 0;
+    top: 0;
+    z-index: 84;
+    display: grid;
+    place-items: center;
+    width: 46px;
+    height: 64px;
+    padding: 3px;
+    border-radius: 7px;
+    border: 2px solid oklch(97% 0.02 95 / 0.9);
+    background: color-mix(in srgb, var(--ghost-tint, #8a8f98) 55%, oklch(20% 0.02 220));
+    box-shadow: 0 6px 16px oklch(5% 0.02 220 / 0.4);
+    color: oklch(98% 0.01 95);
+    font-size: 9px;
+    font-weight: 800;
+    text-align: center;
+    line-height: 1.15;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    pointer-events: none;
+    will-change: transform, opacity, filter;
+}
+.discard-ghost-blank {
+    font-size: 20px;
+    background: oklch(30% 0.03 205);
+}
+/* The whole property panel is one drop target now (see `.property-groups`
+ * as a DropZone in Table.tsx), so a set that would accept the card in hand
+ * only needs a quiet marker, not a target of its own to hit. */
+.property-set-live {
+    animation: property-set-invite 1.6s ease-in-out infinite;
+    border-radius: 12px;
+}
+@keyframes property-set-invite {
+    50% {
+        filter: brightness(1.12);
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .property-set-live {
+        animation: none;
+    }
+}
+.drop-zone-hint {
+    background: oklch(8% 0.02 220 / 0.42);
+    color: oklch(88% 0.11 92 / 0.85);
+    opacity: 0.85;
+    transform: scale(0.96);
+    transition:
+        opacity 200ms ease,
+        transform 260ms cubic-bezier(0.34, 1.5, 0.64, 1),
+        background-color 200ms ease;
+}
+.drop-zone-over .drop-zone-hint {
+    background: oklch(88% 0.14 92 / 0.22);
+    color: oklch(99% 0.01 95);
+    opacity: 1;
+    transform: scale(1);
 }
 
 /* ── Phone drop targets ───────────────────────────────────────────────────
@@ -2254,13 +2740,23 @@ body.is-dragging {
     flex-shrink: 0;
     min-width: 0;
 }
+/* Bank and action space split the row evenly — a fixed narrow action target
+   beside a bank that could grow as wide as it liked read as two different
+   sizes of target for two equally common moves. */
 .board-targets > .bank-zone {
-    flex: 1 1 auto;
+    flex: 1 1 0;
     width: auto;
     min-width: 0;
+    transform-origin: center bottom;
+    transition: flex-grow 120ms ease;
 }
 .board-target {
-    flex: 0 0 5.5rem;
+    flex: 1 1 0;
+    min-width: 0;
+    transition: flex-grow 120ms ease;
+    /* Growing from the bottom edge lifts a lit zone up, away from the hand
+       right below it, instead of bulging down over it from the centre. */
+    transform-origin: center bottom;
 }
 .board-target-slot {
     display: flex;
@@ -2290,6 +2786,49 @@ body.is-dragging {
 .board-target[data-active] .board-target-slot {
     border-color: oklch(85% 0.09 90 / 0.75);
     color: oklch(89% 0.1 90);
+}
+/* The bank and the action space are each a single, generously sized target,
+   so growing the one that fits the card in hand reads clearly on its own —
+   unlike a property colour, there is no row of neighbours it could crowd. */
+.board-target.drop-zone-live,
+.bank-zone.drop-zone-live {
+    transform: scale(1.08);
+    z-index: 4;
+}
+@media (max-width: 899px) {
+    .board-target.drop-zone-live,
+    .bank-zone.drop-zone-live {
+        transform: scale(1.12);
+    }
+}
+/* Whichever zone the card cannot land in steps back rather than competing
+   for attention with the one that is actually lit. */
+body.is-dragging .board-target:not(.drop-zone-live),
+body.is-dragging .board-targets > .bank-zone:not(.drop-zone-live) {
+    opacity: 0.55;
+    transform: scale(0.95);
+}
+/* When only one of the two can take the card — money, which only banks;
+   a hotel, which only plays — that one gets the row and the other stands
+   aside as a strip. Which it is depends on the card, so it is settled the
+   moment the card leaves the hand and does not move again.
+   An earlier version widened whichever half the finger was nearest, which
+   sounds like the same idea and is the opposite of it: the target moved
+   while it was being aimed at, and a card held over a zone that had just
+   slid out from under it registered nothing until the player shook it. */
+.board-targets:has(> [data-active]) > :not([data-active]) {
+    flex-grow: 0.28;
+}
+.board-targets:has(> [data-active]) > [data-active] {
+    flex-grow: 1.72;
+}
+/* The whole board, not just one colour, once a property card is what is
+   being carried — a colour a player does not have yet is easy to miss among
+   sets already in play. */
+.property-zone-live {
+    box-shadow:
+        0 0 0 2px oklch(85% 0.09 90 / 0.55),
+        0 5px 0 oklch(12% 0.02 211 / 0.4);
 }
 
 /* ── The folding board ────────────────────────────────────────────────────
@@ -2351,6 +2890,20 @@ body.is-dragging {
        them wrap into a grid turned every rival into a full-width panel and
        swallowed the table; only the player actually taking a turn expands,
        and that is the spotlight's job. */
+    /* Your own hand, folded to a strip while someone else plays — the room
+       it gives up goes to the board actually in play, same as the board's
+       own fold does for the seats above it. */
+    .hand-zone.is-folded {
+        height: auto;
+        min-height: 0;
+        padding-top: 6px;
+        padding-bottom: 6px;
+        flex: 0 0 auto;
+    }
+    .hand-folded .arena-top {
+        flex: 1 1 auto;
+        min-height: 150px;
+    }
 }
 .chip-sets {
     height: 4px;
@@ -2449,8 +3002,15 @@ body.is-dragging {
     }
 }
 @media (prefers-reduced-motion: reduce) {
+    /* The loops go; the size change stays, because it is what says where the
+       card may land rather than decoration around it. */
+    .drop-zone-live,
     .drop-zone-over {
         animation: none;
+    }
+    .drop-zone,
+    .drop-zone-hint {
+        transition-duration: 1ms;
     }
 }
 
@@ -2831,20 +3391,22 @@ body.is-dragging {
     display: none;
 }
 .active-board-sets {
+    /* However many sets are on it, the board scrolls to show the rest
+       rather than clipping them — the same rule as your own board, so a
+       rival's fourth or fifth set is never simply unreachable. */
     flex: 0 1 auto;
     min-height: 0;
-    overflow-x: auto;
-    overflow-y: hidden;
-    overscroll-behavior-x: contain;
-    scrollbar-width: none;
+    max-height: 178px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: oklch(100% 0 0 / 0.18) transparent;
 }
 .active-board-sets > div {
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
     gap: 6px;
-    align-items: stretch;
-}
-.active-board-sets::-webkit-scrollbar {
-    display: none;
+    align-items: flex-start;
 }
 .active-board-sets .card-face {
     width: 60px;
@@ -2871,10 +3433,17 @@ body.is-dragging {
         min-height: 0;
     }
     .my-board {
-        flex: 0 0 auto;
-        /* The narrow layout floors this at 170px, which a folded board cannot
-           fill — that unfilled remainder was the empty green band above the
-           hand. It sizes to what it holds now. */
+        /* Sizes to what it holds and never stretches — growing is what left an
+           empty green band above the hand when the board was folded. But it
+           must be able to give way: with three or more colour sets and a full
+           hand the board wanted more room than there was, and being unable to
+           shrink it simply overran the table and took the bank and the action
+           space off the bottom of the screen with it. There was no way left to
+           bank a card or play an action.
+           It yields instead, and the board scrolls inside itself — the drop
+           row is stuck to its bottom edge, so whatever the board's height, the
+           row is the part that stays on screen. */
+        flex: 0 1 auto;
         min-height: 0;
         max-height: 46vh;
     }
@@ -3260,15 +3829,36 @@ body.is-dragging {
         transform: translateY(-5px) scale(0.98);
     }
 }
-/* The seat sits against the top of the felt, so its bubble hangs underneath
-   rather than off the edge of the table. */
+/* The seats along the top of the arena have nothing above them, and hanging
+   the bubble underneath them put it flat on the cards in play — the one thing
+   at the table you are never allowed to hide. So it goes out sideways instead:
+   past the panel into the rim, off the felt, still beside the face that spoke.
+   No transform here: `seat-play-life` animates that property, and centring the
+   bubble with one would be wiped by the first frame. */
 .seats-1 .seat-play,
 .seats-3 .opponent-seat:first-child .seat-play,
-.seats-4 .opponent-seat:first-child .seat-play,
-.seats-4 .opponent-seat:nth-child(2) .seat-play {
-    top: auto;
-    bottom: -14px;
-    border-radius: 12px 12px 4px 12px;
+.seats-4 .opponent-seat:nth-child(2) .seat-play,
+.seats-5 .opponent-seat:first-child .seat-play {
+    top: 6px;
+    bottom: auto;
+    left: calc(100% + 8px);
+    right: auto;
+    margin: 0;
+    width: max-content;
+    max-width: min(9.5rem, 22vw);
+    border-radius: 4px 12px 12px 12px;
+}
+/* The left-hand one of a pair goes out its own way, so neither bubble crosses
+   the middle of the table. */
+.seats-4 .opponent-seat:first-child .seat-play {
+    top: 6px;
+    bottom: auto;
+    left: auto;
+    right: calc(100% + 8px);
+    margin: 0;
+    width: max-content;
+    max-width: min(9.5rem, 22vw);
+    border-radius: 12px 4px 12px 12px;
 }
 /* On a phone the seats are a sideways rail with no room above them, so the
    bubble sits over the chip it belongs to. */
@@ -3279,6 +3869,7 @@ body.is-dragging {
     right: 2px;
     margin: 0;
     width: auto;
+    max-width: none;
     font-size: 10px;
     padding: 3px 7px;
     border-radius: 9px;
@@ -3610,4 +4201,97 @@ body.is-dragging {
     .tutorial-done-overlay {
         animation: none;
     }
+}
+
+/* ── Installed on a phone ─────────────────────────────────────────────────
+   The insets are the right answer and are used first; this only sets a floor
+   under them, because an iPhone that reports nothing still has a clock, a
+   signal bar and often an island sitting over the top of the page. */
+@media (max-width: 899px) {
+    html.standalone .game-room {
+        padding-top: max(env(safe-area-inset-top), 44px);
+    }
+    html.standalone .safe-screen,
+    html.standalone .home-screen,
+    html.standalone .welcome-screen {
+        padding-top: max(env(safe-area-inset-top), 48px);
+    }
+    html.standalone .call-corner {
+        top: calc(70px + max(env(safe-area-inset-top), 44px));
+    }
+    html.standalone .tour-strip-top {
+        top: calc(0.5rem + max(env(safe-area-inset-top), 44px));
+    }
+    html.standalone .error-toast {
+        top: calc(0.75rem + max(env(safe-area-inset-top), 44px));
+    }
+}
+
+/* ── A table is not a page ────────────────────────────────────────────────
+   While a game is on, the document itself must not move: no rubber-band at
+   the top, no scroll left behind by a drag that ran off the edge, no address
+   bar sliding in and out under the cards. Pinning the body is the only thing
+   iOS honours reliably; the rails inside the table still scroll, because they
+   are their own scroll containers.
+
+   It is a body class rather than a rule on .game-room because the bounce
+   belongs to the document, and only the document can refuse it. */
+body.playing {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+    overscroll-behavior: none;
+    /* Kills the double-tap-to-zoom delay as well as the zoom itself, so a
+       quick tap on a card answers at once. */
+    touch-action: manipulation;
+}
+
+/* The tour never advances on its own. When it is waiting on the player the
+   button says so twice: in words above it, and by refusing to sit still. */
+.tour-next-ready {
+    animation: tour-next-pulse 1.7s ease-in-out infinite;
+}
+@keyframes tour-next-pulse {
+    0%,
+    100% {
+        box-shadow: 0 0 0 0 oklch(84% 0.14 88 / 0.55);
+    }
+    55% {
+        box-shadow: 0 0 0 7px oklch(84% 0.14 88 / 0);
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .tour-next-ready {
+        animation: none;
+    }
+}
+
+/* A long press on a card used to raise the iOS text-selection loupe and the
+   copy/share callout in the middle of a drag, and every tap flashed the grey
+   link highlight. Neither belongs on a table. */
+body.playing .game-room {
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+}
+body.playing .hand-card,
+body.playing .card-face,
+body.playing .drop-zone {
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+/* ── A lesson is not a free table ─────────────────────────────────────────
+   While the tour is waiting for one particular move, that move is the only
+   one the table answers. Otherwise a player halfway through "play a property"
+   can bank it, discard it, open the settings or end the turn, and the lesson
+   sits there asking for something that is no longer possible.
+
+   The tutorial card itself, the dialogs it opens and the card tray all live
+   outside this, so the move it is asking for can still be completed. */
+body.tour-locked .game-room {
+    pointer-events: none;
+}
+body.tour-locked [data-tour-live],
+body.tour-locked .card-action-tray {
+    pointer-events: auto;
 }

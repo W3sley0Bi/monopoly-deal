@@ -22,6 +22,8 @@ const log: Catalog = {
 
     // Turn flow. The em dash marks the turn line, which LogList styles.
     'log.turn': '— Turno di {name} —',
+    // The scripted table rebuilds itself for each lesson; this marks where.
+    'log.tutorial_lesson': '— Lezione: {lesson} —',
     'log.timeout_respond': '{name} non ha risposto in tempo.',
     'log.timeout_turn': 'Il turno di {name} è scaduto.',
 
@@ -30,7 +32,8 @@ const log: Catalog = {
     'log.banked_money': '{name} ha messo in banca ${amount}M.',
     'log.played_property': '{name} ha giocato {card} come {color}.',
     'log.moved_wildcard': '{name} ha spostato {card} su {color}.',
-    'log.discarded': '{name} ha scartato {card}.',
+    'log.discarded_excess.one': '{name} aveva troppe carte — 1 carta è volata via.',
+    'log.discarded_excess.other': '{name} aveva troppe carte — {count} carte sono volate via.',
     'log.pass_go.one': '{name} ha giocato Via! e ha pescato {count} carta.',
     'log.pass_go.other': '{name} ha giocato Via! e ha pescato {count} carte.',
     'log.building': '{name} ha giocato {card} su {color} — ora l’affitto è ${rent}M.',
@@ -60,8 +63,6 @@ const log: Catalog = {
     'log.win_deathmatch': '🏆 {name} vince lo scontro mortale con {sets} serie complete!',
 
     // Chat lines the server announces.
-    'chat.radio_on': '{name} ha sintonizzato la radio su {station}',
-    'chat.radio_off': '{name} ha spento la radio',
     'chat.joined_call': '{name} è entrato in chiamata',
     'chat.left_call': '{name} è uscito dalla chiamata',
 

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import type { Card, ClientMessage, Color, GameView, PlayerView } from '../types';
+import type { Card, ClientMessage, Color, GameView, PlayerView, SetView } from '../types';
 import { colorMeta, opponents, playableColors, stealableCards, you } from '../game/meta';
 import { useI18n } from '../i18n';
 import { money } from '../i18n/format';
@@ -53,6 +53,43 @@ function ColorPicker({ colors, value, onChange, disabledColors, note }: {
     );
 }
 
+/**
+ * Choosing a set, by the set rather than by its name. A colour swatch reading
+ * "Brown $2M" is the label on a thing the player is already looking at — the
+ * cards are right there on the table — so this shows the stack itself and
+ * rings the chosen one. The cards inside take no clicks of their own: the
+ * whole stack is the choice, and a card that answered separately would put a
+ * button inside a button.
+ */
+function SetPicker({ sets, value, onChange }: {
+    sets: SetView[];
+    value?: Color;
+    onChange: (c: Color) => void;
+}) {
+    return (
+        <div className="set-picker">
+            {sets.map(set => (
+                <div
+                    key={set.color}
+                    role="button"
+                    tabIndex={0}
+                    aria-pressed={value === set.color}
+                    className={`set-option ${value === set.color ? 'is-chosen' : ''}`}
+                    onClick={() => onChange(set.color)}
+                    onKeyDown={e => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            onChange(set.color);
+                        }
+                    }}
+                >
+                    <PropertySets sets={[set]} size="sm" />
+                </div>
+            ))}
+        </div>
+    );
+}
+
 function PlayerPicker({ players, value, onChange, hint }: {
     players: PlayerView[];
     value?: string;
@@ -82,6 +119,13 @@ export default function ActionDialog({ view, card, intent, onCancel, onConfirm }
     const foes = opponents(view);
     const [color, setColor] = useState<Color | undefined>(() => {
         const opts = playableColors(card, view.colors);
+        // A rent card prints two colours, but only one is ever a real choice
+        // once you only own a set in one of them — the other was never going
+        // to charge anything, so there is nothing to ask about.
+        if (card.type === 'rent') {
+            const owned = opts.filter(c => me.sets.some(s => s.color === c && s.cards.length > 0));
+            if (owned.length === 1) return owned[0];
+        }
         return opts.length === 1 ? opts[0] : undefined;
     });
     const [targetPlayer, setTargetPlayer] = useState<string | undefined>(foes.length === 1 ? foes[0].id : undefined);
@@ -233,6 +277,7 @@ export default function ActionDialog({ view, card, intent, onCancel, onConfirm }
                                         card={d}
                                         size="sm"
                                         selected={doubles.includes(d.id)}
+                                        pick="take"
                                         onClick={() => setDoubles(cur =>
                                             cur.includes(d.id) ? cur.filter(x => x !== d.id) : [...cur, d.id])}
                                     />
@@ -277,8 +322,7 @@ export default function ActionDialog({ view, card, intent, onCancel, onConfirm }
                 }
             >
                 {buildable.length
-                    ? <ColorPicker colors={buildable.map(s => s.color)} value={color} onChange={setColor}
-                        note={c => money(t, me.sets.find(s => s.color === c)?.rent ?? 0)} />
+                    ? <SetPicker sets={buildable} value={color} onChange={setColor} />
                     : <p className="text-sm text-white/60">{t('dialog.bank_it_instead')}</p>}
             </Modal>
         );
@@ -350,7 +394,7 @@ export default function ActionDialog({ view, card, intent, onCancel, onConfirm }
                         <div>
                             <p className="label-caps mb-2">{t('dialog.set_to_steal')}</p>
                             {completeSets.length
-                                ? <ColorPicker colors={completeSets.map(s => s.color)} value={color} onChange={setColor} />
+                                ? <SetPicker sets={completeSets} value={color} onChange={setColor} />
                                 : <p className="text-sm text-white/60">{t('dialog.no_complete_set', { name: target.name })}</p>}
                         </div>
                     )}
@@ -366,6 +410,8 @@ export default function ActionDialog({ view, card, intent, onCancel, onConfirm }
         const mine = stealableCards(me);
         const theirIds = new Set(theirs.map(x => x.card.id));
         const myIds = new Set(mine.map(x => x.card.id));
+        const takenCard = theirs.find(x => x.card.id === targetCard)?.card;
+        const givenCard = mine.find(x => x.card.id === giveCard)?.card;
 
         return (
             <Modal
@@ -412,8 +458,14 @@ export default function ActionDialog({ view, card, intent, onCancel, onConfirm }
                                     onCardClick={c => setTargetCard(c.id)}
                                     enabledIds={theirIds}
                                     selectedIds={targetCard ? new Set([targetCard]) : undefined}
+                                    pickTone="take"
                                 />
                                 : <p className="text-sm text-white/60">{t('dialog.nothing_stealable')}</p>}
+                            <p className="pick-line pick-line-take">
+                                {takenCard
+                                    ? t('dialog.chosen_take', { card: tCard(takenCard) })
+                                    : t('dialog.chosen_take_none')}
+                            </p>
                         </div>
                     )}
 
@@ -426,8 +478,14 @@ export default function ActionDialog({ view, card, intent, onCancel, onConfirm }
                                     onCardClick={c => setGiveCard(c.id)}
                                     enabledIds={myIds}
                                     selectedIds={giveCard ? new Set([giveCard]) : undefined}
+                                    pickTone="give"
                                 />
                                 : <p className="text-sm text-white/60">{t('dialog.nothing_to_give')}</p>}
+                            <p className="pick-line pick-line-give">
+                                {givenCard
+                                    ? t('dialog.chosen_give', { card: tCard(givenCard) })
+                                    : t('dialog.chosen_give_none')}
+                            </p>
                         </div>
                     )}
                 </div>

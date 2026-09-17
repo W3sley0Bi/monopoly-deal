@@ -3,27 +3,23 @@ import GameAudioControls from './GameAudioControls';
 import RoomInvite from './RoomInvite';
 import { useState } from 'react';
 import type { ClientMessage, Difficulty, Mode, RoomView } from '../types';
-import type { Call } from '../game/useWebRTC';
 import { useI18n } from '../i18n';
 import { formatTurn } from '../i18n/format';
 import GameBrand, { Cityscape } from './GameBrand';
 import Avatar from './Avatar';
-import CallControls from './CallControls';
 import ChatBox from './ChatBox';
-import CallStage from './CallStage';
 
 interface Props {
     audio: GameAudio;
     room: RoomView;
     error?: string;
-    call: Call;
     send: (msg: ClientMessage) => void;
     onLeave: () => void;
 }
 
 const DIFFICULTIES: Difficulty[] = ['easy', 'normal', 'hard'];
 
-export default function RoomLobby({ audio, room, error, call, send, onLeave }: Props) {
+export default function RoomLobby({ audio, room, error, send, onLeave }: Props) {
     const { t } = useI18n();
     const g = room.game;
     const [confirmKick, setConfirmKick] = useState<string>();
@@ -59,7 +55,7 @@ export default function RoomLobby({ audio, room, error, call, send, onLeave }: P
                 </div>
                 <div className="ml-auto flex flex-wrap items-center gap-2">
                     <RoomInvite room={room} />
-                    <CallControls call={call} memberCount={room.call_members.length} />
+
                     <span className="rounded-full bg-black/30 px-3 py-1 text-xs">
                         {t('lobby.host')} <span className="font-semibold">{room.owner_name}</span>
                     </span>
@@ -68,8 +64,8 @@ export default function RoomLobby({ audio, room, error, call, send, onLeave }: P
                     </button>
                 </div>
             </header>
-            <CallStage call={call} room={room} />
-            <GameAudioControls audio={audio} radio={room.radio} canManage={room.is_owner} ownerName={room.owner_name} send={send} />
+
+            <GameAudioControls audio={audio} />
 
             {error && (
                 <p className="animate-shake rounded-lg border border-rose-300/40 bg-rose-600/25 px-3 py-2 text-center text-sm font-semibold text-rose-100">
@@ -85,9 +81,8 @@ export default function RoomLobby({ audio, room, error, call, send, onLeave }: P
                     {g.players.map((p, i) => (
                         <li key={p.id} className="flex items-center gap-3 rounded-xl bg-black/25 px-3 py-2">
                             <span className="grid h-6 w-6 place-items-center rounded-full bg-brass font-bold text-ink">{i + 1}</span>
-                            <Avatar id={p.id} name={p.name} size={36} away={!p.connected} inCall={room.call_members.includes(p.id)} inCallLabel={t('call.in_call')} />
+                            <Avatar id={p.id} name={p.name} size={36} away={!p.connected} />
                             <span className="font-semibold">{p.name}</span>
-                            {room.call_members.includes(p.id) && <span className="call-tag">{t('call.in_call')}</span>}
                             {p.bot && <span className="rounded-full bg-white/10 px-2 py-0.5 text-[0.65rem] uppercase tracking-widest text-white/60">{t('lobby.robot_tag')}</span>}
                             {p.id === room.owner_id && <span title={t('lobby.host_title')}>👑</span>}
                             {p.id === room.you && <span className="text-xs text-brass">({t('common.you')})</span>}

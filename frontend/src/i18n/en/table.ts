@@ -23,6 +23,7 @@ const table: Catalog = {
     'table.reaction_3': "Mind blown",
 
     'table.motion': "Card animation",
+    'table.cry_reaction': "Discard reaction gif",
     'table.on': "On",
     'table.off': "Off",
     'table.turn_of': "{name}’s turn",
@@ -40,9 +41,9 @@ const table: Catalog = {
     'table.plays_hint': 'Plays left this turn',
     'table.end_turn': 'End turn',
     'table.end_turn_hint': 'End your turn',
+    'table.end_turn_over_limit': 'Ending now drops {count} extra card(s)',
     'table.auto_end': 'Auto-ending in {seconds}s',
     'table.auto_end_short': '⏱ {seconds}s',
-    'table.discard_first': 'Discard down to 7 cards first',
     'table.deck_hint': 'Cards left in the deck',
     'table.discard_hint': 'Discard pile',
     'table.bank_hint': 'Your bank',
@@ -101,11 +102,14 @@ const table: Catalog = {
     'table.properties_drag': 'Drag a property card here to start a set',
     // The wildcard rule changed: a card already on the table is no longer free
     // to shuffle around, so the mat says what a move now costs.
+    'table.joker_pick_colour': 'Drop it on a colour, or tap the joker to choose one.',
     'table.wildcard_move_cost': 'Moving a wildcard already on the table costs one play.',
 
     // ── Hand ─────────────────────────────────────────────────────────────
     'table.hand': 'Hand · {count}',
-    'table.over_limit': 'Over 7 — discard {count}',
+    'table.hand_fold': 'Fold your hand away',
+    'table.hand_unfold': 'Show your hand',
+    'table.over_limit': 'Over 7 by {count} — extra cards drop when you end your turn',
     'table.hand_tap': 'Tap a card for options, or drag it up to play',
     'table.hand_drag': 'Drag a card onto the mat, or tap it for options',
     'table.hand_empty': 'No cards — you draw 5 at the start of your next turn.',
@@ -117,9 +121,6 @@ const table: Catalog = {
     'table.charge_rent': 'Charge rent',
     'table.play_action': 'Play action',
     'table.bank_card': 'Bank {amount}',
-    'table.discard_card': 'Discard',
-    'table.discard_this': 'Discard this card',
-    'table.discard_locked': 'You may only discard while over the 7-card limit',
     'table.just_say_no_hint': 'Keep this in hand to block actions against you.',
     'table.double_rent_hint': 'Pick this from the rent dialog to double a charge.',
 
@@ -167,6 +168,10 @@ const table: Catalog = {
     'dialog.deal_breaker': 'Deal Breaker',
     'dialog.deal_breaker_blurb': 'Steal an entire complete set',
     'dialog.take_the_set': 'Take the set',
+    'dialog.chosen_take': 'Taking: {card}',
+    'dialog.chosen_take_none': 'Tap one of their cards to take it.',
+    'dialog.chosen_give': 'Giving: {card}',
+    'dialog.chosen_give_none': 'Tap one of yours to give in exchange.',
     'dialog.victim': 'Victim',
     'dialog.set_to_steal': 'Complete set to steal',
     'dialog.no_complete_set': '{name} has no complete set.',
@@ -210,6 +215,9 @@ const table: Catalog = {
 
     'pending.ui.you_target': 'You are the target',
     'pending.ui.you_target_blurb': 'Block it with Just Say No, or allow it.',
+    'pending.ui.stake_lose': 'They take this from you',
+    'pending.ui.stake_lose_set': 'They take this whole set',
+    'pending.ui.stake_gain': 'You get this back',
     'pending.ui.allow_it': 'Allow it',
 
     'pending.ui.you_owe': 'You owe {amount}',
@@ -232,6 +240,11 @@ const table: Catalog = {
     'pending.sly_deal': 'Sly Deal',
     'pending.forced_deal': 'Forced Deal',
     'pending.deal_breaker': 'Deal Breaker',
+    'table.tap_tray': 'Tap for card options',
+    'table.hand_peek': 'Card preview in hand',
+    'table.hand_drag_only': 'Drag a card up to play it',
+    'inspect.hand_hint_drag': 'Hover to inspect / Drag to play',
+    'inspect.hand_hint_click': 'Click to choose · Drag to play',
 };
 
 export default table;

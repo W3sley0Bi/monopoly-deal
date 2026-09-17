@@ -5,6 +5,7 @@ import { formatTurn } from '../i18n/format';
 import GameBrand, { Cityscape } from './GameBrand';
 import Avatar from './Avatar';
 import LanguagePicker from './LanguagePicker';
+import AccountMenu from './AccountMenu';
 import InstallBanner from './InstallBanner';
 import { NARROW, useMediaQuery } from '../game/useMediaQuery';
 import { markTutorialSeen, tutorialSeen } from './Tutorial';
@@ -111,20 +112,8 @@ export default function Home({ inviteCode, view, connected, name, playerId, erro
     return (
         <div className="home-screen mx-auto flex min-h-full w-full max-w-5xl flex-col gap-4 p-4 sm:p-6">
             <Cityscape /><header className="home-header flex flex-wrap items-center gap-3 px-4 py-3">
-                <h1><GameBrand compact /></h1>
-                <LanguagePicker />
-                <span className="ml-auto flex items-center gap-2 rounded-full bg-black/30 px-2 py-1">
-                    <Avatar id={playerId} name={name} size={28} />
-                    <span className="text-sm font-semibold">{name}</span>
-                    <button
-                        type="button"
-                        className="btn btn-ghost !px-2 !py-0.5 !text-xs"
-                        onClick={() => onSetName('')}
-                    >
-                        {t('home.change_name')}
-                    </button>
-                </span>
                 {!connected && <span className="text-xs text-amber-300">{t('home.reconnecting')}</span>}
+                <span className="ml-auto"><AccountMenu playerId={playerId} name={name} onSetName={onSetName} /></span>
             </header>
 
             {error && <ErrorLine text={error} />}

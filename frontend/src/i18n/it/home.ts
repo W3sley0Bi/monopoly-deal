@@ -18,6 +18,7 @@ const home: Catalog = {
     'home.waiting_server': 'In attesa del server…',
     'home.connecting': 'Connessione al server…',
     'home.change_name': 'Cambia',
+    'home.account': 'Account',
     'home.reconnecting': 'riconnessione…',
 
     // Solo practice against robots.
