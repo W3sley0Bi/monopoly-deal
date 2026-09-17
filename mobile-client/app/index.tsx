@@ -89,12 +89,12 @@ export default function HomeScreen() {
                     <Text style={styles.hint}>{t('home.avatar_note')}</Text>
 
                     <Btn
-                        label={connected ? t('home.continue') : t('home.waiting_server')}
+                        label={t('home.continue')}
                         variant="gold"
-                        disabled={!connected || !draft.trim()}
+                        disabled={!draft.trim()}
                         onPress={() => setName(draft.trim())}
                     />
-                    {!connected ? <Text style={styles.hint}>{t('home.connecting')}</Text> : null}
+                    {!connected ? <Text style={styles.hint}>{t('home.offline_available')}</Text> : null}
                 </Panel>
             </ScrollView>
         );
@@ -118,7 +118,7 @@ export default function HomeScreen() {
                     </View>
                 ) : null}
 
-                {!connected ? <Text style={styles.reconnect}>{t('home.reconnecting')}</Text> : null}
+                {!connected ? <Text style={styles.reconnect}>{t('home.offline_status')}</Text> : null}
 
                 <Pressable style={styles.account} onPress={() => setAccount(true)}>
                     <Avatar id={myId} name={name} size={30} />
@@ -163,7 +163,6 @@ export default function HomeScreen() {
                     <Btn
                         label={t('home.solo.play')}
                         variant="gold"
-                        disabled={!connected}
                         onPress={() =>
                             send({
                                 type: 'create_room',

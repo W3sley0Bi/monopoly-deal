@@ -62,12 +62,28 @@ function handFanLayout(cards: CardT[], availableWidth: number) {
     return { rows, width };
 }
 
-function handCardSlotStyle(index: number, count: number, availableWidth: number): ViewStyle {
+/**
+ * The fan overlaps cards, so a card is wider than the space it gets. Laying
+ * that out with flex slots narrower than the card left the overhang outside
+ * its slot, where touches reach it only through overflow hit-testing — which
+ * is why most of the hand stopped answering the drag once the hand passed
+ * seven cards. Each card gets a full-width absolute box instead: the box a
+ * later card covers is exactly the part of the earlier card you cannot see,
+ * so the area that answers a pull is the area you are looking at.
+ */
+function handRowMetrics(count: number, availableWidth: number) {
     const step = count <= 1
-        ? HAND_CARD_WIDTH
+        ? 0
         : Math.min(HAND_NATURAL_STEP, (availableWidth - HAND_CARD_WIDTH) / (count - 1));
+    return { step, width: step * Math.max(0, count - 1) + HAND_CARD_WIDTH };
+}
+
+function handCardSlotStyle(index: number, step: number): ViewStyle {
     return {
-        width: index === count - 1 ? HAND_CARD_WIDTH : step,
+        position: 'absolute',
+        left: index * step,
+        top: 0,
+        width: HAND_CARD_WIDTH,
         height: HAND_CARD_HEIGHT + 12,
         zIndex: index + 1,
     };
@@ -248,6 +264,10 @@ function TableBody() {
     const hasPending = Boolean(room?.game.pending);
     const [boardOpen, setBoardOpen] = useState(true);
     const [handOpen, setHandOpen] = useState(true);
+    // Measured rather than derived from the window: the fan lays its rows out
+    // to an exact width, and guessing the panel's padding wrong pushes the
+    // outermost cards under the panel's clip.
+    const [fanWidth, setFanWidth] = useState(0);
     // Bubbles carry what players *said*. What they did is on the felt and in
     // the log; narrating it over their head as well made the table chatter.
     const said = useChatBubbles(room?.chat ?? EMPTY_CHAT, room?.id);
@@ -284,7 +304,7 @@ function TableBody() {
     const myTurn = isYourTurn(g);
     const canPlay = myTurn && !pending && g.plays_left > 0 && (!tutorial || (tutorial.task && !tutorial.done));
     const hand = (me?.hand ?? []).filter((c) => c.id !== sent);
-    const handFan = handFanLayout(hand, windowWidth - 34);
+    const handFan = handFanLayout(hand, fanWidth || windowWidth - 34);
     const overLimit = (me?.hand?.length ?? 0) > 7;
 
     // The deck offers Pass Go when playing one is legal right now — `canPlay`
@@ -614,16 +634,23 @@ function TableBody() {
 
                 <View
                     style={[styles.handFan, !handShown && styles.hidden]}
-                    onLayout={measureTutorialAnchors}
+                    onLayout={(e) => {
+                        setFanWidth(e.nativeEvent.layout.width - 12);
+                        measureTutorialAnchors();
+                    }}
                 >
-                    {handFan.rows.map((row, rowIndex) => (
-                        <View key={`hand-row-${rowIndex}`} style={styles.handFanRow}>
+                    {handFan.rows.map((row, rowIndex) => {
+                        const metrics = handRowMetrics(row.length, handFan.width);
+                        return <View
+                            key={`hand-row-${rowIndex}`}
+                            style={[styles.handFanRow, { width: metrics.width }]}
+                        >
                             {row.map((card, cardIndex) => {
                                 const cardEnabled = canPlay && tutorialAllowsCard(card, tutorial) &&
                                     (!tutorial || card.id === tutorialSourceCardId);
                                 return <View
                                     key={card.id}
-                                    style={handCardSlotStyle(cardIndex, row.length, handFan.width)}
+                                    style={handCardSlotStyle(cardIndex, metrics.step)}
                                 >
                                     <View
                                         ref={card.id === tutorialSourceCardId ? tutorialCardRef : undefined}
@@ -661,8 +688,8 @@ function TableBody() {
                                     </View>
                                 </View>;
                             })}
-                        </View>
-                    ))}
+                        </View>;
+                    })}
                     {hand.length === 0 ? <Text style={styles.handHint}>{t('table.hand_empty')}</Text> : null}
                 </View>
             </GlassPanel>
@@ -1308,7 +1335,8 @@ const styles = StyleSheet.create({
     grabberRow: { alignItems: 'center', paddingTop: 2 },
     grabber: { width: 34, height: 4, borderRadius: 2, backgroundColor: '#d8fff033' },
     handFan: { flexShrink: 0, alignItems: 'center', gap: 3, paddingTop: 5, paddingBottom: 6, paddingHorizontal: 6 },
-    handFanRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'center' },
+    // Absolutely placed cards, so the row carries the height itself.
+    handFanRow: { position: 'relative', height: HAND_CARD_HEIGHT + 12 },
     handHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     handHint: { flex: 1, textAlign: 'right', fontFamily: uiFont(700), fontSize: 10, color: ink.muted45 },
     overLimit: { fontFamily: uiFont(700), fontSize: 10, color: ink.endTurnHint },

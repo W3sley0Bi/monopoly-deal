@@ -10,6 +10,7 @@ import * as Linking from 'expo-linking';
 import { SERVER_URL } from '../config';
 import { useStore } from '../store';
 import { applyDevMove } from '../../src/dev/reduce';
+import { OfflineGame, OfflineGameError } from '../../src/game/offline/engine';
 import { useJsonSocket, type SocketStatus } from './socket';
 import type { ClientMessage, HomeView, RoomView, ServerMessage } from '../../src/types';
 
@@ -206,19 +207,93 @@ export function GameConnectionProvider({ children }: { children: ReactNode }) {
 
     const connection = useGameConnection(playerId, playerName, setPlayerName, setRoomId, roomId);
 
+    // Solo games use the same client-message / room-snapshot boundary as the
+    // server. Keeping that seam means every table component works unchanged,
+    // while the rules and robot turns run entirely inside the Expo app.
+    const [offlineGame, setOfflineGame] = useState<OfflineGame | null>(null);
+    const [offlineRoom, setOfflineRoom] = useState<RoomView | null>(null);
+    const [offlineNotice, setOfflineNotice] = useState<Notice | null>(null);
+
+    const sendOffline = useCallback((msg: Omit<ClientMessage, 'player_id'>) => {
+        if (msg.type === 'create_room' && msg.auto_start && msg.mode !== 'tutorial' && (msg.bots ?? 0) > 0) {
+            const game = new OfflineGame({
+                playerId,
+                playerName: playerName || 'Player',
+                roomName: msg.room_name || 'Solo table',
+                bots: msg.bots ?? 2,
+                difficulty: msg.bot_difficulty ?? 'normal',
+                mode: msg.mode,
+            });
+            setOfflineNotice(null);
+            setOfflineGame(game);
+            setOfflineRoom(game.view());
+            return true;
+        }
+        if (!offlineGame) return false;
+        try {
+            offlineGame.dispatch(msg);
+            setOfflineNotice(null);
+            setOfflineRoom(offlineGame.view());
+        } catch (error) {
+            if (error instanceof OfflineGameError) {
+                setOfflineNotice({ key: error.key, args: error.args, kind: 'error' });
+                return true;
+            }
+            throw error;
+        }
+        return true;
+    }, [offlineGame, playerId, playerName]);
+
+    useEffect(() => {
+        if (!offlineGame || !offlineRoom || !offlineGame.isBotWaiting()) return;
+        const timer = setTimeout(() => {
+            try {
+                offlineGame.stepBot();
+                setOfflineRoom(offlineGame.view());
+            } catch (error) {
+                // A robot move is opportunistic. The engine will try its next
+                // legal move on the following tick instead of crashing UI.
+                setOfflineNotice(error instanceof OfflineGameError
+                    ? { key: error.key, args: error.args, kind: 'error' }
+                    : { text: 'The robot could not finish its move.', kind: 'error' });
+            }
+        }, 650);
+        return () => clearTimeout(timer);
+    }, [offlineGame, offlineRoom]);
+
     // A dev fixture stands in for the live room. Moves are applied locally by
     // `applyDevMove` rather than posted: the server has never heard of this
     // room and would answer every one with an error banner.
     const devRoom = useStore((s) => s.devRoom);
     const setDevRoom = useStore((s) => s.setDevRoom);
-    const value: UseGameConnection = devRoom
+    const liveOrOffline: UseGameConnection = offlineGame
         ? {
               ...connection,
+              room: offlineRoom,
+              notice: offlineNotice,
+              skewMs: 0,
+              send: (msg) => { void sendOffline(msg); },
+              leave: () => {
+                  setOfflineGame(null);
+                  setOfflineRoom(null);
+                  setOfflineNotice(null);
+              },
+          }
+        : {
+              ...connection,
+              send: (msg) => {
+                  if (!sendOffline(msg)) connection.send(msg);
+              },
+          };
+
+    const value: UseGameConnection = devRoom
+        ? {
+              ...liveOrOffline,
               room: devRoom,
               send: (msg) => setDevRoom(applyDevMove(devRoom, msg)),
               leave: () => setDevRoom(null),
           }
-        : connection;
+        : liveOrOffline;
 
     return createElement(GameConnectionContext.Provider, { value }, children);
 }

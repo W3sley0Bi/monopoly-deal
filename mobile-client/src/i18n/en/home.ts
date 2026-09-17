@@ -17,9 +17,11 @@ const home: Catalog = {
     'home.continue': 'Continue',
     'home.waiting_server': 'Waiting for the server…',
     'home.connecting': 'Connecting to the server…',
+    'home.offline_available': 'You can continue offline and play against robots.',
     'home.change_name': 'Change',
     'home.account': 'Account',
     'home.reconnecting': 'reconnecting…',
+    'home.offline_status': 'Offline · solo robot games are available',
 
     // Solo practice against robots.
     'home.solo.title': 'Play solo',
