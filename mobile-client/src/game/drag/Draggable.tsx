@@ -11,7 +11,15 @@ interface Props {
     /** `vertical` for hand cards; `free` for a wildcard on the board. */
     axis?: 'vertical' | 'free';
     enabled?: boolean;
-    onTap?: () => void;
+    /** Fires as the card leaves its resting place, before the ghost is shown. */
+    onDragStart?: () => void;
+    /**
+     * The card this handle stands for, when the two are not the same box. A
+     * hand card is touched through a strip the width of the sliver you can see,
+     * while the ghost has to be the whole card: `dx`/`dy` offset the strip to
+     * the card's top-left, `w`/`h` are the card's own size.
+     */
+    ghost?: { dx: number; dy: number; w: number; h: number };
     children: React.ReactNode;
 }
 
@@ -22,7 +30,7 @@ interface Props {
  * never hands the gesture to another interaction: the hand is a fixed fan, so
  * a quick diagonal lift must still pick up the card rather than cancel it.
  */
-export function Draggable({ state, axis = 'vertical', enabled = true, onTap, children }: Props) {
+export function Draggable({ state, axis = 'vertical', enabled = true, onDragStart, ghost, children }: Props) {
     const layer = useDragLayer();
     const shared = useDragShared();
     const ref = useAnimatedRef<View>();
@@ -57,20 +65,23 @@ export function Draggable({ state, axis = 'vertical', enabled = true, onTap, chi
         .activeOffsetY(axis === 'vertical' ? [-6, 6] : [-8, 8])
         .failOffsetX([-10000, 10000])
         .onStart((e) => {
+            if (onDragStart) runOnJS(onDragStart)();
             const bounds = measure(ref);
             if (!bounds) {
                 runOnJS(pickUpFallback)(e.absoluteX, e.absoluteY);
                 return;
             }
-            grabX.value = e.absoluteX - bounds.pageX;
-            grabY.value = e.absoluteY - bounds.pageY;
-            shared.x.value = bounds.pageX;
-            shared.y.value = bounds.pageY;
+            const x = bounds.pageX + (ghost ? ghost.dx : 0);
+            const y = bounds.pageY + (ghost ? ghost.dy : 0);
+            grabX.value = e.absoluteX - x;
+            grabY.value = e.absoluteY - y;
+            shared.x.value = x;
+            shared.y.value = y;
             runOnJS(layer.begin)(state, {
-                x: bounds.pageX,
-                y: bounds.pageY,
-                w: bounds.width,
-                h: bounds.height,
+                x,
+                y,
+                w: ghost ? ghost.w : bounds.width,
+                h: ghost ? ghost.h : bounds.height,
             });
         })
         .onUpdate((e) => {
@@ -106,19 +117,12 @@ export function Draggable({ state, axis = 'vertical', enabled = true, onTap, chi
             if (!success) runOnJS(shared.cancel)();
         });
 
-    const tap = Gesture.Tap()
-        .enabled(enabled && !!onTap)
-        .onEnd((_e, success) => {
-            'worklet';
-            if (success && onTap) runOnJS(onTap)();
-        });
-
-    // Exclusive, so a tap still selects and the drag never fires alongside it —
-    // which is what the web needed its `swallowNextClick` hack for.
-    const gesture = Gesture.Exclusive(pan, tap);
-
+    // Taps belong to whatever the caller puts inside: a gesture-handler tap
+    // composed with this pan only fired on part of an overlapping hand, and a
+    // plain `Pressable` answers wherever it is drawn. The pan still wins once
+    // the finger moves, because activating it cancels the touch below.
     return (
-        <GestureDetector gesture={gesture}>
+        <GestureDetector gesture={pan}>
             <View
                 ref={(node) => {
                     ref(node);

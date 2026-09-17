@@ -10,12 +10,11 @@ import { GlassPanel, TableGlassProvider } from '../src/components/table/TableGla
 
 import { useGameConnectionContext } from '../lib/net/messages';
 import { useStore } from '../lib/store';
-import { CARD_SIZES, brand, ink, line, radius, status, surface } from '../lib/theme';
+import { brand, ink, line, radius, status, surface } from '../lib/theme';
 import { displayFont, ls, uiFont } from '../lib/fonts';
 import { Btn, Icon, LabelCaps, Panel, Sheet, Toggle } from '../src/ui/kit';
-import { Card, WildFlip } from '../src/ui/card';
 import { PlayerChip, PropertySets } from '../src/components/board';
-import { DragLayer, Draggable, DropZone, useDragLayer } from '../src/game/drag';
+import { DragLayer, DropZone, useDragLayer } from '../src/game/drag';
 import { ActionDialog } from '../src/components/table/ActionDialog';
 import { ActiveBoard } from '../src/components/board/ActiveBoard';
 import { useChatBubbles } from '../src/game/useChatBubbles';
@@ -40,66 +39,13 @@ import {
     playableColors,
     you as youOf,
 } from '../src/game/meta';
+import { HandFan } from '../src/components/table/HandFan';
+import { Card } from '../src/ui/card';
 import { applyOptimistic, moveSettled, type PendingMove } from '../src/game/optimistic';
 import type { Card as CardT, ChatMessage, Color, RoomView, TutorialState } from '../src/types';
 import type { ActionDialogIntent, PendingViewerRole } from '../lib/contracts';
 
 const EMPTY_CHAT: ChatMessage[] = [];
-const HAND_CARD_WIDTH = CARD_SIZES.hand.w;
-const HAND_CARD_HEIGHT = CARD_SIZES.hand.h;
-const HAND_NATURAL_STEP = HAND_CARD_WIDTH - 12;
-const HAND_MIN_VISIBLE = 30;
-
-function handFanLayout(cards: CardT[], availableWidth: number) {
-    const width = Math.max(240, availableWidth);
-    const cardsPerRow = Math.max(1, Math.floor((width - HAND_CARD_WIDTH) / HAND_MIN_VISIBLE) + 1);
-    const rowCount = Math.max(1, Math.ceil(cards.length / cardsPerRow));
-    const balancedRowSize = Math.max(1, Math.ceil(cards.length / rowCount));
-    const rows: CardT[][] = [];
-    for (let index = 0; index < cards.length; index += balancedRowSize) {
-        rows.push(cards.slice(index, index + balancedRowSize));
-    }
-    return { rows, width };
-}
-
-/**
- * The fan overlaps cards, so a card is wider than the space it gets. Laying
- * that out with flex slots narrower than the card left the overhang outside
- * its slot, where touches reach it only through overflow hit-testing — which
- * is why most of the hand stopped answering the drag once the hand passed
- * seven cards. Each card gets a full-width absolute box instead: the box a
- * later card covers is exactly the part of the earlier card you cannot see,
- * so the area that answers a pull is the area you are looking at.
- */
-function handRowMetrics(count: number, availableWidth: number) {
-    const step = count <= 1
-        ? 0
-        : Math.min(HAND_NATURAL_STEP, (availableWidth - HAND_CARD_WIDTH) / (count - 1));
-    return { step, width: step * Math.max(0, count - 1) + HAND_CARD_WIDTH };
-}
-
-function handCardSlotStyle(index: number, step: number): ViewStyle {
-    return {
-        position: 'absolute',
-        left: index * step,
-        top: 0,
-        width: HAND_CARD_WIDTH,
-        height: HAND_CARD_HEIGHT + 12,
-        zIndex: index + 1,
-    };
-}
-
-function fannedCardStyle(index: number, count: number, selected: boolean): ViewStyle {
-    const middle = (count - 1) / 2;
-    const distance = index - middle;
-    const normalized = middle > 0 ? distance / middle : 0;
-    return {
-        transform: [
-            { translateY: Math.abs(normalized) * 5 - (selected ? 5 : 0) },
-            { rotate: `${normalized * 4}deg` },
-        ],
-    };
-}
 
 export default function TableScreen() {
     // The body has to live inside the layer to read what is being carried.
@@ -304,7 +250,9 @@ function TableBody() {
     const myTurn = isYourTurn(g);
     const canPlay = myTurn && !pending && g.plays_left > 0 && (!tutorial || (tutorial.task && !tutorial.done));
     const hand = (me?.hand ?? []).filter((c) => c.id !== sent);
-    const handFan = handFanLayout(hand, fanWidth || windowWidth - 34);
+    const cardEnabled = (card: CardT) => canPlay && tutorialAllowsCard(card, tutorial) &&
+        (!tutorial || card.id === tutorialSourceCardId);
+    const handFanWidth = fanWidth || windowWidth - 34;
     const overLimit = (me?.hand?.length ?? 0) > 7;
 
     // The deck offers Pass Go when playing one is legal right now — `canPlay`
@@ -330,11 +278,15 @@ function TableBody() {
     const lastEvent = [...g.log].reverse().find((e) => e.key !== 'log.turn' && e.key !== 'log.tutorial_lesson');
 
     function openCard(card: CardT) {
-        if (
-            !canPlay ||
-            !tutorialAllowsCard(card, tutorial) ||
-            (tutorial && card.id !== tutorialSourceCardId)
-        ) return;
+        const playable = canPlay && tutorialAllowsCard(card, tutorial) &&
+            (!tutorial || card.id === tutorialSourceCardId);
+        // Off-turn, a tap is only a peek: it pops the card clear of the fan so
+        // it can be read. The coach is the exception — while it is pointing at
+        // one card, popping another argues with it.
+        if (!playable) {
+            if (!tutorial) setSelected((prev) => (prev?.id === card.id ? null : card));
+            return;
+        }
         const colors = card.colors ?? [];
 
         // A two-colour wildcard aims itself by tapping — the player picks which
@@ -639,57 +591,21 @@ function TableBody() {
                         measureTutorialAnchors();
                     }}
                 >
-                    {handFan.rows.map((row, rowIndex) => {
-                        const metrics = handRowMetrics(row.length, handFan.width);
-                        return <View
-                            key={`hand-row-${rowIndex}`}
-                            style={[styles.handFanRow, { width: metrics.width }]}
-                        >
-                            {row.map((card, cardIndex) => {
-                                const cardEnabled = canPlay && tutorialAllowsCard(card, tutorial) &&
-                                    (!tutorial || card.id === tutorialSourceCardId);
-                                return <View
-                                    key={card.id}
-                                    style={handCardSlotStyle(cardIndex, metrics.step)}
-                                >
-                                    <View
-                                        ref={card.id === tutorialSourceCardId ? tutorialCardRef : undefined}
-                                        collapsable={false}
-                                        style={fannedCardStyle(cardIndex, row.length, selected?.id === card.id)}
-                                        onLayout={() => {
-                                            if (card.id !== tutorialSourceCardId) return;
-                                            requestAnimationFrame(() =>
-                                                recordTutorialAnchor('card', tutorialCardRef.current),
-                                            );
-                                        }}
-                                    >
-                                        <Draggable
-                                            state={{ card, from: 'hand' }}
-                                            axis="vertical"
-                                            enabled={cardEnabled}
-                                            onTap={() => openCard(card)}
-                                        >
-                                            {/* A two-colour wildcard turns rather than
-                                                redrawing: tapping it is the same gesture as
-                                                turning the card round on a real table. */}
-                                            <WildFlip active={wildColor[card.id] ?? null}>
-                                                {(shown) => (
-                                                    <Card
-                                                        card={card}
-                                                        size="hand"
-                                                        activeColor={shown ?? null}
-                                                        selected={selected?.id === card.id}
-                                                        disabled={!cardEnabled}
-                                                        dimmed={!cardEnabled || carriedCard?.id === card.id}
-                                                    />
-                                                )}
-                                            </WildFlip>
-                                        </Draggable>
-                                    </View>
-                                </View>;
-                            })}
-                        </View>;
-                    })}
+                    <HandFan
+                        cards={hand}
+                        width={handFanWidth}
+                        selectedId={selected?.id ?? null}
+                        carriedId={carriedCard?.id ?? null}
+                        wildColor={wildColor}
+                        isPlayable={cardEnabled}
+                        onTapCard={openCard}
+                        onDragStart={() => setSelected(null)}
+                        anchorCardId={tutorialSourceCardId}
+                        anchorRef={tutorialCardRef}
+                        onAnchorLayout={() => requestAnimationFrame(() =>
+                            recordTutorialAnchor('card', tutorialCardRef.current),
+                        )}
+                    />
                     {hand.length === 0 ? <Text style={styles.handHint}>{t('table.hand_empty')}</Text> : null}
                 </View>
             </GlassPanel>
@@ -700,7 +616,7 @@ function TableBody() {
             {/* The options tray. Opt-in: dragging a card where it goes is the
                 gesture the table is built around, and the tray covers the felt
                 to say the same thing in buttons. */}
-            {(tapTray || tutorial?.id === 'tapping') && selected && handShown ? (
+            {(tapTray || tutorial?.id === 'tapping') && selected && handShown && canPlay ? (
                 <Panel style={styles.tray}>
                     <Text style={styles.trayTitle} numberOfLines={1}>
                         {tCard(selected)}
@@ -1334,9 +1250,7 @@ const styles = StyleSheet.create({
     handZone: { flexShrink: 0, gap: 2, paddingHorizontal: 4, paddingBottom: 4, paddingTop: 2, overflow: 'hidden' },
     grabberRow: { alignItems: 'center', paddingTop: 2 },
     grabber: { width: 34, height: 4, borderRadius: 2, backgroundColor: '#d8fff033' },
-    handFan: { flexShrink: 0, alignItems: 'center', gap: 3, paddingTop: 5, paddingBottom: 6, paddingHorizontal: 6 },
-    // Absolutely placed cards, so the row carries the height itself.
-    handFanRow: { position: 'relative', height: HAND_CARD_HEIGHT + 12 },
+    handFan: { flexShrink: 0, alignItems: 'center', gap: 3, paddingTop: 0, paddingBottom: 4, paddingHorizontal: 6 },
     handHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     handHint: { flex: 1, textAlign: 'right', fontFamily: uiFont(700), fontSize: 10, color: ink.muted45 },
     overLimit: { fontFamily: uiFont(700), fontSize: 10, color: ink.endTurnHint },
