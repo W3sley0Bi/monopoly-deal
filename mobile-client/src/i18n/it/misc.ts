@@ -33,6 +33,9 @@ const misc: Catalog = {
     'opponent.hand_title': 'Carte in mano',
     'opponent.bank_title': 'Banca',
     'opponent.sets_title': 'Serie complete',
+    'opponent.hand_short': 'Carte',
+    'opponent.bank_short': 'Banca',
+    'opponent.sets_short': 'Serie',
 
     'board.in_hand.one': '{count} in mano',
     'board.in_hand.other': '{count} in mano',

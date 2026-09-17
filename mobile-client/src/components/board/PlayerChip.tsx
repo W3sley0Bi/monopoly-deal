@@ -1,4 +1,5 @@
-import { memo } from 'react';
+import { memo, useCallback, useState } from 'react';
+import type { LayoutChangeEvent } from 'react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { PlayerChipProps } from '../../../lib/contracts';
@@ -26,32 +27,68 @@ function PlayerChipImpl({
     onPress,
 }: PlayerChipProps) {
     const { t } = useI18n();
+    const [chipWidth, setChipWidth] = useState(0);
+    const onLayout = useCallback((event: LayoutChangeEvent) => {
+        const next = Math.round(event.nativeEvent.layout.width);
+        setChipWidth((current) => current === next ? current : next);
+    }, []);
+    // Four/five-player tables keep the compact baseline. With fewer players,
+    // each seat gets wider and its primary data should grow with it.
+    const typeScale = Math.max(1, Math.min(1.4, (chipWidth || 92) / 92));
+    const accessibilityLabel = [
+        player.name,
+        t('board.banked', { amount: `$${player.bank_total}M` }),
+        t('board.in_hand', { count: player.hand_count }),
+        t('board.sets', { count: player.complete_sets }),
+    ].join(', ');
 
     return (
         <Pressable
             onPress={onPress}
+            onLayout={onLayout}
             accessibilityRole="button"
-            accessibilityLabel={player.name}
+            accessibilityLabel={accessibilityLabel}
             style={[styles.chip, isTurn && styles.turn, isTargeted && styles.targeted]}
         >
             <View style={styles.head}>
                 <Avatar id={player.id} name={player.name} size={20} active={isTurn} dimmed={!player.connected} />
                 <View style={styles.names}>
-                    <Text style={styles.name} numberOfLines={1}>
+                    <Text style={[styles.name, { fontSize: 11 * typeScale }]} numberOfLines={1}>
                         {player.name}
                         {isOwner ? ' 👑' : ''}
                         {player.bot ? ' 🤖' : ''}
                     </Text>
                     {!player.connected && !player.bot ? (
-                        <Text style={styles.away} numberOfLines={1}>{t('opponent.away')}</Text>
+                        <Text style={[styles.away, { fontSize: 8 * typeScale }]} numberOfLines={1}>{t('opponent.away')}</Text>
                     ) : null}
                 </View>
             </View>
 
             <View style={styles.stats}>
-                <Text style={styles.bank} numberOfLines={1}>${player.bank_total}M</Text>
-                <Text style={styles.stat} numberOfLines={1}>🂠{player.hand_count}</Text>
-                <Text style={styles.stat} numberOfLines={1}>◼{player.complete_sets}</Text>
+                <View style={styles.metric}>
+                    <Text style={[styles.metricLabel, { fontSize: 7 * typeScale }]} numberOfLines={1}>
+                        {t('opponent.bank_short')}
+                    </Text>
+                    <Text style={[styles.bank, { fontSize: 11 * typeScale }]} numberOfLines={1}>
+                        ${player.bank_total}M
+                    </Text>
+                </View>
+                <View style={styles.metric}>
+                    <Text style={[styles.metricLabel, { fontSize: 7 * typeScale }]} numberOfLines={1}>
+                        {t('opponent.hand_short')}
+                    </Text>
+                    <Text style={[styles.stat, { fontSize: 11 * typeScale }]} numberOfLines={1}>
+                        {player.hand_count}
+                    </Text>
+                </View>
+                <View style={styles.metric}>
+                    <Text style={[styles.metricLabel, { fontSize: 7 * typeScale }]} numberOfLines={1}>
+                        {t('opponent.sets_short')}
+                    </Text>
+                    <Text style={[styles.sets, { fontSize: 11 * typeScale }]} numberOfLines={1}>
+                        {player.complete_sets}/3
+                    </Text>
+                </View>
             </View>
 
             {/* The colours they already hold — the only board information that
@@ -105,9 +142,12 @@ const styles = StyleSheet.create({
     names: { flex: 1, minWidth: 0 },
     name: { fontFamily: uiFont(700), fontSize: 11, color: ink.body },
     away: { fontFamily: uiFont(700), fontSize: 8, color: ink.muted45 },
-    stats: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 3 },
-    bank: { fontFamily: uiFont(800), fontSize: 10, color: status.bank },
-    stat: { fontFamily: uiFont(700), fontSize: 9, color: ink.muted60 },
+    stats: { flexDirection: 'row', alignItems: 'flex-start', gap: 3 },
+    metric: { flex: 1, minWidth: 0, alignItems: 'center' },
+    metricLabel: { fontFamily: uiFont(900), color: ink.muted45, textTransform: 'uppercase' },
+    bank: { fontFamily: uiFont(800), color: status.bank },
+    stat: { fontFamily: uiFont(800), color: ink.body },
+    sets: { fontFamily: uiFont(900), color: brand.brass },
     // Share the width: eight colours at a fixed size would overflow a quarter
     // of the screen, so each one takes an equal slice of whatever there is.
     swatches: { flexDirection: 'row', gap: 2, height: 4 },
