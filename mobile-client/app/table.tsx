@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Pressable, ScrollView, Share, StyleSheet, Text, View, useWindowDimensions, type LayoutRectangle, type StyleProp, type ViewStyle } from 'react-native';
+import { Alert, Platform, Pressable, ScrollView, Share, StyleSheet, Text, View, useWindowDimensions, type LayoutRectangle, type StyleProp, type ViewStyle } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
@@ -8,7 +8,7 @@ import { BlurTargetView } from 'expo-blur';
 import { FeltTable, type SeatHit } from '../src/components/table/FeltTable';
 import { GlassPanel, TableGlassProvider } from '../src/components/table/TableGlass';
 
-import { useGameConnectionContext } from '../lib/net/messages';
+import { useGameConnectionContext, type UseGameConnection } from '../lib/net/messages';
 import { useStore } from '../lib/store';
 import { brand, ink, line, radius, status, surface } from '../lib/theme';
 import { displayFont, ls, uiFont } from '../lib/fonts';
@@ -25,6 +25,7 @@ import { ChatPanel } from '../src/components/table/ChatPanel';
 import { TutorialCoach, TutorialDone, type TutorialAnchors } from '../src/components/table/TutorialCoach';
 import { CountdownTimer } from '../src/components/table/CountdownTimer';
 import { StartWheel } from '../src/components/table/StartWheel';
+import { PlayerBoardRow } from '../src/components/table/PlayerBoardRow';
 import { GameSoundSettings } from '../src/components/settings/GameSoundSettings';
 import { useI18n } from '../src/i18n';
 import { useGameAudio } from '../src/game/useGameAudio';
@@ -71,6 +72,11 @@ function TableBody() {
     const endTurnTutorialRef = useRef<View>(null);
     const tutorialCardRef = useRef<View>(null);
     const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+    // A landscape phone can be wider than a portrait tablet. Native devices
+    // therefore qualify by their short edge; the web also supports a wide,
+    // short desktop window.
+    const roomyPlayerStation = Math.min(windowWidth, windowHeight) >= 600 ||
+        (Platform.OS === 'web' && windowWidth >= 900);
     // The felt belongs to the viewport, not to the accordion's remaining space.
     // Just the rail now (~64, the chips being one row shorter) plus the top
     // padding. It has to clear the rail rather than merely start near it: the
@@ -242,6 +248,11 @@ function TableBody() {
         leave();
     }, [leave, setTutorialDone]);
 
+    // Leaving clears `room` before the router replaces this screen. Keep this
+    // hook above the empty-room return so that transition never changes the
+    // number of hooks rendered by TableBody.
+    const autoEndLeft = useAutoEndTurn(room, sent, skewMs, send);
+
     if (!room) return null;
 
     const g = room.game;
@@ -280,29 +291,6 @@ function TableBody() {
           : 'bystander';
 
     const lastEvent = [...g.log].reverse().find((e) => e.key !== 'log.turn' && e.key !== 'log.tutorial_lesson');
-
-    const startPending = Boolean(g.starts_at_ms && Date.now() + skewMs < g.starts_at_ms);
-    const autoEnd = myTurn && !pending && !spectating && !startPending && g.state === 'playing' && g.plays_left === 0 && hand.length <= 7;
-    
-    const sendRef = useRef(send);
-    sendRef.current = send;
-    const [autoEndLeft, setAutoEndLeft] = useState(0);
-
-    useEffect(() => {
-        if (!autoEnd) {
-            setAutoEndLeft(0);
-            return;
-        }
-        const until = Date.now() + AUTO_END_MS;
-        setAutoEndLeft(Math.ceil(AUTO_END_MS / 1000));
-        const interval = setInterval(
-            () => setAutoEndLeft(Math.max(0, Math.ceil((until - Date.now()) / 1000))), 250);
-        const timer = setTimeout(() => sendRef.current({ type: 'end_turn' }), AUTO_END_MS);
-        return () => {
-            clearInterval(interval);
-            clearTimeout(timer);
-        };
-    }, [autoEnd, g.current_turn]);
 
     function openCard(card: CardT) {
         const playable = canPlay && tutorialAllowsCard(card, tutorial) &&
@@ -355,7 +343,7 @@ function TableBody() {
     // never re-aimed mid-drag — a target that moves under a thumb is worse
     // than a small one.
     const carried = dragLayer.dragging;
-    const boardShown = boardOpen || Boolean(carried);
+    const boardShown = roomyPlayerStation || boardOpen || Boolean(carried);
     const handShown = handOpen || carried?.from === 'hand';
     const turnPlayer = g.players[g.current_turn % g.players.length];
     const carriedCard = carried?.card ?? null;
@@ -455,15 +443,17 @@ function TableBody() {
             </View>
 
             {me ? <>
+            <PlayerBoardRow
+                roomy={roomyPlayerStation}
+                expanded={boardShown}
+                onLayout={(e) => setLocalTop(e.nativeEvent.layout.y)}
+            >
             {/* ---- my board ---- */}
             <GlassPanel
-                onLayout={(e) => {
-                    setLocalTop(e.nativeEvent.layout.y);
-                }}
-                style={[styles.board, !boardShown && styles.boardFolded]}
+                style={[styles.board, roomyPlayerStation && styles.boardRoomy, !boardShown && styles.boardFolded]}
             >
                 <Pressable style={({ pressed }) => [styles.boardHead, styles.foldHead, pressed && styles.foldHeadPressed]} accessibilityRole="button"
-                    accessibilityState={{ expanded: boardShown }} disabled={!!carried || tutorialActive}
+                    accessibilityState={{ expanded: boardShown }} disabled={roomyPlayerStation || !!carried || tutorialActive}
                     accessibilityLabel={t(boardShown ? 'table.board_fold' : 'table.board_unfold')}
                     onPress={() => {
                         void Haptics.selectionAsync();
@@ -476,7 +466,7 @@ function TableBody() {
                     <Text style={styles.progress}>
                         {t('table.sets_progress', { done: me?.complete_sets ?? 0 })}
                     </Text>
-                    <DisclosureIcon expanded={boardShown} />
+                    {!roomyPlayerStation ? <DisclosureIcon expanded={boardShown} /> : null}
                 </Pressable>
                 <DropZone
                     id="properties"
@@ -517,13 +507,13 @@ function TableBody() {
             </GlassPanel>
 
                 {/* The two landing places a card can go that are not a set. */}
-                <View style={styles.dropRow}>
+                <View style={[styles.dropRow, roomyPlayerStation && styles.dropRowRoomy]}>
                     <DropZone
                         id="bank"
                         targetRef={bankTutorialRef}
                         glass
                         active={bankActive}
-                        grow={growFor(bankActive)}
+                        grow={roomyPlayerStation ? 1 : growFor(bankActive)}
                         hint={t('table.bank_drop', { amount: carriedCard?.value ?? 0 })}
                         onDrop={(card) =>
                             act({ type: 'play_bank', card_id: card.id }, card.id, {
@@ -562,7 +552,7 @@ function TableBody() {
                         targetRef={actionTutorialRef}
                         glass
                         active={actionActive}
-                        grow={growFor(actionActive)}
+                        grow={roomyPlayerStation ? 1 : growFor(actionActive)}
                         hint={t('table.play_it')}
                         onDrop={(card) => playAction(card)}
                         onLayout={() => recordTutorialAnchor('action', actionTutorialRef.current)}
@@ -577,11 +567,12 @@ function TableBody() {
                         </View>
                     </DropZone>
                 </View>
+            </PlayerBoardRow>
 
             {/* ---- hand ---- */}
             <GlassPanel
                 targetRef={handTutorialRef}
-                style={styles.handZone}
+                style={[styles.handZone, roomyPlayerStation && styles.playerStationRoomy]}
                 onLayout={() => recordTutorialAnchor('hand', handTutorialRef.current)}
             >
                 {/* The hand folds like the board does, and a bare header row did
@@ -660,7 +651,7 @@ function TableBody() {
                 gesture the table is built around, and the tray covers the felt
                 to say the same thing in buttons. */}
             {(tapTray || tutorial?.id === 'tapping') && selected && handShown && canPlay ? (
-                <Panel style={styles.tray}>
+                <Panel style={[styles.tray, roomyPlayerStation && styles.playerStationRoomy]}>
                     <Text style={styles.trayTitle} numberOfLines={1}>
                         {tCard(selected)}
                     </Text>
@@ -706,7 +697,7 @@ function TableBody() {
             ) : null}
 
             {/* ---- bottom bar ---- */}
-            <GlassPanel style={styles.controls}>
+            <GlassPanel style={[styles.controls, roomyPlayerStation && styles.playerStationRoomy]}>
                 {/* Table-level controls, all in one bar: the header above was a
                     36pt strip carrying a single button, and the felt wanted
                     those points more than the gear did. */}
@@ -1083,6 +1074,54 @@ function TableBody() {
     );
 }
 
+function useAutoEndTurn(
+    room: RoomView | null,
+    sent: string | null,
+    skewMs: number,
+    send: UseGameConnection['send'],
+): number {
+    const sendRef = useRef(send);
+    sendRef.current = send;
+    const [secondsLeft, setSecondsLeft] = useState(0);
+
+    const game = room?.game;
+    const me = game ? youOf(game) : null;
+    const handCount = (me?.hand ?? []).filter((card) => card.id !== sent).length;
+    const startPending = Boolean(game?.starts_at_ms && Date.now() + skewMs < game.starts_at_ms);
+    const autoEnd = Boolean(
+        room &&
+        game &&
+        isYourTurn(game) &&
+        !game.pending &&
+        room.you_seated &&
+        me &&
+        !startPending &&
+        game.state === 'playing' &&
+        game.plays_left === 0 &&
+        handCount <= 7
+    );
+
+    useEffect(() => {
+        if (!autoEnd) {
+            setSecondsLeft(0);
+            return;
+        }
+        const until = Date.now() + AUTO_END_MS;
+        setSecondsLeft(Math.ceil(AUTO_END_MS / 1000));
+        const interval = setInterval(
+            () => setSecondsLeft(Math.max(0, Math.ceil((until - Date.now()) / 1000))),
+            250,
+        );
+        const timer = setTimeout(() => sendRef.current({ type: 'end_turn' }), AUTO_END_MS);
+        return () => {
+            clearInterval(interval);
+            clearTimeout(timer);
+        };
+    }, [autoEnd, game?.current_turn]);
+
+    return secondsLeft;
+}
+
 /** Only the card a scripted lesson is teaching stays live. */
 function tutorialAllowsCard(card: CardT, tutorial: TutorialState | null): boolean {
     if (!tutorial) return true;
@@ -1218,6 +1257,7 @@ const styles = StyleSheet.create({
     // own, so pairing it with `flexShrink` left the faster shrink to whichever
     // of the two the platform happened to apply last.
     sharedTable: { flexGrow: 1, flexShrink: 1.6, flexBasis: 0, minHeight: 104, gap: 5, justifyContent: 'flex-start', overflow: 'hidden' },
+    playerStationRoomy: { width: '60%', alignSelf: 'center' },
     hidden: { display: 'none' },
     // What `flex: 0` means on native — grow 0, shrink 0, basis auto — written
     // out, so the folded board is sized by its header on both platforms.
@@ -1266,6 +1306,7 @@ const styles = StyleSheet.create({
     // merged style holding both the shorthand and its parts has no defined
     // winner, and the two platforms did not pick the same one.
     board: { flexGrow: 1, flexShrink: 1, flexBasis: 0, padding: 4, gap: 6, minHeight: 96, overflow: 'hidden' },
+    boardRoomy: { minWidth: 0 },
     boardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     boardScroll: { flex: 1 },
     progress: { fontFamily: uiFont(700), fontSize: 11, color: ink.muted60 },
@@ -1280,6 +1321,7 @@ const styles = StyleSheet.create({
         overflow: 'hidden',
     },
     dropRow: { flexDirection: 'row', gap: 6 },
+    dropRowRoomy: { width: '40%', height: '100%', flexShrink: 0 },
     // The two tiles read as the same material as the board and hand panels, so
     // their contents follow the same head geometry as the fold headers.
     zoneTile: { minHeight: 56, minWidth: 104, alignItems: 'stretch', justifyContent: 'center', paddingHorizontal: 10, paddingVertical: 6 },
