@@ -28,6 +28,8 @@ interface Props {
     anchorCardId?: string | null;
     anchorRef?: Ref<View>;
     onAnchorLayout?: () => void;
+    /** Enlarges the fan and its touch geometry together on roomy screens. */
+    scale?: number;
     /**
      * Paints every touch strip and reports where the platform actually put it.
      * The hand has had a run of bugs where a card was drawn in one place and
@@ -59,10 +61,11 @@ export function HandFan({
     anchorCardId,
     anchorRef,
     onAnchorLayout,
+    scale = 1,
     debug,
 }: Props) {
     return <>
-        {fanLayout(cards, width).map((row, rowIndex) => {
+        {fanLayout(cards, width, scale).map((row, rowIndex) => {
             const popped = row.cards.findIndex((card) => card.id === selectedId);
             // Paint order is child order, so the popped card goes last. Keys
             // keep each card's identity across the reorder.
@@ -83,6 +86,7 @@ export function HandFan({
                             count={row.cards.length}
                             left={row.left[index]}
                             popped={popped < 0 ? null : popped}
+                            scale={scale}
                         >
                             <View
                                 ref={card.id === anchorCardId ? anchorRef : undefined}
@@ -111,7 +115,7 @@ export function HandFan({
 
                 <View style={styles.strips}>
                     {row.cards.map((card, index) => {
-                        const stripLeft = row.left[index] + FAN_NUDGE;
+                        const stripLeft = row.left[index] + FAN_NUDGE * scale;
                         const stripWidth = row.strip[index];
                         return (
                         <Draggable
@@ -133,7 +137,7 @@ export function HandFan({
                             }}
                             // The strip is the handle; the card that flies is the
                             // whole card, which starts below the pop's headroom.
-                            ghost={{ dx: 0, dy: FAN_HEADROOM, w: HAND_CARD_WIDTH, h: HAND_CARD_HEIGHT }}
+                            ghost={{ dx: 0, dy: FAN_HEADROOM * scale, w: HAND_CARD_WIDTH * scale, h: HAND_CARD_HEIGHT * scale }}
                             onTap={() => onTapCard(card)}
                             onDragStart={onDragStart}
                         >

@@ -47,6 +47,7 @@ describe('<PlayerBoardRow /> responsive layout', () => {
             flexDirection: 'row',
             gap: 8,
             height: 200,
+            marginBottom: -10,
             minHeight: 200,
             width: '60%',
         });

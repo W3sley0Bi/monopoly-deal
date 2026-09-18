@@ -30,19 +30,20 @@ export interface FanRow<T> {
     height: number;
 }
 
-export function fanRowHeight() {
-    return HAND_CARD_HEIGHT + FAN_HEADROOM + FAN_FOOT;
+export function fanRowHeight(scale = 1) {
+    return HAND_CARD_HEIGHT * scale + FAN_HEADROOM * scale + FAN_FOOT * scale;
 }
 
-export function fanRowMetrics(count: number, availableWidth: number) {
-    const usable = Math.max(HAND_CARD_WIDTH, availableWidth - FAN_NUDGE * 2);
+export function fanRowMetrics(count: number, availableWidth: number, scale = 1) {
+    const cardWidth = HAND_CARD_WIDTH * scale;
+    const usable = Math.max(cardWidth, availableWidth - FAN_NUDGE * scale * 2);
     const step = count <= 1
         ? 0
-        : Math.max(1, Math.min(NATURAL_STEP, (usable - HAND_CARD_WIDTH) / (count - 1)));
+        : Math.max(1, Math.min(NATURAL_STEP * scale, (usable - cardWidth) / (count - 1)));
     return {
         step,
-        width: step * Math.max(0, count - 1) + HAND_CARD_WIDTH + FAN_NUDGE * 2,
-        height: fanRowHeight(),
+        width: step * Math.max(0, count - 1) + cardWidth + FAN_NUDGE * scale * 2,
+        height: fanRowHeight(scale),
     };
 }
 
@@ -53,21 +54,22 @@ export function fanRowMetrics(count: number, availableWidth: number) {
  * `MIN_VISIBLE` wraps into balanced rows instead, because a sliver too narrow
  * to read is also too narrow to hit.
  */
-export function fanLayout<T>(cards: T[], availableWidth: number): FanRow<T>[] {
+export function fanLayout<T>(cards: T[], availableWidth: number, scale = 1): FanRow<T>[] {
+    const cardWidth = HAND_CARD_WIDTH * scale;
     const width = Math.max(240, availableWidth);
-    const perRow = Math.max(1, Math.floor((width - HAND_CARD_WIDTH) / MIN_VISIBLE) + 1);
+    const perRow = Math.max(1, Math.floor((width - cardWidth) / (MIN_VISIBLE * scale)) + 1);
     const rowCount = Math.max(1, Math.ceil(cards.length / perRow));
     const rowSize = Math.max(1, Math.ceil(cards.length / rowCount));
 
     const rows: FanRow<T>[] = [];
     for (let index = 0; index < cards.length; index += rowSize) {
         const slice = cards.slice(index, index + rowSize);
-        const metrics = fanRowMetrics(slice.length, width);
+        const metrics = fanRowMetrics(slice.length, width, scale);
         rows.push({
             cards: slice,
             left: slice.map((_, i) => i * metrics.step),
             // The last card has nothing in front of it, so all of it shows.
-            strip: slice.map((_, i) => (i === slice.length - 1 ? HAND_CARD_WIDTH : metrics.step)),
+            strip: slice.map((_, i) => (i === slice.length - 1 ? cardWidth : metrics.step)),
             step: metrics.step,
             width: metrics.width,
             height: metrics.height,

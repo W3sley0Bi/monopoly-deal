@@ -345,7 +345,7 @@ function TableBody() {
     // than a small one.
     const carried = dragLayer.dragging;
     const boardShown = roomyPlayerStation || boardOpen || Boolean(carried);
-    const handShown = handOpen || carried?.from === 'hand';
+    const handShown = roomyPlayerStation || handOpen || carried?.from === 'hand';
     const turnPlayer = g.players[g.current_turn % g.players.length];
     const carriedCard = carried?.card ?? null;
     const carriedTargets = carriedCard ? dropTargets(carriedCard, g.colors) : null;
@@ -611,15 +611,20 @@ function TableBody() {
             {/* ---- hand ---- */}
             <GlassPanel
                 targetRef={handTutorialRef}
-                style={[styles.handZone, roomyPlayerStation && styles.playerStationRoomy]}
+                withGlass={!roomyPlayerStation}
+                style={[
+                    styles.handZone,
+                    roomyPlayerStation && styles.playerStationRoomy,
+                    roomyPlayerStation && styles.handZoneRoomy,
+                ]}
                 onLayout={() => recordTutorialAnchor('hand', handTutorialRef.current)}
             >
                 {/* The hand folds like the board does, and a bare header row did
                     not read as something you could collapse. */}
-                <View style={styles.grabberRow} pointerEvents="none">
+                {!roomyPlayerStation ? <View style={styles.grabberRow} pointerEvents="none">
                     <View style={styles.grabber} />
-                </View>
-                <Pressable style={({ pressed }) => [styles.handHead, styles.foldHead, pressed && styles.foldHeadPressed]} accessibilityRole="button"
+                </View> : null}
+                {!roomyPlayerStation ? <Pressable style={({ pressed }) => [styles.handHead, styles.foldHead, pressed && styles.foldHeadPressed]} accessibilityRole="button"
                     accessibilityState={{ expanded: handShown }} disabled={!!carried || tutorialActive}
                     accessibilityLabel={t(handShown ? 'table.hand_fold' : 'table.hand_unfold')}
                     onPress={() => {
@@ -639,7 +644,7 @@ function TableBody() {
                         </Text>
                     ) : null}
                     <DisclosureIcon expanded={handShown} />
-                </Pressable>
+                </Pressable> : null}
 
 
                 <View
@@ -678,6 +683,7 @@ function TableBody() {
                         onAnchorLayout={() => requestAnimationFrame(() =>
                             recordTutorialAnchor('card', tutorialCardRef.current),
                         )}
+                        scale={roomyPlayerStation ? 1.18 : 1}
                     />
                     {hand.length === 0 ? <Text style={styles.handHint}>{t('table.hand_empty')}</Text> : null}
                 </View>
@@ -1397,6 +1403,13 @@ const styles = StyleSheet.create({
     },
     bankTotal: { fontFamily: displayFont(900), fontSize: 16, color: status.bank },
     handZone: { flexShrink: 0, gap: 2, paddingHorizontal: 4, paddingBottom: 4, paddingTop: 2, overflow: 'hidden' },
+    handZoneRoomy: {
+        borderWidth: 0,
+        borderRadius: 0,
+        boxShadow: 'none',
+        padding: 0,
+        overflow: 'visible',
+    },
     grabberRow: { alignItems: 'center', paddingTop: 2 },
     grabber: { width: 34, height: 4, borderRadius: 2, backgroundColor: '#d8fff033' },
     handFan: { flexShrink: 0, alignItems: 'center', gap: 3, paddingTop: 0, paddingBottom: 4, paddingHorizontal: 6 },

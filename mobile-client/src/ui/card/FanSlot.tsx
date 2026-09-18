@@ -19,6 +19,8 @@ interface Props {
     left: number;
     /** Index of the popped card in this row, or null when none is. */
     popped: number | null;
+    /** Roomy screens scale the fan geometry and its painted card together. */
+    scale?: number;
     children: ReactNode;
 }
 
@@ -33,10 +35,10 @@ interface Props {
  * It paints and nothing else: the touch that pops it belongs to a strip in the
  * layer above, so nothing here needs to be reachable.
  */
-export function FanSlot({ index, count, left, popped, children }: Props) {
+export function FanSlot({ index, count, left, popped, scale = 1, children }: Props) {
     const reduced = useReducedMotion();
     const isPopped = popped === index;
-    const nudge = fanNudge(index, popped);
+    const nudge = fanNudge(index, popped) * scale;
     const tilt = fanTilt(index, count);
 
     const animated = useAnimatedStyle(() => {
@@ -47,7 +49,7 @@ export function FanSlot({ index, count, left, popped, children }: Props) {
         return {
             transform: [
                 { translateX: to(nudge) },
-                { translateY: to(tilt.lift + (isPopped ? -FAN_HEADROOM : 0)) },
+                { translateY: to((tilt.lift + (isPopped ? -FAN_HEADROOM : 0)) * scale) },
                 // Inside the animated array, not beside it: a second `transform`
                 // on the same view replaces this one rather than adding to it.
                 { rotate: `${tilt.rotate}deg` },
@@ -61,15 +63,19 @@ export function FanSlot({ index, count, left, popped, children }: Props) {
             style={[
                 {
                     position: 'absolute',
-                    left: left + FAN_NUDGE,
-                    top: FAN_HEADROOM,
-                    width: HAND_CARD_WIDTH,
-                    height: HAND_CARD_HEIGHT,
+                    left: left + FAN_NUDGE * scale,
+                    top: FAN_HEADROOM * scale,
+                    width: HAND_CARD_WIDTH * scale,
+                    height: HAND_CARD_HEIGHT * scale,
                 },
                 animated,
             ]}
         >
-            {children}
+            <Animated.View
+                style={scale === 1 ? undefined : { transform: [{ scale }], transformOrigin: 'top left' }}
+            >
+                {children}
+            </Animated.View>
         </Animated.View>
     );
 }

@@ -51,6 +51,7 @@ const styles = StyleSheet.create({
         // keep their own shorter roomy height and sit against its bottom edge.
         // Mobile keeps the flexible stack defined by `base` above.
         height: 200,
+        marginBottom: -10,
         flexGrow: 0,
         flexShrink: 0,
         flexBasis: 0,

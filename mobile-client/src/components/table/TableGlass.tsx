@@ -36,7 +36,7 @@ export function GlassLayer({ radius = 19 }: { radius?: number }) {
 }
 
 /** The effect is behind the content and never participates in card gestures. */
-export function GlassPanel({ children, style, targetRef, ...props }: ViewProps & { targetRef?: Ref<View> }) {
+export function GlassPanel({ children, style, targetRef, withGlass = true, ...props }: ViewProps & { targetRef?: Ref<View>; withGlass?: boolean }) {
     const glass = useContext(GlassContext);
     // The blur is a clipped child, so it has to follow whatever radius the
     // caller set — at the panel default it squares off the corners of a
@@ -44,7 +44,7 @@ export function GlassPanel({ children, style, targetRef, ...props }: ViewProps &
     const flat = StyleSheet.flatten([styles.panel, style]);
     const corner = typeof flat.borderRadius === 'number' ? flat.borderRadius : 20;
     return <View ref={targetRef} {...props} style={[styles.panel, style, glass?.reduced && styles.solid]}>
-        <GlassLayer radius={corner - 1} />
+        {withGlass ? <GlassLayer radius={corner - 1} /> : null}
         {children}
     </View>;
 }

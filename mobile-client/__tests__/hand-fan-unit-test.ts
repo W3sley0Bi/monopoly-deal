@@ -49,6 +49,14 @@ describe('fan geometry', () => {
         expect(row.height).toBeGreaterThanOrEqual(HAND_CARD_HEIGHT + FAN_HEADROOM);
     });
 
+    it('scales a roomy hand without shrinking its touch geometry', () => {
+        const scale = 1.18;
+        const [row] = fanLayout(ids(3), PHONE, scale);
+        expect(row.strip[row.strip.length - 1]).toBeCloseTo(HAND_CARD_WIDTH * scale);
+        expect(row.height).toBeGreaterThanOrEqual((HAND_CARD_HEIGHT + FAN_HEADROOM) * scale);
+        expect(row.width).toBeLessThanOrEqual(PHONE);
+    });
+
     it('wraps a hand too wide to keep its cards readable', () => {
         const wide = fanLayout(ids(9), PHONE);
         const narrow = fanLayout(ids(9), 240);
