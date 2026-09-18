@@ -2,7 +2,7 @@ import { cleanup, render } from '@testing-library/react-native';
 import { afterEach, describe, expect, it } from '@jest/globals';
 import { StyleSheet, View, type ViewStyle } from 'react-native';
 
-import { PlayerBoardRow } from '../src/components/table/PlayerBoardRow';
+import { PlayerBoardRow, propertyDensityForLayout } from '../src/components/table/PlayerBoardRow';
 
 async function layout(roomy: boolean, expanded: boolean): Promise<ViewStyle> {
     const screen = await render(
@@ -42,10 +42,25 @@ describe('<PlayerBoardRow /> responsive layout', () => {
     it('uses the centered horizontal station layout on tablet and desktop', async () => {
         await expect(layout(true, true)).resolves.toMatchObject({
             alignSelf: 'center',
+            flexGrow: 0,
+            flexShrink: 0,
             flexDirection: 'row',
             gap: 8,
-            minHeight: 96,
+            height: 200,
+            minHeight: 200,
             width: '60%',
         });
+    });
+
+    it('keeps full-size property cards on roomy screens as sets are added', () => {
+        expect(propertyDensityForLayout(true, 4)).toBe('normal');
+        expect(propertyDensityForLayout(true, 5)).toBe('normal');
+        expect(propertyDensityForLayout(true, 8)).toBe('normal');
+    });
+
+    it('retains compact property densities on mobile', () => {
+        expect(propertyDensityForLayout(false, 4)).toBe('normal');
+        expect(propertyDensityForLayout(false, 5)).toBe('dense');
+        expect(propertyDensityForLayout(false, 7)).toBe('tight');
     });
 });

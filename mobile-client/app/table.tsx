@@ -25,7 +25,7 @@ import { ChatPanel } from '../src/components/table/ChatPanel';
 import { TutorialCoach, TutorialDone, type TutorialAnchors } from '../src/components/table/TutorialCoach';
 import { CountdownTimer } from '../src/components/table/CountdownTimer';
 import { StartWheel } from '../src/components/table/StartWheel';
-import { PlayerBoardRow } from '../src/components/table/PlayerBoardRow';
+import { PlayerBoardRow, propertyDensityForLayout } from '../src/components/table/PlayerBoardRow';
 import { GameSoundSettings } from '../src/components/settings/GameSoundSettings';
 import { useI18n } from '../src/i18n';
 import { useGameAudio } from '../src/game/useGameAudio';
@@ -291,6 +291,7 @@ function TableBody() {
           : 'bystander';
 
     const lastEvent = [...g.log].reverse().find((e) => e.key !== 'log.turn' && e.key !== 'log.tutorial_lesson');
+    const eventText = lastEvent ? tLog(lastEvent) : t('table.shared_space');
 
     function openCard(card: CardT) {
         const playable = canPlay && tutorialAllowsCard(card, tutorial) &&
@@ -406,22 +407,32 @@ function TableBody() {
                 (`game.MaxPlayers` is five), and they all belong on screen at
                 once. Scrolling hid a player behind a gesture, which is a poor
                 way to learn somebody just completed a set. */}
-            <View style={styles.opponentRail}>
-                {rivals.map((p) => (
-                    <View key={p.id} style={styles.railSlot}>
-                        <PlayerChip
-                            player={p}
-                            isTurn={g.players[g.current_turn % g.players.length]?.id === p.id}
-                            isTargeted={!!pending?.targets?.some((x) => !x.settled && x.player_id === p.id)}
-                            isOwner={p.id === room.owner_id}
-                            isYou={false}
-                            playBubbleText={said[p.id]?.text ?? null}
-                            onPress={() => {
-                                if (!tutorialActive) setSheetPlayer(p.id);
-                            }}
-                        />
-                    </View>
-                ))}
+            <View style={[styles.opponentRail, roomyPlayerStation && styles.opponentRailRoomy]}>
+                {rivals.map((p) => {
+                    const isTurn = g.players[g.current_turn % g.players.length]?.id === p.id;
+                    return (
+                        <View
+                            key={p.id}
+                            style={[
+                                styles.railSlot,
+                                roomyPlayerStation && styles.railSlotRoomy,
+                                roomyPlayerStation && isTurn && styles.railSlotTurnRoomy,
+                            ]}
+                        >
+                            <PlayerChip
+                                player={p}
+                                isTurn={isTurn}
+                                isTargeted={!!pending?.targets?.some((x) => !x.settled && x.player_id === p.id)}
+                                isOwner={p.id === room.owner_id}
+                                isYou={false}
+                                playBubbleText={said[p.id]?.text ?? null}
+                                onPress={() => {
+                                    if (!tutorialActive) setSheetPlayer(p.id);
+                                }}
+                            />
+                        </View>
+                    );
+                })}
             </View>
 
             {/* This space grows above the local sections, keeping them bottom-anchored. */}
@@ -437,9 +448,11 @@ function TableBody() {
             {/* Not interactive, and it sits directly over the far seats: left
                 tappable it swallowed every tap and long-press aimed at the two
                 piles across the table. */}
-            <Text pointerEvents="none" style={styles.event} numberOfLines={2} accessibilityLiveRegion="polite">
-                {lastEvent ? tLog(lastEvent) : t('table.shared_space')}
-            </Text>
+            {!roomyPlayerStation || !me ? (
+                <Text pointerEvents="none" style={styles.event} numberOfLines={2} accessibilityLiveRegion="polite">
+                    {eventText}
+                </Text>
+            ) : null}
             </View>
 
             {me ? <>
@@ -459,14 +472,36 @@ function TableBody() {
                         void Haptics.selectionAsync();
                         setBoardOpen(open => !open);
                     }}>
-                    <LabelCaps>{t('table.your_properties')}</LabelCaps>
-                {!boardShown ? <View style={[styles.swatches, styles.inlineSwatches]} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-                    {me?.sets.map(set => <View key={set.color} style={[styles.swatch, { backgroundColor: colorMeta(set.color).hex, flex: set.cards.length, opacity: set.complete ? 1 : 0.55 }]} />)}
-                </View> : null}
-                    <Text style={styles.progress}>
-                        {t('table.sets_progress', { done: me?.complete_sets ?? 0 })}
-                    </Text>
-                    {!roomyPlayerStation ? <DisclosureIcon expanded={boardShown} /> : null}
+                    {roomyPlayerStation ? (
+                        <>
+                            <View style={styles.boardHeaderLabelRoomy}>
+                                <LabelCaps>{t('table.your_properties')}</LabelCaps>
+                            </View>
+                            <Text
+                                pointerEvents="none"
+                                style={[styles.event, styles.boardEvent]}
+                                numberOfLines={1}
+                                ellipsizeMode="tail"
+                                accessibilityLiveRegion="polite"
+                            >
+                                {eventText}
+                            </Text>
+                            <Text style={[styles.progress, styles.boardProgressRoomy]}>
+                                {t('table.sets_progress', { done: me?.complete_sets ?? 0 })}
+                            </Text>
+                        </>
+                    ) : (
+                        <>
+                            <LabelCaps>{t('table.your_properties')}</LabelCaps>
+                            {!boardShown ? <View style={[styles.swatches, styles.inlineSwatches]} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+                                {me?.sets.map(set => <View key={set.color} style={[styles.swatch, { backgroundColor: colorMeta(set.color).hex, flex: set.cards.length, opacity: set.complete ? 1 : 0.55 }]} />)}
+                            </View> : null}
+                            <Text style={styles.progress}>
+                                {t('table.sets_progress', { done: me?.complete_sets ?? 0 })}
+                            </Text>
+                            <DisclosureIcon expanded={boardShown} />
+                        </>
+                    )}
                 </Pressable>
                 <DropZone
                     id="properties"
@@ -490,7 +525,7 @@ function TableBody() {
                     <PropertySets
                         sets={me?.sets ?? []}
                         size="propertyZone"
-                        density={(me?.sets.length ?? 0) > 6 ? 'tight' : (me?.sets.length ?? 0) > 4 ? 'dense' : 'normal'}
+                        density={propertyDensityForLayout(roomyPlayerStation, me?.sets.length ?? 0)}
                         onCardPress={
                             canPlay && !tutorial
                                 ? (card, set) => {
@@ -547,25 +582,29 @@ function TableBody() {
                         </Pressable>
                     </DropZone>
 
-                    <DropZone
-                        id="action"
-                        targetRef={actionTutorialRef}
-                        glass
-                        active={actionActive}
-                        grow={roomyPlayerStation ? 1 : growFor(actionActive)}
-                        hint={t('table.play_it')}
-                        onDrop={(card) => playAction(card)}
-                        onLayout={() => recordTutorialAnchor('action', actionTutorialRef.current)}
-                        style={styles.zoneTile}
-                    >
-                        <View style={styles.zoneHead}>
-                            <ZoneGlyph name="sparkles" fallback="✦" />
-                            <View style={styles.zoneText}>
-                                <LabelCaps>{t('table.action_space')}</LabelCaps>
-                                <Text style={styles.zoneMeta} numberOfLines={1}>{t('table.action_hint')}</Text>
+                    {/* Action is intentionally hidden on roomy screens for now.
+                        Phones retain the native drop target and its mechanics. */}
+                    {!roomyPlayerStation ? (
+                        <DropZone
+                            id="action"
+                            targetRef={actionTutorialRef}
+                            glass
+                            active={actionActive}
+                            grow={growFor(actionActive)}
+                            hint={t('table.play_it')}
+                            onDrop={(card) => playAction(card)}
+                            onLayout={() => recordTutorialAnchor('action', actionTutorialRef.current)}
+                            style={styles.zoneTile}
+                        >
+                            <View style={styles.zoneHead}>
+                                <ZoneGlyph name="sparkles" fallback="✦" />
+                                <View style={styles.zoneText}>
+                                    <LabelCaps>{t('table.action_space')}</LabelCaps>
+                                    <Text style={styles.zoneMeta} numberOfLines={1}>{t('table.action_hint')}</Text>
+                                </View>
                             </View>
-                        </View>
-                    </DropZone>
+                        </DropZone>
+                    ) : null}
                 </View>
             </PlayerBoardRow>
 
@@ -1248,9 +1287,14 @@ const styles = StyleSheet.create({
     codeBig: { fontFamily: displayFont(900), fontSize: 20, color: brand.inviteCode, letterSpacing: ls(0.1, 20) },
     notice: { fontFamily: uiFont(700), fontSize: 12, color: status.danger },
     opponentRail: { flexGrow: 0, flexShrink: 0, flexDirection: 'row', gap: 5 },
-    // Equal shares, and `minWidth: 0` so a long name shrinks the slot instead
-    // of pushing its neighbours off the screen.
+    opponentRailRoomy: { width: '60%', alignSelf: 'center' },
+    // Equal shares on mobile, and `minWidth: 0` so a long name shrinks the slot
+    // instead of pushing its neighbours off the screen.
     railSlot: { flex: 1, minWidth: 0 },
+    railSlotRoomy: { flexGrow: 1, flexBasis: 0 },
+    // The active seat carries the turn context, so it earns more room without
+    // making the whole opponent rail dominate a desktop or tablet.
+    railSlotTurnRoomy: { flexGrow: 1.4 },
     // Gives up height faster than your own board does: when the tray opens, the
     // shared table is the part you are least likely to be reading.
     // Longhands for the same reason as `board`: `flex: 1` sets a shrink of its
@@ -1306,8 +1350,20 @@ const styles = StyleSheet.create({
     // merged style holding both the shorthand and its parts has no defined
     // winner, and the two platforms did not pick the same one.
     board: { flexGrow: 1, flexShrink: 1, flexBasis: 0, padding: 4, gap: 6, minHeight: 96, overflow: 'hidden' },
-    boardRoomy: { minWidth: 0 },
+    boardRoomy: { minWidth: 0, minHeight: 0 },
     boardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    // On roomy screens the current action shares the Properties header rather
+    // than spending a separate line over the felt. The three header items use
+    // the same row, so the message cannot overlap the label or set count.
+    boardHeaderLabelRoomy: { flexShrink: 0 },
+    boardEvent: {
+        flex: 1,
+        minWidth: 0,
+        paddingVertical: 3,
+        fontSize: 11,
+        lineHeight: 14,
+    },
+    boardProgressRoomy: { flexShrink: 0 },
     boardScroll: { flex: 1 },
     progress: { fontFamily: uiFont(700), fontSize: 11, color: ink.muted60 },
     // No backgroundColor here: the zone animates its own, and anything set on
@@ -1321,7 +1377,7 @@ const styles = StyleSheet.create({
         overflow: 'hidden',
     },
     dropRow: { flexDirection: 'row', gap: 6 },
-    dropRowRoomy: { width: '40%', height: '100%', flexShrink: 0 },
+    dropRowRoomy: { width: '20%', height: 112, flexShrink: 0, alignSelf: 'flex-end' },
     // The two tiles read as the same material as the board and hand panels, so
     // their contents follow the same head geometry as the fold headers.
     zoneTile: { minHeight: 56, minWidth: 104, alignItems: 'stretch', justifyContent: 'center', paddingHorizontal: 10, paddingVertical: 6 },

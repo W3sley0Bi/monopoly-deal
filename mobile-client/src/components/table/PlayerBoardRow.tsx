@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { StyleSheet, View, type LayoutChangeEvent } from 'react-native';
+import type { Density } from '../../../lib/contracts';
 
 type PlayerBoardRowProps = {
     children: ReactNode;
@@ -7,6 +8,13 @@ type PlayerBoardRowProps = {
     roomy: boolean;
     onLayout?: (event: LayoutChangeEvent) => void;
 };
+
+export function propertyDensityForLayout(roomy: boolean, setCount: number): Density {
+    if (roomy) return 'normal';
+    if (setCount > 6) return 'tight';
+    if (setCount > 4) return 'dense';
+    return 'normal';
+}
 
 /** Keeps the local board stack spacious on phones and horizontal on roomy screens. */
 export function PlayerBoardRow({ children, expanded, roomy, onLayout }: PlayerBoardRowProps) {
@@ -39,8 +47,14 @@ const styles = StyleSheet.create({
     roomy: {
         width: '60%',
         alignSelf: 'center',
+        // The wrapper follows the taller Properties panel. Bank and Action
+        // keep their own shorter roomy height and sit against its bottom edge.
+        // Mobile keeps the flexible stack defined by `base` above.
+        height: 200,
+        flexGrow: 0,
+        flexShrink: 0,
         flexBasis: 0,
-        minHeight: 96,
+        minHeight: 200,
         flexDirection: 'row',
         gap: 8,
     },
