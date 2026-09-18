@@ -168,12 +168,10 @@ const DECK_H = 43;
 const PROMPT_W = 120;
 
 /**
- * A play mat, not a card table. Green baize is the visual language of a casino
- * and this is a game children play, so the mat is a blueberry board-game
- * surface: still dark enough for the glass panels, and red card backs and brass
- * accents read louder on it than they did on teal.
+ * A lively emerald board-game felt surface: inviting, high-contrast,
+ * allowing property colors, red card backs, and brass accents to pop.
  */
-const MAT = ['#4a5893', '#5b6aa6', '#2f3a69'] as const;
+const MAT = ['#1b8a6b', '#24a37f', '#12634d'] as const;
 
 /** The travelling turn lamp: three dots, the plays left in the current turn. */
 const MARKER_W = 34;
@@ -193,7 +191,7 @@ function animateMarker(target: number, animate: boolean) {
 const RIM = 12;
 
 /** The room the table stands in: darker, so the mat reads as a lit surface. */
-const ROOM = ['#151a33', '#0e1226'] as const;
+const ROOM = ['#0a1e1d', '#051211'] as const;
 
 /**
  * How much smaller the far side of the table is than the near side. Shallow
@@ -613,11 +611,11 @@ export function FeltTable({
                 {/* The table's thickness, showing under the near edge: what
                     makes it a slab standing in the room rather than a shape
                     painted on the wall behind it. */}
-                <Polygon points={tableOval.apron} fill="#1a2046" />
-                <Polygon points={tableOval.top} fill="url(#felt-mat)" stroke="#c8d2ff42" strokeWidth={2} />
+                <Polygon points={tableOval.apron} fill="#0d3a30" />
+                <Polygon points={tableOval.top} fill="url(#felt-mat)" stroke="#8eefd266" strokeWidth={2.5} />
                 {/* The rim line, a hair inside the edge — the eye takes the
                     double edge as a moulded lip. */}
-                <Polygon points={tableOval.rim} fill="none" stroke="#ccd5ff40" strokeWidth={1} />
+                <Polygon points={tableOval.rim} fill="none" stroke="#a7f3d059" strokeWidth={1.5} />
             </Svg>
         ) : (
             <LinearGradient
@@ -773,8 +771,8 @@ export function FeltTable({
                                 top: u(Math.floor(slot / COLS) * ROW),
                                 width: u(STACK_W),
                                 height: u(STACK_H),
-                                borderWidth: u(0.75),
-                                borderRadius: u(2),
+                                borderWidth: Math.max(1, u(1.25)),
+                                borderRadius: u(2.5),
                             },
                             !player && styles.emptyGuide,
                             player?.id === hoveredSeatId && styles.guideHovered,
@@ -785,8 +783,8 @@ export function FeltTable({
                         top: u(BANK_VERTICAL_INSET),
                         width: u(BANK_W),
                         height: u(PILE_H - BANK_VERTICAL_INSET * 2),
-                        borderWidth: u(0.75),
-                        borderRadius: u(2),
+                        borderWidth: Math.max(1, u(1.25)),
+                        borderRadius: u(2.5),
                     }, !player && styles.emptyGuide, player?.id === hoveredSeatId && styles.guideHovered]} />
 
                     {assignedProperties.map((color, slot) => {
@@ -882,17 +880,17 @@ const styles = StyleSheet.create({
         right: RIM,
         bottom: RIM,
         left: RIM,
-        borderWidth: 1,
-        borderColor: '#ccd5ff40',
+        borderWidth: 1.5,
+        borderColor: '#a7f3d059',
     },
     mat: {
         position: 'absolute',
         top: 4,
-        borderWidth: 2,
-        borderColor: '#c8d2ff42',
+        borderWidth: 2.5,
+        borderColor: '#8eefd266',
         // The rim catches light from above, which is most of what says the
         // table has an edge rather than being a painted background.
-        boxShadow: '0px 10px 26px #05081c8f, inset 0px 2px 0px #e3e9ff2e',
+        boxShadow: '0px 10px 26px #0314118f, inset 0px 2px 0px #8eefd238',
     },
     // Every seat owns this same mat. Only its rotation and depth change.
     seat: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
@@ -900,15 +898,15 @@ const styles = StyleSheet.create({
         position: 'absolute',
         width: STACK_W,
         height: STACK_H,
-        borderWidth: 0.75,
-        borderColor: '#dbe2ff24',
-        borderRadius: 2,
-        backgroundColor: '#dbe2ff08',
+        borderWidth: 1.25,
+        borderColor: '#ffffff59',
+        borderRadius: 2.5,
+        backgroundColor: '#ffffff12',
     },
     guideHovered: {
-        borderColor: '#ffffff66',
-        backgroundColor: '#ffffff1a',
-        boxShadow: '0px 0px 8px #ffffff33',
+        borderColor: '#ffffff',
+        backgroundColor: '#ffffff29',
+        boxShadow: '0px 0px 8px #8eefd280',
     },
     bankGuide: {
         position: 'absolute',
@@ -916,12 +914,12 @@ const styles = StyleSheet.create({
         top: BANK_VERTICAL_INSET,
         width: BANK_W,
         height: PILE_H - BANK_VERTICAL_INSET * 2,
-        borderWidth: 0.75,
-        borderColor: '#e6cd7330',
-        borderRadius: 2,
-        backgroundColor: '#e6cd7308',
+        borderWidth: 1.25,
+        borderColor: '#ffd98a73',
+        borderRadius: 2.5,
+        backgroundColor: '#ffd98a14',
     },
-    emptyGuide: { opacity: 0.38 },
+    emptyGuide: { opacity: 0.45 },
     card: { position: 'absolute', width: CARD_W, height: CARD_H, backgroundColor: '#f7f2df', borderWidth: 0.75, borderRadius: 2, overflow: 'hidden', boxShadow: '0px 1px 2px #12173866' },
     value: { fontFamily: uiFont(900), fontSize: 8, lineHeight: 11, color: '#183139', textAlign: 'center' },
     // The two centre piles lie on the table like everything else, so they are
@@ -961,7 +959,7 @@ const styles = StyleSheet.create({
         borderRadius: 4,
         borderWidth: 1,
         borderStyle: 'dashed',
-        borderColor: '#d5dcff26',
+        borderColor: '#a7f3d059',
     },
     /*
      * Pinned under the pile, not pushed down by it.
@@ -978,7 +976,7 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         fontFamily: uiFont(800),
         fontSize: 10,
-        color: '#dbe2ffb8',
+        color: '#e6fffacc',
     },
     /**
      * Above the pile, not below it: the count already owns the space under the
