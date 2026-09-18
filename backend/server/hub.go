@@ -1,6 +1,8 @@
 package server
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"math/rand/v2"
@@ -24,10 +26,21 @@ const emptyRoomTTL = 90 * time.Second
 // shorten it so a whole robot turn fits inside a read deadline.
 var botMoveDelay = 1100 * time.Millisecond
 
+// WebSocket keepalive and per-connection writer configuration.
+const (
+	pingInterval = 30 * time.Second
+	pongWait     = 45 * time.Second
+	writeWait    = 10 * time.Second
+	sendChSize   = 16
+)
+
 // Client is one websocket connection.
 type Client struct {
 	conn *websocket.Conn
-	wmu  sync.Mutex
+
+	sendCh    chan []byte
+	done      chan struct{}
+	closeOnce sync.Once
 
 	playerID string
 	name     string
@@ -35,19 +48,66 @@ type Client struct {
 }
 
 func (c *Client) send(msg ServerMessage) error {
-	c.wmu.Lock()
-	defer c.wmu.Unlock()
-	return c.conn.WriteJSON(msg)
+	b, err := json.Marshal(msg)
+	if err != nil {
+		return err
+	}
+	select {
+	case c.sendCh <- b:
+		return nil
+	case <-c.done:
+		return errors.New("client stopped")
+	default:
+		c.stop()
+		return errors.New("client write channel full")
+	}
+}
+
+func (c *Client) stop() {
+	c.closeOnce.Do(func() {
+		close(c.done)
+		c.conn.Close()
+	})
+}
+
+func (c *Client) writePump() {
+	ticker := time.NewTicker(pingInterval)
+	defer func() {
+		ticker.Stop()
+		c.stop()
+	}()
+
+	for {
+		select {
+		case b, ok := <-c.sendCh:
+			if !ok {
+				return
+			}
+			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
+			if err := c.conn.WriteMessage(websocket.TextMessage, b); err != nil {
+				return
+			}
+		case <-ticker.C:
+			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
+			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				return
+			}
+		case <-c.done:
+			return
+		}
+	}
 }
 
 // Hub owns every room and connection. One mutex guards all of it; the game
 // logic is cheap and this keeps the state impossible to tear.
 type Hub struct {
-	mu      sync.Mutex
-	rooms   map[string]*Room
-	order   []string
-	clients map[*Client]struct{}
-	stop    chan struct{}
+	mu       sync.Mutex
+	rooms    map[string]*Room
+	order    []string
+	clients  map[*Client]struct{}
+	stop     chan struct{}
+	stopped  chan struct{}
+	stopOnce sync.Once
 	// pending holds direct messages queued while the lock is held.
 	pending []outbound
 }
@@ -57,13 +117,17 @@ func NewHub() *Hub {
 		rooms:   map[string]*Room{},
 		clients: map[*Client]struct{}{},
 		stop:    make(chan struct{}),
+		stopped: make(chan struct{}),
 	}
 	go h.loop()
 	return h
 }
 
-// Close stops the background ticker.
-func (h *Hub) Close() { close(h.stop) }
+// Close stops the background ticker and waits for its worker to exit.
+func (h *Hub) Close() {
+	h.stopOnce.Do(func() { close(h.stop) })
+	<-h.stopped
+}
 
 // outbound is one pending websocket write.
 type outbound struct {
@@ -73,41 +137,54 @@ type outbound struct {
 
 func (h *Hub) loop() {
 	t := time.NewTicker(500 * time.Millisecond)
-	defer t.Stop()
+	defer func() {
+		t.Stop()
+		close(h.stopped)
+	}()
 	for {
 		select {
 		case <-h.stop:
 			return
 		case now := <-t.C:
 			h.mu.Lock()
-			changed := false
+			beforeHome := h.homeFingerprintLocked()
+			var batch []outbound
+			changedRooms := make(map[string]struct{})
+
 			for _, id := range append([]string{}, h.order...) {
 				r := h.rooms[id]
 				if r == nil {
 					continue
 				}
+
 				if r.Game.Tick(now) {
 					r.absorbRequests()
-					changed = true
+					changedRooms[id] = struct{}{}
 				}
 				if h.stepBotsLocked(r, now) {
-					changed = true
+					changedRooms[id] = struct{}{}
 				}
 				if h.roomClientCountLocked(id) == 0 {
 					if r.emptySince.IsZero() {
 						r.emptySince = now
 					} else if now.Sub(r.emptySince) > emptyRoomTTL {
 						h.deleteRoomLocked(id)
-						changed = true
+						continue
 					}
 				} else {
 					r.emptySince = time.Time{}
 				}
 			}
-			var batch []outbound
-			if changed {
-				batch = h.snapshotLocked()
+
+			for id := range changedRooms {
+				if r := h.rooms[id]; r != nil {
+					batch = append(batch, h.broadcastRoomLocked(r)...)
+				}
 			}
+			if beforeHome != h.homeFingerprintLocked() {
+				batch = append(batch, h.broadcastHomeLocked()...)
+			}
+			batch = append(batch, h.flushPendingLocked()...)
 			h.mu.Unlock()
 			deliver(batch)
 		}
@@ -198,22 +275,45 @@ func (h *Hub) HandleConnections(w http.ResponseWriter, r *http.Request) {
 		log.Printf("upgrade failed: %v", err)
 		return
 	}
-	c := &Client{conn: conn}
+	c := &Client{
+		conn:   conn,
+		sendCh: make(chan []byte, sendChSize),
+		done:   make(chan struct{}),
+	}
+
+	conn.SetReadLimit(64 << 10)
+	conn.SetReadDeadline(time.Now().Add(pongWait))
+	conn.SetPongHandler(func(string) error {
+		conn.SetReadDeadline(time.Now().Add(pongWait))
+		return nil
+	})
+
+	go c.writePump()
 
 	h.mu.Lock()
 	h.clients[c] = struct{}{}
-	batch := h.snapshotLocked()
+	batch := []outbound{h.unicastLocked(c)}
 	h.mu.Unlock()
 	deliver(batch)
 
 	defer func() {
 		h.mu.Lock()
+		beforeHome := h.homeFingerprintLocked()
 		delete(h.clients, c)
+		roomID := c.roomID
 		h.detachLocked(c)
-		batch := h.snapshotLocked()
+		batch := h.flushPendingLocked()
+		if roomID != "" {
+			if r := h.rooms[roomID]; r != nil {
+				batch = append(batch, h.broadcastRoomLocked(r)...)
+			}
+		}
+		if beforeHome != h.homeFingerprintLocked() {
+			batch = append(batch, h.broadcastHomeLocked()...)
+		}
 		h.mu.Unlock()
 		deliver(batch)
-		conn.Close()
+		c.stop()
 	}()
 
 	for {
@@ -267,6 +367,11 @@ func (h *Hub) detachLocked(c *Client) {
 
 func (h *Hub) handle(c *Client, msg ClientMessage) {
 	h.mu.Lock()
+	beforeHome := h.homeFingerprintLocked()
+	previousRooms := make(map[*Client]string, len(h.clients))
+	for client := range h.clients {
+		previousRooms[client] = client.roomID
+	}
 
 	if c.playerID == "" && msg.PlayerID != "" {
 		c.playerID = msg.PlayerID
@@ -276,12 +381,14 @@ func (h *Hub) handle(c *Client, msg ClientMessage) {
 	}
 	if c.playerID == "" {
 		h.mu.Unlock()
-		c.send(errorMessage(game.NewFault("err.missing_player_id", "missing player id")))
+		_ = c.send(errorMessage(game.NewFault("err.missing_player_id", "missing player id")))
 		return
 	}
 
 	var err error
 	var notice ServerMessage
+
+	oldRoomID := c.roomID
 
 	switch msg.Type {
 	case MsgHello:
@@ -303,20 +410,52 @@ func (h *Hub) handle(c *Client, msg ClientMessage) {
 		err = h.handleRoomLocked(c, msg)
 	}
 
+	var batch []outbound
 	if err == nil {
 		if r := h.rooms[c.roomID]; r != nil {
 			r.Game.PostAction()
 			r.absorbRequests()
 			r.ensureOwner()
 		}
+
+		batch = h.flushPendingLocked()
+		homeChanged := beforeHome != h.homeFingerprintLocked()
+		if homeChanged {
+			batch = append(batch, h.broadcastHomeLocked()...)
+		}
+
+		if msg.Type == MsgHello {
+			batch = append(batch, h.unicastLocked(c))
+		} else {
+			affected := map[string]struct{}{}
+			if oldRoomID != "" {
+				affected[oldRoomID] = struct{}{}
+			}
+			if c.roomID != "" {
+				affected[c.roomID] = struct{}{}
+			}
+			for id := range affected {
+				if r := h.rooms[id]; r != nil {
+					batch = append(batch, h.broadcastRoomLocked(r)...)
+				}
+			}
+			if !homeChanged {
+				for client, oldID := range previousRooms {
+					if oldID != "" && client.roomID == "" {
+						batch = append(batch, h.unicastLocked(client))
+					}
+				}
+			}
+		}
+	} else {
+		batch = append(h.flushPendingLocked(), h.unicastLocked(c))
 	}
-	batch := h.snapshotLocked()
 	h.mu.Unlock()
 
 	if err != nil {
-		c.send(errorMessage(err))
+		_ = c.send(errorMessage(err))
 	} else if notice.Type != "" {
-		c.send(notice)
+		_ = c.send(notice)
 	}
 	deliver(batch)
 }
@@ -618,33 +757,80 @@ func (h *Hub) kickLocked(r *Room, targetID string) error {
 	return nil
 }
 
-// snapshotLocked builds one message per connected client.
-func (h *Hub) snapshotLocked() []outbound {
+func (h *Hub) broadcastRoomLocked(r *Room) []outbound {
+	var batch []outbound
+	for c := range h.clients {
+		if c.roomID == r.ID {
+			batch = append(batch, outbound{c, ServerMessage{Type: "room", Payload: r.view(c.playerID)}})
+		}
+	}
+	return batch
+}
+
+func (h *Hub) broadcastHomeLocked() []outbound {
 	home := h.homeRoomsLocked()
 	live := h.roomClientCountsLocked()
-	batch := make([]outbound, 0, len(h.clients)+len(h.pending))
-	batch = append(batch, h.pending...)
-	h.pending = nil
+	batch := make([]outbound, 0, len(h.clients))
 	for c := range h.clients {
-		if r := h.rooms[c.roomID]; r != nil {
-			batch = append(batch, outbound{c, ServerMessage{Type: "room", Payload: r.view(c.playerID)}})
-			continue
+		if c.roomID == "" {
+			rooms := make([]RoomSummary, 0, len(home))
+			for _, r := range home {
+				rooms = append(rooms, r.summary(c.playerID, live[r.ID]))
+			}
+			batch = append(batch, outbound{c, ServerMessage{Type: "home", Payload: HomeView{
+				You:            c.playerID,
+				Name:           c.name,
+				Rooms:          rooms,
+				Modes:          modeInfos(),
+				TurnOptions:    game.TurnSecondOptions,
+				RespondOptions: game.RespondSecondOptions,
+				Difficulties:   game.Difficulties,
+				MaxPlayers:     game.MaxPlayers,
+			}}})
 		}
-		rooms := make([]RoomSummary, 0, len(home))
-		for _, r := range home {
-			rooms = append(rooms, r.summary(c.playerID, live[r.ID]))
-		}
-		batch = append(batch, outbound{c, ServerMessage{Type: "home", Payload: HomeView{
-			You:            c.playerID,
-			Name:           c.name,
-			Rooms:          rooms,
-			Modes:          modeInfos(),
-			TurnOptions:    game.TurnSecondOptions,
-			RespondOptions: game.RespondSecondOptions,
-			Difficulties:   game.Difficulties,
-			MaxPlayers:     game.MaxPlayers,
-		}}})
 	}
+	return batch
+}
+
+// homeFingerprintLocked captures exactly the public room-summary data visible
+// to a lobby client. It prevents in-room-only changes (chat, hands, timers)
+// from waking every client on the home screen.
+func (h *Hub) homeFingerprintLocked() string {
+	home := h.homeRoomsLocked()
+	live := h.roomClientCountsLocked()
+	rooms := make([]RoomSummary, 0, len(home))
+	for _, r := range home {
+		rooms = append(rooms, r.summary("", live[r.ID]))
+	}
+	b, _ := json.Marshal(rooms)
+	return string(b)
+}
+
+func (h *Hub) unicastLocked(c *Client) outbound {
+	if r := h.rooms[c.roomID]; r != nil {
+		return outbound{c, ServerMessage{Type: "room", Payload: r.view(c.playerID)}}
+	}
+	home := h.homeRoomsLocked()
+	live := h.roomClientCountsLocked()
+	rooms := make([]RoomSummary, 0, len(home))
+	for _, r := range home {
+		rooms = append(rooms, r.summary(c.playerID, live[r.ID]))
+	}
+	return outbound{c, ServerMessage{Type: "home", Payload: HomeView{
+		You:            c.playerID,
+		Name:           c.name,
+		Rooms:          rooms,
+		Modes:          modeInfos(),
+		TurnOptions:    game.TurnSecondOptions,
+		RespondOptions: game.RespondSecondOptions,
+		Difficulties:   game.Difficulties,
+		MaxPlayers:     game.MaxPlayers,
+	}}}
+}
+
+func (h *Hub) flushPendingLocked() []outbound {
+	batch := h.pending
+	h.pending = nil
 	return batch
 }
 
@@ -664,7 +850,7 @@ func (h *Hub) homeRoomsLocked() []*Room {
 func deliver(batch []outbound) {
 	for _, b := range batch {
 		if err := b.c.send(b.msg); err != nil {
-			b.c.conn.Close()
+			b.c.stop()
 		}
 	}
 }

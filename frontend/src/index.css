@@ -702,13 +702,6 @@ select:focus-visible {
     font-weight: 900;
     box-shadow: 0 2px 0 oklch(10% 0.02 211 / 0.4);
 }
-.seat-video {
-    position: absolute;
-    top: 0;
-    right: -70px;
-    width: 66px;
-    height: 50px;
-}
 .table-center {
     position: absolute;
     display: flex;
@@ -1806,9 +1799,6 @@ select:focus-visible {
     letter-spacing: -0.04em;
 }
 @media (max-width: 599px) {
-    .compact-room .call-join-label {
-        display: none;
-    }
     .compact-room .game-header h1 {
         max-width: 120px;
         font-size: 12px;
@@ -2238,145 +2228,6 @@ select:focus-visible {
     .seats-4 .opponent-seat:nth-child(2) { right: 18.5%; }
 }
 
-/* Video belongs to the table, while call audio stays mounted independently. */
-.call-toolbar { display: flex; align-items: center; gap: 4px; }
-.call-toolbar .btn { min-height: 36px; padding: 6px 10px; font-size: 12px; }
-.call-toolbar .call-icon { width: 36px; padding: 4px; }
-.call-live > span:first-child { color: #71e6b5; font-size: 10px; }
-.call-count { border-radius: 50%; background: #ffffff16; min-width: 19px; text-align: center; }
-.call-waiting .call-count { background: oklch(72% .16 165 / .3); color: oklch(92% .09 165); box-shadow: 0 0 0 1px oklch(72% .16 165 / .55); animation: call-invite 2.6s ease-in-out infinite; }
-@keyframes call-invite {
-    0%, 62%, 100% { box-shadow: 0 0 0 1px oklch(72% .16 165 / .55); }
-    78% { box-shadow: 0 0 0 1px oklch(72% .16 165 / .55), 0 0 12px 2px oklch(72% .16 165 / .45); }
-}
-/* Who can hear you: one dot on the avatar, everywhere a player is drawn. */
-.avatar-in-call::after {
-    content: '';
-    position: absolute;
-    right: -1px;
-    bottom: -1px;
-    width: 34%;
-    height: 34%;
-    min-width: 8px;
-    min-height: 8px;
-    border-radius: 50%;
-    background: oklch(78% .16 165);
-    box-shadow: 0 0 0 2px oklch(22% .035 211), 0 0 9px oklch(78% .16 165 / .75);
-    animation: call-dot 2.4s ease-in-out infinite;
-}
-@keyframes call-dot {
-    0%, 100% { transform: scale(1); }
-    50% { transform: scale(1.16); }
-}
-.call-tag {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    border-radius: 999px;
-    background: oklch(72% .16 165 / .18);
-    padding: 1px 7px;
-    color: oklch(88% .1 165);
-    font-size: 9px;
-    font-weight: 800;
-    letter-spacing: .06em;
-    text-transform: uppercase;
-    white-space: nowrap;
-}
-.call-tag::before {
-    content: '';
-    width: 5px;
-    height: 5px;
-    border-radius: 50%;
-    background: oklch(78% .16 165);
-}
-@media (prefers-reduced-motion: reduce) {
-    .avatar-in-call::after, .call-waiting .call-count { animation: none; }
-}
-.call-disabled { background: #89383d80 !important; border-color: #e9939270 !important; }
-.call-video { position: relative; aspect-ratio: 16 / 9; min-width: 0; overflow: hidden; border-radius: 12px; background: radial-gradient(ellipse at 50% 20%, #365b62, #142b35); border: 1px solid #ffffff29; box-shadow: 0 5px 14px #0004; }
-.call-video video { display: block; width: 100%; height: 100%; object-fit: cover; }
-.call-mirrored { transform: scaleX(-1); }
-.call-avatar { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; padding-bottom: 18px; }
-.call-avatar > span:last-child { font-size: 10px; color: #d2e1e5; }
-.call-video-caption { position: absolute; inset: auto 0 0; display: flex; justify-content: space-between; align-items: center; padding: 13px 9px 6px; background: linear-gradient(transparent, #000c); font-size: 12px; font-weight: 650; }
-.call-video-caption > span:first-child { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.call-expand { position: absolute; top: 5px; right: 5px; width: 30px; height: 30px; border-radius: 8px; background: #071c27bb; color: white; opacity: .75; }
-.call-expand:hover, .call-expand:focus-visible { opacity: 1; background: #183f4b; }
-.call-stage { z-index: 15; border: 1px solid #ffffff24; border-radius: 14px; background: #102a30f2; box-shadow: 0 8px 24px #0003; padding: 7px; min-width: 0; }
-.call-stage-header { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 0 3px 4px; font-size: 11px; color: #c8d8d9; }
-.call-stage-header > span { display: flex; align-items: center; gap: 7px; }
-.call-stage-header i { width: 6px; height: 6px; border-radius: 50%; background: #75e7b5; }
-.call-stage-header button { width: 30px; height: 28px; border-radius: 7px; font-size: 17px; }
-.call-stage-header button:hover { background: #ffffff18; }
-.call-stage-tiles { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: thin; }
-.call-stage-tiles > .call-video { width: 184px; flex: 0 0 184px; }
-.call-strip { margin: 0 8px 8px; flex-shrink: 0; }
-.call-corner { position: fixed; right: 16px; top: 86px; width: 226px; max-height: 38vh; overflow-y: auto; }
-.call-corner-left { right: auto; left: 16px; }
-.call-corner .call-stage-tiles { flex-direction: column; overflow: visible; }
-.call-corner .call-video { width: 100%; flex: none; }
-.call-collapsed .call-stage-header { padding-bottom: 0; }
-.call-settings { display: grid; gap: 22px; font-size: 14px; }
-.call-settings fieldset { min-width: 0; border-top: 1px solid #ffffff1c; }
-.call-settings legend { padding-right: 12px; margin-bottom: 12px; font-weight: 700; color: #ead7b7; }
-.call-preview-row { display: grid; grid-template-columns: 210px 1fr; align-items: center; gap: 20px; }
-.call-preview-row p { margin-bottom: 10px; }
-.call-layout-options { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-.call-layout-options button { display: flex; flex-direction: column; align-items: center; gap: 7px; border: 1px solid #ffffff28; border-radius: 10px; padding: 10px 5px; background: #ffffff05; font-size: 12px; }
-.call-layout-options button > span { font-size: 25px; line-height: 1; }
-.call-layout-options button.selected { border-color: #eed39b; color: #ffe0a6; background: #ddbb701c; }
-.call-help { margin: 9px 0 0; font-size: 12px; line-height: 1.5; color: #bed0d1; }
-.call-device-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.call-device-grid label { display: flex; flex-direction: column; min-width: 0; gap: 6px; }
-.call-device-grid select { width: 100%; min-height: 40px; border: 1px solid #ffffff30; background: #102a30; color: #fff; border-radius: 8px; padding: 7px; font-size: 13px; }
-.call-checks { display: grid; gap: 12px; }
-.call-checks label { display: flex; align-items: center; gap: 10px; min-height: 28px; }
-.call-checks input { accent-color: #e3bf7b; }
-.call-checks input[type=checkbox] { width: 18px; height: 18px; flex-shrink: 0; }
-.call-volume { flex-wrap: wrap; }
-.call-volume input { flex: 1; min-width: 90px; }
-.call-volume output { width: 38px; font-variant-numeric: tabular-nums; }
-.call-error { border: 1px solid #e9888880; padding: 12px; color: #ffcdcd; background: #80373a40; border-radius: 8px; }
-.call-error-short { color: #ffb6af; font-size: 11px; text-decoration: underline; }
-.call-gallery { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; }
-.call-gallery-small { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin-top: 14px; }
-.call-focused > .call-video { max-height: 50vh; margin: auto; }
-.call-focused > button { margin-top: 8px; }
-.call-person-mute { font-size: 12px; padding: 8px 4px; text-align: left; color: #cbdadb; }
-.call-person-mute[aria-pressed=true] { color: #ffb4ab; }
-.call-enable-audio { position: fixed; bottom: 15px; right: 15px; z-index: 80; }
-.seat-with-camera > .seat-camera { width: 180px; height: 101px; grid-column: 1; }
-.seat-with-camera > .seat-profile { min-height: 25px; padding: 3px 7px; }
-.seat-with-camera > .seat-profile .seat-avatar, .seat-with-camera > .seat-profile .seat-info > span { display: none; }
-.seat-with-camera > .seat-profile .seat-info strong { font-size: 12px; }
-@media (min-width: 900px) {
-    .seats-1 .seat-with-camera .opponent-properties, .seats-3 .seat-with-camera:first-child .opponent-properties,
-    .seats-1 .seat-with-camera .opponent-properties-empty, .seats-3 .seat-with-camera:first-child .opponent-properties-empty { grid-row: 1 / 5; }
-}
-@media (max-width: 899px) {
-    .call-strip { margin: 0 8px 6px; padding: 4px 6px; }
-    .call-stage-tiles > .call-video { width: 154px; flex-basis: 154px; }
-    .call-corner { top: 70px; right: 8px; width: 178px; }
-    .call-corner-left { right: auto; left: 8px; }
-    .call-corner .call-video { width: 100%; flex-basis: auto; }
-    .call-gallery { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
-}
-@media (max-width: 480px) {
-    .call-toolbar .btn { min-height: 34px; padding: 4px 7px; }
-    .call-toolbar .call-icon { width: 30px; }
-    .call-preview-row { grid-template-columns: 1fr; gap: 12px; }
-    .call-preview-row > .call-video { max-width: 260px; }
-    .call-device-grid { grid-template-columns: 1fr; }
-    .call-layout-options { grid-template-columns: 1fr 1fr; }
-}
-@media (max-height: 550px) and (orientation: landscape) {
-    .call-strip .call-stage-tiles > .call-video { width: 116px; flex-basis: 116px; }
-    .call-strip .call-stage-header { padding: 0; }
-    .call-strip .call-avatar > span:last-child { display: none; }
-    .call-strip .call-avatar > span[role=img] { width: 30px !important; height: 30px !important; }
-}
-.call-seat-dock { width: 180px; top: 78px; right: 70px; max-height: 140px; }
-.call-seat-dock.call-corner-left { right: auto; left: 28px; }
 /* Every public property group stays visible; no sideways scrolling inside a set. */
 .opponent-properties { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); overflow: visible; gap: 6px; }
 .opponent-set { width: auto; min-width: 0; }
@@ -2419,14 +2270,11 @@ select:focus-visible {
     scrollbar-color: oklch(100% 0 0 / 0.18) transparent;
 }
 .property-zone { min-height: 0; }
-.call-enable-audio { top: 66px; bottom: auto; right: 50%; transform: translateX(50%); font-size: 12px; z-index: 45; }
 /* A seat at the head of the table is a two-column grid, so its properties are
    bounded by the profile beside them rather than by the stack above. */
 @media (min-width: 900px) {
     .seats-1 .opponent-properties,
     .seats-3 .opponent-seat:first-child .opponent-properties { max-height: 152px; }
-    .seats-1 .seat-with-camera .opponent-properties,
-    .seats-3 .seat-with-camera:first-child .opponent-properties { max-height: 204px; }
 }
 @media (min-width: 900px) and (max-height: 780px) {
     .arena-top { min-height: 190px; }
@@ -4064,9 +3912,6 @@ body.is-dragging .board-targets > .bank-zone:not(.drop-zone-live) {
     }
 }
 /* Anything pinned to the top of the window, rather than to a panel. */
-.call-corner {
-    top: calc(70px + env(safe-area-inset-top));
-}
 .tour-strip-top {
     top: calc(0.5rem + env(safe-area-inset-top));
 }
@@ -4215,9 +4060,6 @@ body.is-dragging .board-targets > .bank-zone:not(.drop-zone-live) {
     html.standalone .home-screen,
     html.standalone .welcome-screen {
         padding-top: max(env(safe-area-inset-top), 48px);
-    }
-    html.standalone .call-corner {
-        top: calc(70px + max(env(safe-area-inset-top), 44px));
     }
     html.standalone .tour-strip-top {
         top: calc(0.5rem + max(env(safe-area-inset-top), 44px));

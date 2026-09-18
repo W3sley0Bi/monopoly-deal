@@ -1,9 +1,9 @@
 /**
  * `useJsonSocket` — ported precisely from `frontend/src/game/useJsonSocket.ts`
  * per SHELL-SPEC.md §2, plus the two native-only additions the spec calls
- * for: an `AppState` listener that forces a reconnect on foreground, and an
- * app-level heartbeat (mobile OSes kill idle sockets silently; there is no
- * tab to keep the connection honest). Everything else ports verbatim —
+ * for: an `AppState` listener that forces a reconnect on foreground. The
+ * server owns WebSocket ping/pong keepalive, so health checks never enter the
+ * game message stream. Everything else ports verbatim —
  * linear backoff, the unbounded send queue, the ref-held handler.
  */
 import { useEffect, useRef, useState } from 'react';
@@ -15,8 +15,6 @@ export interface UseJsonSocket<Out> {
     status: SocketStatus;
     send: (msg: Out) => void;
 }
-
-const HEARTBEAT_MS = 20000;
 
 export function useJsonSocket<In, Out>(url: string, onMessage: (msg: In) => void): UseJsonSocket<Out> {
     // Computed once so the connect effect never re-fires on a changing prop.
@@ -38,7 +36,6 @@ export function useJsonSocket<In, Out>(url: string, onMessage: (msg: In) => void
         let closed = false;
         let attempt = 0;
         let retry: ReturnType<typeof setTimeout> | null = null;
-        let heartbeat: ReturnType<typeof setInterval> | null = null;
 
         function connect() {
             if (closed) return;
@@ -56,15 +53,6 @@ export function useJsonSocket<In, Out>(url: string, onMessage: (msg: In) => void
                 for (const msg of pending) {
                     ws.send(JSON.stringify(msg));
                 }
-                heartbeat = setInterval(() => {
-                    if (ws.readyState === WebSocket.OPEN) {
-                        try {
-                            ws.send(JSON.stringify({ type: 'hello' } as unknown as Out));
-                        } catch {
-                            // ignore — a broken socket will close on its own
-                        }
-                    }
-                }, HEARTBEAT_MS);
             };
 
             ws.onmessage = (event) => {
@@ -77,10 +65,6 @@ export function useJsonSocket<In, Out>(url: string, onMessage: (msg: In) => void
             };
 
             ws.onclose = () => {
-                if (heartbeat) {
-                    clearInterval(heartbeat);
-                    heartbeat = null;
-                }
                 if (closed) return;
                 setStatus('closed');
                 attempt += 1;
@@ -111,7 +95,6 @@ export function useJsonSocket<In, Out>(url: string, onMessage: (msg: In) => void
         return () => {
             closed = true;
             if (retry) clearTimeout(retry);
-            if (heartbeat) clearInterval(heartbeat);
             appStateSub.remove();
             const ws = wsRef.current;
             wsRef.current = null;

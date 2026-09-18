@@ -480,6 +480,7 @@ func TestNonOwnerCannotCloseOccupiedTable(t *testing.T) {
 	if err := b.expectError("close refused"); !strings.Contains(err, "close that table") {
 		t.Fatalf("unexpected error: %q", err)
 	}
+	a.send(ClientMessage{Type: MsgHello})
 	a.room("still open", func(v RoomView) bool { return v.ID == code })
 }
 

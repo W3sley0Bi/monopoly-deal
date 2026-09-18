@@ -94,38 +94,11 @@ From there you can:
 Everyone gets a generated avatar, produced on the device with DiceBear, so it
 works with no internet connection.
 
-## Chat and video
+## Chat
 
 Every table has a **group chat** — a tab beside the table log during a game, and
 a panel in the table lobby. Spectators can chat too. Unread messages show a
 badge on the collapsed rail.
-
-**Voice and video** is peer-to-peer WebRTC. Press **Join call** to share your
-camera and microphone; each player's video appears in the corner of their panel,
-with your own preview and mic/camera toggles in the top bar. The server only
-relays the connection setup — the media itself goes directly between browsers.
-On a LAN no STUN or TURN servers are used at all, so the call works with no
-internet; away from the LAN the client adds public STUN servers so peers can
-find each other.
-
-### Video needs HTTPS
-
-Browsers only allow camera and microphone access on a *secure* origin. That
-means `http://localhost` works, but `http://192.168.x.x` does not — on a plain
-LAN address the call button shows "Call unavailable" and explains why. To use
-video from phones and other machines, serve over HTTPS:
-
-```bash
-make run-tls      # generates a self-signed cert, then serves https on :8080
-```
-
-The certificate covers `localhost` and this machine's LAN addresses. Browsers
-will warn once about the self-signed certificate — accept it and the camera
-works. Under the hood: `make certs` writes `cert.pem`/`key.pem`, and the server
-uses HTTPS whenever `CERT_FILE` and `KEY_FILE` are set.
-
-The game itself works fine over plain HTTP; only the call needs the secure
-origin.
 
 ### Playing with people off the LAN
 
@@ -147,12 +120,6 @@ The client derives its WebSocket address from the page it was served from, so
 the tunnelled origin gives `wss://.../ws` with no configuration. On ngrok's free
 plan each visitor sees a one-time browser warning page — clicking **Visit Site**
 gets them through.
-
-Because the tunnel is HTTPS, camera and microphone work for everyone, not just
-localhost. Over the internet the call uses public STUN servers to find a route
-between browsers; there is still no TURN relay, so a player behind a strict
-(symmetric) NAT may fail to connect for video while chat and the game itself
-keep working.
 
 ### Host controls
 
@@ -282,7 +249,6 @@ backend/
   server/hub.go        connections, rooms, routing, timer loop
   server/room.go       one table: owner, spectators, seat queue
   server/messages.go   wire format and per-player views
-  cmd/gencert/         self-signed certificate for HTTPS play
   game/card.go         cards, colours, set sizes, rent tables, deck
   game/game.go         players, sets, turn flow, modes, timer, win check
   game/bot.go          robot seats: move priorities, responses, difficulty
@@ -297,7 +263,6 @@ frontend/src/
   components/Table     the mat, drag and drop, dialogs, log and chat
   components/Tutorial  the guided tour: spotlight, steps, task detection
   components/SidePanel log and group chat, with unread badge
-  game/useWebRTC.ts    peer-to-peer mesh for voice and video
 ```
 
 Each client only ever receives its own hand: other players' hands are sent as a

@@ -5,15 +5,11 @@ import HoverDetails from './HoverDetails';
 import { PlayBubble, ReactionBubble } from './Reactions';
 import Avatar from './Avatar';
 import { CardBack } from './PlayingCard';
-import type { ReactNode } from 'react';
 
 interface Props {
     player: PlayerView;
     isTurn: boolean;
     isTargeted?: boolean;
-    /** Connected to the table's call. */
-    inCall?: boolean;
-    video?: ReactNode;
     onOpen: () => void;
     reaction?: ChatMessage;
     /** The move this player just made, already translated. */
@@ -26,8 +22,6 @@ export default function OpponentPanel({
     player,
     isTurn,
     isTargeted,
-    inCall,
-    video,
     onOpen,
     reaction,
     play,
@@ -38,13 +32,12 @@ export default function OpponentPanel({
     return (
         <div
             data-player-id={player.id}
-            className={`opponent-seat ${video ? 'seat-with-camera' : ''} ${isTurn ? 'seat-active' : ''} ${isTargeted ? 'seat-targeted' : ''}`}
+            className={`opponent-seat ${isTurn ? 'seat-active' : ''} ${isTargeted ? 'seat-targeted' : ''}`}
         >
             {reaction && (
                 <ReactionBubble key={reaction.id} message={reaction} />
             )}
             {play && !reaction && <PlayBubble key={playKey} text={play} />}
-            {video}
             <HoverDetails
                 content={
                     <div className="player-inspection">
@@ -87,8 +80,6 @@ export default function OpponentPanel({
                             size={52}
                             active={isTurn}
                             away={!player.connected}
-                            inCall={inCall}
-                            inCallLabel={t('call.in_call')}
                         />
                         {isTurn && (
                             <span className="seat-turn">

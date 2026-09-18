@@ -97,9 +97,6 @@ const errors: Catalog = {
 
     // Transport
     'err.unknown_message': 'Unbekannter Nachrichtentyp "{type}".',
-    'err.bad_signal': 'Fehlerhaftes Signal.',
-    'err.no_self_signal': 'Du kannst kein Signal an dich selbst senden.',
-    'err.peer_offline': 'Dieser Spieler ist nicht verbunden.',
 };
 
 export default errors;

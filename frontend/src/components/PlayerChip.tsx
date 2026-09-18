@@ -9,8 +9,6 @@ interface Props {
     player: PlayerView;
     isTurn: boolean;
     isTargeted?: boolean;
-    stream?: MediaStream | null;
-    inCall?: boolean;
     /** Fill the available width when only a couple of opponents are seated. */
     grow?: boolean;
     onOpen: () => void;
@@ -26,7 +24,7 @@ interface Props {
  * colour bar summarising their sets. Tapping opens their full board in a sheet,
  * so the table stays inside one vertical screen.
  */
-export default function PlayerChip({ player, isTurn, isTargeted, stream, inCall, grow, onOpen, reaction, play, playKey }: Props) {
+export default function PlayerChip({ player, isTurn, isTargeted, grow, onOpen, reaction, play, playKey }: Props) {
     const { t } = useI18n();
 
     return (
@@ -44,11 +42,10 @@ export default function PlayerChip({ player, isTurn, isTargeted, stream, inCall,
             {reaction && <ReactionBubble key={reaction.id} message={reaction} />}
             {play && !reaction && <PlayBubble key={playKey} text={play} />}
             <div className="flex min-w-0 items-center gap-1.5">
-                <Avatar id={player.id} name={player.name} size={28} active={isTurn} away={!player.connected} inCall={Boolean(stream || inCall)} inCallLabel={t('call.in_call')} />
+                <Avatar id={player.id} name={player.name} size={28} active={isTurn} away={!player.connected} />
                 <span className="min-w-0 flex-1 truncate font-display text-base leading-none tracking-wide">
                     {player.name}
                 </span>
-                {(stream || inCall) && <span className="call-tag" title={t('call.in_call')}>{t('call.in_call')}</span>}
             </div>
 
             <div className="flex items-center gap-2 text-[0.7rem] text-white/70">

@@ -5,7 +5,7 @@
 product
 
 ## Users
-Friends playing together on computers and phones, locally or over a shared link. Solo players practice against one to four robots. The repository supports spectators, multilingual tables, chat, and optional voice/video.
+Friends playing together on computers and phones, locally or over a shared link. Solo players practice against one to four robots. The repository supports spectators, multilingual tables, and chat.
 
 ## Product Purpose
 Make the server-authoritative Monopoly Deal rules feel like a lively shared game night. Build three complete property sets while reading opponents, playing actions, and defending against debts and steals. Preserve every existing rules interaction and private-hand boundary.

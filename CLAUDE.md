@@ -17,7 +17,6 @@ cd frontend && npm run dev  # Vite on :5173, talks to :8080
 cd frontend && npm run build && cd ../backend && go run .
 
 make run        # build client + server binary, then run
-make run-tls    # same over HTTPS (needed for camera/mic off localhost)
 make test       # go test ./... + tsc -b + i18n check
 ```
 

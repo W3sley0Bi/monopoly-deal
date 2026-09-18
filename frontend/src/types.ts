@@ -141,17 +141,6 @@ export interface ChatMessage {
     system?: boolean;
 }
 
-/** One relayed WebRTC payload. */
-export interface RTCEnvelope {
-    from: string;
-    signal: RTCSignal;
-}
-
-export type RTCSignal =
-    | { kind: 'media'; micOn: boolean; camOn: boolean }
-    | { kind: 'offer' | 'answer'; sdp: RTCSessionDescriptionInit }
-    | { kind: 'candidate'; candidate: RTCIceCandidateInit };
-
 export interface RoomView {
     private: boolean;
     id: string;
@@ -256,6 +245,5 @@ export interface ClientMessage {
 export type ServerMessage =
     | { type: 'home'; payload: HomeView }
     | { type: 'room'; payload: RoomView }
-    | { type: 'rtc_signal'; payload: RTCEnvelope }
     | { type: 'error'; error: string; error_key?: string; error_args?: Record<string, unknown> }
     | { type: 'notice'; notice: string; notice_key?: string; notice_args?: Record<string, unknown> };

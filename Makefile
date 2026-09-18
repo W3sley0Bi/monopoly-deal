@@ -1,4 +1,4 @@
-.PHONY: build run run-tls certs dev tunnel serve-public test clean
+.PHONY: build run dev tunnel serve-public test clean
 
 build:
 	cd frontend && npm install && npm run build
@@ -7,16 +7,7 @@ build:
 run: build
 	cd backend && ./server_bin
 
-# Voice/video needs a secure origin. Generates a self-signed cert covering this
-# machine's LAN address, then serves over HTTPS. Browsers will warn once.
-certs:
-	cd backend && go run ./cmd/gencert
-
-run-tls: build certs
-	cd backend && CERT_FILE=cert.pem KEY_FILE=key.pem ./server_bin
-
-# Play with people off the LAN: the tunnel terminates TLS, so the page is a
-# secure origin and camera/mic work with no local certificate.
+# Play with people off the LAN through a public tunnel.
 NGROK_URL ?= https://polite-vulture-immune.ngrok-free.app
 
 tunnel:

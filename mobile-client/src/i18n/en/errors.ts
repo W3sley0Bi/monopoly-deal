@@ -98,9 +98,6 @@ const errors: Catalog = {
 
     // Transport
     'err.unknown_message': 'Unknown message type "{type}".',
-    'err.bad_signal': 'Malformed signal.',
-    'err.no_self_signal': 'You cannot signal yourself.',
-    'err.peer_offline': 'That player is not connected.',
 };
 
 export default errors;

@@ -117,7 +117,7 @@ const PILE_W = BANK_LEFT + BANK_W;
 const PILE_H = PROPERTY_GRID_H;
 const SEAT = Math.ceil(Math.hypot(PILE_W, PILE_H));
 /** Clear space between two neighbouring blocks on the ring. */
-const SEAT_GAP = 14;
+const SEAT_GAP = 22;
 
 // The two piles at the middle of the felt.
 const DECK_W = 30;
@@ -141,7 +141,7 @@ const MAT = ['#4a5893', '#5b6aa6', '#2f3a69'] as const;
 const MARKER_W = 34;
 const MARKER_H = 14;
 /** How far outside the seat ring it rides, clear of everyone's cards. */
-const MARKER_OUT = 26;
+const MARKER_OUT = 42;
 
 /** Timing for the lamp's trip round the ring; instant when motion is off. */
 function animateMarker(target: number, animate: boolean) {

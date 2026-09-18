@@ -33,29 +33,12 @@ func main() {
 	port := strings.TrimPrefix(envOr("PORT", "8080"), ":")
 	addr := ":" + port
 
-	scheme := "http"
-	wsScheme := "ws"
-	cert, key := os.Getenv("CERT_FILE"), os.Getenv("KEY_FILE")
-	isTLS := cert != "" && key != ""
-	if isTLS {
-		scheme = "https"
-		wsScheme = "wss"
-	}
-
 	log.Printf("Server listening on:")
-	log.Printf("  -> Local:   %s://localhost:%s (ws: %s://localhost:%s/ws)", scheme, port, wsScheme, port)
+	log.Printf("  -> Local:   http://localhost:%s (ws: ws://localhost:%s/ws)", port, port)
 	for _, ip := range getLocalIPs() {
-		log.Printf("  -> Network: %s://%s:%s (ws: %s://%s:%s/ws)", scheme, ip, port, wsScheme, ip, port)
+		log.Printf("  -> Network: http://%s:%s (ws: ws://%s:%s/ws)", ip, port, ip, port)
 	}
 
-	if isTLS {
-		if err := http.ListenAndServeTLS(addr, cert, key, mux); err != nil {
-			log.Fatal("ListenAndServeTLS: ", err)
-		}
-		return
-	}
-
-	log.Println("No CERT_FILE/KEY_FILE set: camera and microphone will only work on localhost. See README.")
 	if err := http.ListenAndServe(addr, mux); err != nil {
 		log.Fatal("ListenAndServe: ", err)
 	}
