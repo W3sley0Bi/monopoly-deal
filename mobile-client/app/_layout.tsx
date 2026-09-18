@@ -78,6 +78,10 @@ export default function RootLayout() {
                                     options={{ title: 'Deal', animationTypeForReplace: 'pop' }}
                                 />
                                 <Stack.Screen
+                                    name="online"
+                                    options={{ title: 'Play Online', animationTypeForReplace: 'push' }}
+                                />
+                                <Stack.Screen
                                     name="lobby"
                                     options={{ title: 'Lobby', animationTypeForReplace: 'push' }}
                                 />

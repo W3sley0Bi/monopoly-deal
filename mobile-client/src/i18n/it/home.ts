@@ -24,13 +24,13 @@ const home: Catalog = {
     'home.offline_status': 'Offline · puoi giocare in solitaria contro i robot',
 
     // Solo practice against robots.
-    'home.solo.title': 'Gioca da solo',
+    'home.solo.title': 'Gioca offline',
     'home.solo.blurb': 'Un tavolo di allenamento contro robot, senza timer e senza nessuno che ti aspetta.',
     'home.solo.tour': 'Il tutorial ti accompagna nel tuo primo turno.',
     'home.solo.robots': 'Robot',
     'home.solo.options': 'Opzioni: {robots} robot, {level} ▾',
     'home.solo.show_tutorial': 'Mostra il tutorial',
-    'home.solo.play': '🎓 Allenati contro i robot',
+    'home.solo.play': '🎓 Allenati contro i robot offline',
     'home.learn.title': 'Impara a giocare',
     'home.learn.blurb': 'Diciassette lezioni pratiche su un tavolo costruito per ognuna, dalla prima proprietà al Deal Breaker.',
     'home.learn.start': 'Avvia il tutorial',
@@ -41,13 +41,13 @@ const home: Catalog = {
     'home.solo.table_name': 'Allenamento di {name}',
 
     // The table list.
-    'home.tables': 'Tavoli',
+    'home.tables': 'Gioca online',
     'home.open.one': '{count} aperto',
     'home.open.other': '{count} aperti',
     'home.code_label': 'Codice del tavolo',
     'home.code_placeholder': 'CODICE',
     'home.join_by_code': 'Entra con il codice',
-    'home.new_table': '+ Nuovo tavolo',
+    'home.new_table': 'Crea un nuovo tavolo',
     'home.no_tables': 'Ancora nessun tavolo — aprine uno e condividi il codice.',
     'home.youre_in': 'sei dentro',
     'home.state.waiting': 'In sala d’attesa',

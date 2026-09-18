@@ -20,7 +20,7 @@ const VARIANT = {
     ghost: { bg: '#ffffff12', fg: '#e8efeb', edge: 'transparent' },
 } as const;
 
-function BtnImpl({ label, onPress, variant = 'ghost', disabled, pending, icon, style }: BtnProps) {
+function BtnImpl({ label, onPress, variant = 'ghost', disabled, pending, icon, style, textStyle }: BtnProps) {
     const v = VARIANT[variant];
     const off = disabled || pending;
 
@@ -45,7 +45,7 @@ function BtnImpl({ label, onPress, variant = 'ghost', disabled, pending, icon, s
             ]}
         >
             {icon ? <View style={styles.icon}>{icon}</View> : null}
-            <Text style={[styles.label, { color: v.fg }]} numberOfLines={1}>
+            <Text style={[styles.label, { color: v.fg }, textStyle]} numberOfLines={1}>
                 {pending ? '…' : label}
             </Text>
         </Pressable>

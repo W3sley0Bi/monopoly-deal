@@ -1,5 +1,5 @@
 /** Every language the game speaks. */
-export const LANGS = ['en', 'it', 'de'] as const;
+export const LANGS = ['en', 'it', 'de', 'fr'] as const;
 
 export type Lang = (typeof LANGS)[number];
 
@@ -11,10 +11,12 @@ export const LANG_LABEL: Record<Lang, string> = {
     en: 'English',
     it: 'Italiano',
     de: 'Deutsch',
+    fr: 'Français',
 };
 
 export const LANG_FLAG: Record<Lang, string> = {
     en: '🇬🇧',
     it: '🇮🇹',
     de: '🇩🇪',
+    fr: '🇫🇷',
 };

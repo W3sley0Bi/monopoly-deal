@@ -28,7 +28,7 @@ const KEY_CRY_REACTION = 'md.cryreaction';
 const KEY_LIVE_PLAY = 'md.liveplay';
 // md.install.dismissed intentionally dropped — a native app is already installed.
 
-export type Lang = 'en' | 'it' | 'de';
+export type Lang = 'en' | 'it' | 'de' | 'fr';
 
 export interface AudioSettings {
     sfxEnabled: boolean;
@@ -54,7 +54,7 @@ function clamp01(n: number): number {
 function deviceLang(): Lang {
     const locales = Localization.getLocales();
     for (const l of locales) {
-        if (l.languageCode === 'en' || l.languageCode === 'it' || l.languageCode === 'de') {
+        if (l.languageCode === 'en' || l.languageCode === 'it' || l.languageCode === 'de' || l.languageCode === 'fr') {
             return l.languageCode;
         }
     }
@@ -159,7 +159,7 @@ export const useStore = create<Store>((set, get) => ({
 
         let lang: Lang = deviceLang();
         const savedLang = await readString(KEY_LANG);
-        if (savedLang === 'en' || savedLang === 'it' || savedLang === 'de') lang = savedLang;
+        if (savedLang === 'en' || savedLang === 'it' || savedLang === 'de' || savedLang === 'fr') lang = savedLang;
 
         let audio: AudioSettings = DEFAULT_AUDIO;
         const savedAudio = await readString(KEY_AUDIO);

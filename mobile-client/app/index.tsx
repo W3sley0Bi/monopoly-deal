@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-    Alert,
     Platform,
     Pressable,
     RefreshControl,
@@ -11,7 +10,7 @@ import {
     View,
     useWindowDimensions,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useGameConnectionContext } from '../lib/net/messages';
@@ -21,9 +20,8 @@ import { displayFont, ls, uiFont } from '../lib/fonts';
 import { Avatar, Btn, Icon, LabelCaps, LanguagePicker, Panel, Sheet } from '../src/ui/kit';
 import { GameSoundSettings } from '../src/components/settings/GameSoundSettings';
 import { useI18n } from '../src/i18n';
-import { formatTurn } from '../src/i18n/format';
 import { FIXTURES } from '../src/dev/fixtures';
-import type { Difficulty, Mode } from '../src/types';
+import type { Difficulty } from '../src/types';
 
 export default function HomeScreen() {
     const { t } = useI18n();
@@ -36,15 +34,7 @@ export default function HomeScreen() {
     const setDevRoom = useStore((s) => s.setDevRoom);
 
     const [draft, setDraft] = useState(name);
-    const [code, setCode] = useState('');
     const [account, setAccount] = useState(false);
-    const [creating, setCreating] = useState(false);
-    const [tableName, setTableName] = useState('');
-    const [privateRoom, setPrivateRoom] = useState(false);
-    const [createMode, setCreateMode] = useState<Mode>('classic');
-    const [turnSeconds, setTurnSeconds] = useState(0);
-    const [createBots, setCreateBots] = useState(0);
-    const [createLevel, setCreateLevel] = useState<Difficulty>('normal');
     const [bots, setBots] = useState(2);
     const [level, setLevel] = useState<Difficulty>('normal');
 
@@ -53,6 +43,15 @@ export default function HomeScreen() {
     const [seenAtMount] = useState(tutorialDone);
 
     const connected = sock === 'open';
+
+    const [offlineOpen, setOfflineOpen] = useState(!connected);
+    const prevConnectedRef = useRef(connected);
+    useEffect(() => {
+        if (prevConnectedRef.current !== connected) {
+            prevConnectedRef.current = connected;
+            setOfflineOpen(!connected);
+        }
+    }, [connected]);
 
     // ---- responsive: constrain content on wide screens (iPad / web) ----------
     const { width: vw, height: vh } = useWindowDimensions();
@@ -72,8 +71,10 @@ export default function HomeScreen() {
     // ---- welcome gate: nothing is reachable without a name -------------------
     if (!name) {
         return (
-            <ScrollView contentContainerStyle={[styles.welcomeWrap, { paddingBottom: insets.bottom + 24, marginHorizontal: wideMargin }]}>
-                <LanguagePicker />
+            <>
+                <Stack.Screen options={{ headerRight: () => null }} />
+                <ScrollView contentContainerStyle={[styles.welcomeWrap, { paddingBottom: insets.bottom + 24, marginHorizontal: wideMargin }]}>
+                    <LanguagePicker />
 
                 <Panel style={styles.welcomeCard}>
                     <Avatar id={myId} name={draft || t('common.you')} size={56} />
@@ -104,13 +105,27 @@ export default function HomeScreen() {
                     {!connected ? <Text style={styles.hint}>{t('home.offline_available')}</Text> : null}
                 </Panel>
             </ScrollView>
-        );
+        </>
+    );
     }
-
-    const rooms = home?.rooms ?? [];
 
     return (
         <>
+            <Stack.Screen
+                options={{
+                    headerRight: () => (
+                        <Pressable
+                            onPress={() => setAccount(true)}
+                            accessibilityRole="button"
+                            accessibilityLabel={t('home.account')}
+                            hitSlop={8}
+                            style={styles.headerAvatar}
+                        >
+                            <Avatar id={myId} name={name} size={32} />
+                        </Pressable>
+                    ),
+                }}
+            />
             <ScrollView
                 contentContainerStyle={[styles.wrap, { paddingBottom: insets.bottom + 24, marginHorizontal: wideMargin }]}
                 refreshControl={
@@ -126,63 +141,6 @@ export default function HomeScreen() {
                 ) : null}
 
                 {!connected ? <Text style={styles.reconnect}>{t('home.offline_status')}</Text> : null}
-
-                <Pressable style={styles.account} onPress={() => setAccount(true)}>
-                    <Avatar id={myId} name={name} size={30} />
-                    <Text style={styles.accountName}>{name}</Text>
-                    <Icon name="chevron.right" fallback="›" size={16} color={ink.muted45} />
-                </Pressable>
-
-                {/* ---- solo ---- */}
-                <Panel style={styles.card}>
-                    <LabelCaps>{t('home.solo.title')}</LabelCaps>
-                    <Text style={styles.blurb}>{t('home.solo.blurb')}</Text>
-
-                    <View style={styles.rowBetween}>
-                        <Text style={styles.rowLabel}>{t('home.solo.robots')}</Text>
-                        <View style={styles.segment}>
-                            {[1, 2, 3, 4].map((n) => (
-                                <Pressable
-                                    key={n}
-                                    onPress={() => setBots(n)}
-                                    style={[styles.seg, bots === n && styles.segOn]}
-                                >
-                                    <Text style={[styles.segText, bots === n && styles.segTextOn]}>{n}</Text>
-                                </Pressable>
-                            ))}
-                        </View>
-                    </View>
-
-                    <View style={styles.segmentWide}>
-                        {(['easy', 'normal', 'hard'] as Difficulty[]).map((d) => (
-                            <Pressable
-                                key={d}
-                                onPress={() => setLevel(d)}
-                                style={[styles.seg, styles.segWide, level === d && styles.segOn]}
-                            >
-                                <Text style={[styles.segText, level === d && styles.segTextOn]}>
-                                    {t(`difficulty.${d}`)}
-                                </Text>
-                            </Pressable>
-                        ))}
-                    </View>
-
-                    <Btn
-                        label={t('home.solo.play')}
-                        variant="gold"
-                        onPress={() =>
-                            send({
-                                type: 'create_room',
-                                room_name: t('home.solo.table_name', { name }),
-                                mode: 'classic',
-                                turn_seconds: 0,
-                                bots,
-                                bot_difficulty: level,
-                                auto_start: true,
-                            })
-                        }
-                    />
-                </Panel>
 
                 {/* ---- learn ---- */}
                 <Panel style={styles.card}>
@@ -205,101 +163,88 @@ export default function HomeScreen() {
                     />
                 </Panel>
 
-                {/* ---- join / browse ---- */}
+                {/* ---- play online ---- */}
                 <Panel style={styles.card}>
-                    <View style={styles.rowBetween}>
-                        <LabelCaps>{t('home.tables')}</LabelCaps>
-                        <Btn label={t('home.new_table')} variant="gold" onPress={() => setCreating(true)} />
-                    </View>
+                    <LabelCaps>{t('home.tables')}</LabelCaps>
+                    <Btn
+                        label={t('home.tables')}
+                        variant="gold"
+                        style={styles.bigPlayBtn}
+                        textStyle={styles.bigPlayText}
+                        disabled={!connected}
+                        onPress={() => router.push('/online')}
+                    />
+                </Panel>
 
-                    <View style={styles.joinRow}>
-                        <TextInput
-                            value={code}
-                            onChangeText={(v) => setCode(v.toUpperCase().trim())}
-                            placeholder={t('home.code_placeholder')}
-                            placeholderTextColor={ink.muted45}
-                            maxLength={4}
-                            autoCapitalize="characters"
-                            autoCorrect={false}
-                            style={[styles.input, styles.codeInput]}
+                {/* ---- play offline ---- */}
+                <Panel style={styles.card}>
+                    <Pressable
+                        onPress={() => setOfflineOpen((o) => !o)}
+                        accessibilityRole="button"
+                        accessibilityState={{ expanded: offlineOpen }}
+                        accessibilityLabel={t('home.solo.title')}
+                        hitSlop={8}
+                        style={styles.accordionHeader}
+                    >
+                        <LabelCaps>{t('home.solo.title')}</LabelCaps>
+                        <Icon
+                            name={offlineOpen ? 'chevron.up' : 'chevron.down'}
+                            fallback={offlineOpen ? '▴' : '▾'}
+                            size={16}
+                            color={ink.muted45}
                         />
-                        <Btn
-                            label={t('home.join_by_code')}
-                            disabled={code.length !== 4 || !connected}
-                            onPress={() => send({ type: 'join_room', room_id: code })}
-                            style={styles.joinBtn}
-                        />
-                    </View>
+                    </Pressable>
 
-                    {rooms.length === 0 ? (
-                        <Text style={styles.blurb}>{t('home.no_tables')}</Text>
-                    ) : (
-                        rooms.map((r) => (
-                            <View key={r.id} style={styles.tableRow}>
-                                <View style={styles.tableInfo}>
-                                    <View style={styles.tableTitleRow}>
-                                        <Text style={styles.code}>{r.id}</Text>
-                                        <Text style={styles.tableName} numberOfLines={1}>
-                                            {r.name}
-                                        </Text>
-                                    </View>
-                                    <Text style={styles.meta} numberOfLines={1}>
-                                        {t(`mode.${r.mode}`)} · {formatTurn(t, r.turn_seconds)} ·{' '}
-                                        {t(`home.state.${r.state}`)} · {r.players.length}/5
-                                        {r.abandoned ? ` · ${t('home.abandoned')}` : ''}
-                                    </Text>
-                                </View>
+                    {offlineOpen ? (
+                        <>
+                            <Text style={styles.blurb}>{t('home.solo.blurb')}</Text>
 
-                                <View style={styles.tableActions}>
-                                    {r.you_seated || r.you_spectating ? (
-                                        <Btn
-                                            label={t('home.return')}
-                                            variant="gold"
-                                            onPress={() => send({ type: 'join_room', room_id: r.id })}
-                                        />
-                                    ) : (
-                                        <>
-                                            <Btn
-                                                label={t('home.take_seat')}
-                                                variant="gold"
-                                                disabled={r.state !== 'waiting' || r.seats_free <= 0}
-                                                onPress={() => send({ type: 'join_room', room_id: r.id })}
-                                            />
-                                            <Btn
-                                                label={t('home.watch')}
-                                                onPress={() =>
-                                                    send({ type: 'join_room', room_id: r.id, as_spectator: true })
-                                                }
-                                            />
-                                        </>
-                                    )}
-                                    {r.you_may_close ? (
-                                        <Btn
-                                            label={t('home.close')}
-                                            variant="red"
-                                            onPress={() =>
-                                                Alert.alert(
-                                                    r.abandoned
-                                                        ? t('home.close_abandoned_title')
-                                                        : t('home.close_title'),
-                                                    r.name,
-                                                    [
-                                                        { text: t('home.keep'), style: 'cancel' },
-                                                        {
-                                                            text: t('home.close_it'),
-                                                            style: 'destructive',
-                                                            onPress: () =>
-                                                                send({ type: 'close_room', room_id: r.id }),
-                                                        },
-                                                    ],
-                                                )
-                                            }
-                                        />
-                                    ) : null}
+                            <View style={styles.rowBetween}>
+                                <Text style={styles.rowLabel}>{t('home.solo.robots')}</Text>
+                                <View style={styles.segment}>
+                                    {[1, 2, 3, 4].map((n) => (
+                                        <Pressable
+                                            key={n}
+                                            onPress={() => setBots(n)}
+                                            style={[styles.seg, bots === n && styles.segOn]}
+                                        >
+                                            <Text style={[styles.segText, bots === n && styles.segTextOn]}>{n}</Text>
+                                        </Pressable>
+                                    ))}
                                 </View>
                             </View>
-                        ))
-                    )}
+
+                            <View style={styles.segmentWide}>
+                                {(['easy', 'normal', 'hard'] as Difficulty[]).map((d) => (
+                                    <Pressable
+                                        key={d}
+                                        onPress={() => setLevel(d)}
+                                        style={[styles.seg, styles.segWide, level === d && styles.segOn]}
+                                    >
+                                        <Text style={[styles.segText, level === d && styles.segTextOn]}>
+                                            {t(`difficulty.${d}`)}
+                                        </Text>
+                                    </Pressable>
+                                ))}
+                            </View>
+
+                            <Btn
+                                label={t('home.solo.play')}
+                                variant="gold"
+                                onPress={() =>
+                                    send({
+                                        type: 'create_room',
+                                        room_name: t('home.solo.table_name', { name }),
+                                        mode: 'classic',
+                                        turn_seconds: 0,
+                                        bots,
+                                        bot_difficulty: level,
+                                        auto_start: true,
+                                    })
+                                }
+                            />
+                        </>
+                    ) : null}
                 </Panel>
 
                 <Text style={styles.footer}>{t('home.footer')}</Text>
@@ -324,7 +269,7 @@ export default function HomeScreen() {
                         setAccount(false);
                     }}
                 />
-                <LanguagePicker />
+                <LanguagePicker variant="dropdown" />
                 <GameSoundSettings />
 
                 {/* Dev only: frozen tables for looking at the UI without
@@ -350,124 +295,6 @@ export default function HomeScreen() {
                     </View>
                 ) : null}
             </Sheet>
-
-            <Sheet open={creating} onClose={() => setCreating(false)} title={t('home.new_table')}>
-                <LabelCaps>{t('home.table_name')}</LabelCaps>
-                <TextInput
-                    value={tableName}
-                    onChangeText={setTableName}
-                    placeholder={t('home.table_name_placeholder', { name })}
-                    placeholderTextColor={ink.muted45}
-                    maxLength={28}
-                    autoCapitalize="sentences"
-                    style={styles.input}
-                />
-
-                <LabelCaps>{t('invite.visibility')}</LabelCaps>
-                <View style={styles.segmentWide}>
-                    {[false, true].map((isPrivate) => (
-                        <Pressable
-                            key={String(isPrivate)}
-                            onPress={() => setPrivateRoom(isPrivate)}
-                            style={[styles.seg, styles.segWide, privateRoom === isPrivate && styles.segOn]}
-                        >
-                            <Text style={[styles.segText, privateRoom === isPrivate && styles.segTextOn]}>
-                                {t(isPrivate ? 'invite.private' : 'invite.public')}
-                            </Text>
-                        </Pressable>
-                    ))}
-                </View>
-
-                <LabelCaps>{t('home.game_mode')}</LabelCaps>
-                <View style={styles.segmentWide}>
-                    {(home?.modes ?? []).map((m) => (
-                        <Pressable
-                            key={m.id}
-                            disabled={!m.available}
-                            onPress={() => setCreateMode(m.id)}
-                            style={[
-                                styles.seg,
-                                styles.segWide,
-                                createMode === m.id && styles.segOn,
-                                !m.available && styles.segOff,
-                            ]}
-                        >
-                            <Text style={[styles.segText, createMode === m.id && styles.segTextOn]}>
-                                {t(`mode.${m.id}`)}{!m.available ? ` · ${t('home.mode_soon')}` : ''}
-                            </Text>
-                        </Pressable>
-                    ))}
-                </View>
-
-                <LabelCaps>{t('home.turn_timer')}</LabelCaps>
-                <View style={styles.segmentWide}>
-                    {(home?.turn_options ?? [0, 30, 60, 120]).map((seconds) => (
-                        <Pressable
-                            key={seconds}
-                            onPress={() => setTurnSeconds(seconds)}
-                            style={[styles.seg, styles.segWide, turnSeconds === seconds && styles.segOn]}
-                        >
-                            <Text style={[styles.segText, turnSeconds === seconds && styles.segTextOn]}>
-                                {formatTurn(t, seconds)}
-                            </Text>
-                        </Pressable>
-                    ))}
-                </View>
-                <Text style={styles.hint}>{t('home.turn_hint')}</Text>
-
-                <LabelCaps>{t('home.bots')}</LabelCaps>
-                <View style={styles.segmentWide}>
-                    {[0, 1, 2, 3, 4].map((count) => (
-                        <Pressable
-                            key={count}
-                            onPress={() => setCreateBots(count)}
-                            style={[styles.seg, styles.segWide, createBots === count && styles.segOn]}
-                        >
-                            <Text style={[styles.segText, createBots === count && styles.segTextOn]}>
-                                {count === 0 ? t('home.bots_none') : count}
-                            </Text>
-                        </Pressable>
-                    ))}
-                </View>
-
-                {createBots > 0 ? (
-                    <>
-                        <LabelCaps>{t('home.difficulty')}</LabelCaps>
-                        <View style={styles.segmentWide}>
-                            {(home?.difficulties ?? ['easy', 'normal', 'hard']).map((difficulty) => (
-                                <Pressable
-                                    key={difficulty}
-                                    onPress={() => setCreateLevel(difficulty)}
-                                    style={[styles.seg, styles.segWide, createLevel === difficulty && styles.segOn]}
-                                >
-                                    <Text style={[styles.segText, createLevel === difficulty && styles.segTextOn]}>
-                                        {t(`difficulty.${difficulty}`)}
-                                    </Text>
-                                </Pressable>
-                            ))}
-                        </View>
-                    </>
-                ) : null}
-
-                <Btn
-                    label={t('home.open_table')}
-                    variant="gold"
-                    disabled={!connected}
-                    onPress={() => {
-                        send({
-                            type: 'create_room',
-                            room_name: tableName.trim() || t('home.table_name_placeholder', { name }),
-                            private: privateRoom,
-                            mode: createMode,
-                            turn_seconds: turnSeconds,
-                            bots: createBots,
-                            bot_difficulty: createLevel,
-                        });
-                        setCreating(false);
-                        setTableName('');
-                    }}
-                />
-            </Sheet>
         </>
     );
 }
@@ -479,6 +306,15 @@ const styles = StyleSheet.create({
     h1: { fontFamily: displayFont(900), fontSize: 34, color: ink.cream, letterSpacing: ls(-0.05, 34) },
     tagline: { fontFamily: uiFont(700), fontSize: 13, color: ink.muted60, marginBottom: 6 },
     card: { padding: 14, gap: 10 },
+    bigPlayBtn: {
+        minHeight: 52,
+        paddingVertical: 14,
+    },
+    bigPlayText: {
+        fontFamily: uiFont(900),
+        fontSize: 16,
+        letterSpacing: ls(0.04, 16),
+    },
     blurb: { fontFamily: uiFont(700), fontSize: 12, color: ink.muted60, lineHeight: 17 },
     input: {
         minHeight: 44,
@@ -493,6 +329,12 @@ const styles = StyleSheet.create({
     },
     codeInput: { flex: 1, letterSpacing: ls(0.4, 15), textAlign: 'center' },
     hint: { fontFamily: uiFont(700), fontSize: 11, color: ink.muted45 },
+    accordionHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        minHeight: 28,
+    },
     rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
     rowLabel: { fontFamily: uiFont(700), fontSize: 13, color: ink.body },
     segment: { flexDirection: 'row', gap: 4 },
@@ -533,18 +375,12 @@ const styles = StyleSheet.create({
     tableName: { flex: 1, fontFamily: uiFont(700), fontSize: 14, color: ink.body },
     meta: { fontFamily: uiFont(700), fontSize: 11, color: ink.muted45 },
     tableActions: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
-    account: {
-        flexDirection: 'row',
+    headerAvatar: {
+        padding: 4,
+        marginRight: 4,
+        justifyContent: 'center',
         alignItems: 'center',
-        gap: 10,
-        padding: 10,
-        borderRadius: radius.panel,
-        backgroundColor: surface.panel,
-        borderWidth: 1,
-        borderColor: line.panel,
     },
-    accountName: { flex: 1, fontFamily: uiFont(700), fontSize: 15, color: ink.body },
-    accountChevron: { color: ink.muted45, fontSize: 20 },
     notice: {
         padding: 10,
         borderRadius: radius.md,

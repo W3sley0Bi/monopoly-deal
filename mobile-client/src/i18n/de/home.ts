@@ -24,13 +24,13 @@ const home: Catalog = {
     'home.offline_status': 'Offline · Solo-Spiele gegen Roboter sind verfügbar',
 
     // Solo practice against robots.
-    'home.solo.title': 'Solo spielen',
+    'home.solo.title': 'Offline spielen',
     'home.solo.blurb': 'Ein Übungstisch gegen Roboter, ohne Timer und ohne dass jemand auf dich wartet.',
     'home.solo.tour': 'Das Tutorial führt dich durch deine erste Runde.',
     'home.solo.robots': 'Roboter',
     'home.solo.options': 'Optionen: {robots} Roboter, {level} ▾',
     'home.solo.show_tutorial': 'Tutorial anzeigen',
-    'home.solo.play': '🎓 Üben gegen Roboter',
+    'home.solo.play': '🎓 Üben gegen Offline-Roboter',
     'home.learn.title': 'Spielen lernen',
     'home.learn.blurb': 'Siebzehn praktische Lektionen an einem Tisch, der für jede einzelne gebaut wird — von der ersten Immobilie bis zum Deal Breaker.',
     'home.learn.start': 'Tutorial starten',
@@ -41,13 +41,13 @@ const home: Catalog = {
     'home.solo.table_name': 'Übungstisch von {name}',
 
     // The table list.
-    'home.tables': 'Tische',
+    'home.tables': 'Online spielen',
     'home.open.one': '{count} offen',
     'home.open.other': '{count} offen',
     'home.code_label': 'Tischcode',
     'home.code_placeholder': 'CODE',
     'home.join_by_code': 'Mit Code beitreten',
-    'home.new_table': '+ Neuer Tisch',
+    'home.new_table': 'Neuen Tisch erstellen',
     'home.no_tables': 'Noch keine Tische — öffne einen und teile den Code.',
     'home.youre_in': 'du bist dabei',
     'home.state.waiting': 'In der Lobby',

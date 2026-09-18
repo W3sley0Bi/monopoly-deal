@@ -24,13 +24,13 @@ const home: Catalog = {
     'home.offline_status': 'Offline · solo robot games are available',
 
     // Solo practice against robots.
-    'home.solo.title': 'Play solo',
+    'home.solo.title': 'Play offline',
     'home.solo.blurb': 'A practice table against robot players, with no timer and nobody waiting on you.',
     'home.solo.tour': 'The tutorial walks you through your first turn.',
     'home.solo.robots': 'Robots',
     'home.solo.options': 'Options: {robots} robots, {level} ▾',
     'home.solo.show_tutorial': 'Show the tutorial',
-    'home.solo.play': '🎓 Practice vs robots',
+    'home.solo.play': '🎓 Practice against offline bots',
     'home.learn.title': 'Learn to play',
     'home.learn.blurb': 'Seventeen hands-on lessons on a table built for each one, from your first property to Deal Breaker.',
     'home.learn.start': 'Start the tutorial',
@@ -41,13 +41,13 @@ const home: Catalog = {
     'home.solo.table_name': "{name}'s practice",
 
     // The table list.
-    'home.tables': 'Tables',
+    'home.tables': 'Play online',
     'home.open.one': '{count} open',
     'home.open.other': '{count} open',
     'home.code_label': 'Table code',
     'home.code_placeholder': 'CODE',
     'home.join_by_code': 'Join by code',
-    'home.new_table': '+ New table',
+    'home.new_table': 'Create a new table',
     'home.no_tables': 'No tables yet — open one and share the code.',
     'home.youre_in': "you're in",
     'home.state.waiting': 'In the lobby',

@@ -7,20 +7,21 @@ import { LANGS, type Catalog, type Lang } from './types';
 import en from './en';
 import it from './it';
 import de from './de';
+import fr from './fr';
 
 /**
  * Translation for a table where every seat may read a different language.
  *
  * Nothing the server sends is a finished sentence: the game log, chat notices
  * and errors all arrive as a key plus values, and each client renders them in
- * its own language. That is what lets an Italian, a German and an English
- * player share one table and all read the same game.
+ * its own language. That is what lets an Italian, a German, an English
+ * and a French player share one table and all read the same game.
  */
 
-const CATALOGS: Record<Lang, Catalog> = { en, it, de };
+const CATALOGS: Record<Lang, Catalog> = { en, it, de, fr };
 
 function isLang(v: string | null | undefined): v is Lang {
-    return v === 'en' || v === 'it' || v === 'de';
+    return v === 'en' || v === 'it' || v === 'de' || v === 'fr';
 }
 
 /** Device locale fallback, used only until the store has hydrated a saved

@@ -243,6 +243,7 @@ export interface BtnProps {
     pending?: boolean;
     icon?: ReactNode;
     style?: object;
+    textStyle?: object;
 }
 
 export interface PanelProps {

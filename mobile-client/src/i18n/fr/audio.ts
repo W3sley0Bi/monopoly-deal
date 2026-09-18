@@ -1,0 +1,37 @@
+import type { Catalog } from '../types';
+
+const audio: Catalog = {
+    'audio.group': 'Audio du jeu',
+    'audio.sounds': 'Sons',
+    'audio.radio': 'Radio',
+    'audio.mute_sounds': 'Couper les sons du jeu',
+    'audio.enable_sounds': 'Activer les sons du jeu',
+    'audio.radio_leave': 'Arrêter l’écoute',
+    'audio.radio_listen': 'Écouter la radio de la table',
+    'audio.sfx_volume': 'Volume des effets sonores',
+    'audio.radio_volume': 'Volume de la radio',
+    'audio.station_none': 'Radio éteinte',
+    'audio.tuned_by': 'réglée par {name}',
+    'audio.change_station': 'Changer de station',
+    'audio.pick_station': 'Choisir une station',
+    'audio.switch_off': 'Éteindre la radio',
+    'audio.owner_only': 'Seul {name} peut changer de station.',
+    'audio.tap_to_listen': 'Appuyez pour lancer le flux',
+    'audio.not_listening': 'La radio est allumée à cette table — activez la Radio pour l’écouter.',
+    'audio.station_failed': 'Ce flux n’a pas répondu. Essayez une autre station.',
+    'audio.connecting': 'Connexion en cours…',
+    'audio.picker_title': 'Radio de la table',
+    'audio.picker_subtitle': 'Tous les joueurs à la table entendent la station sélectionnée.',
+    'audio.presets': 'Sélection',
+    'audio.search_placeholder': 'Rechercher des stations — jazz, lofi, 80s…',
+    'audio.search': 'Rechercher',
+    'audio.searching': 'Recherche en cours…',
+    'audio.results': 'Résultats de recherche',
+    'audio.no_results': 'Aucune station trouvée. Essayez un autre terme.',
+    'audio.search_failed': 'L’annuaire des stations n’a pas répondu. Réessayez.',
+    'audio.station_home': 'Page de la station',
+    'audio.now_playing': 'À l’antenne',
+    'audio.directory_credit': 'Recherche propulsée par Radio-Browser, un annuaire communautaire gratuit.',
+};
+
+export default audio;
