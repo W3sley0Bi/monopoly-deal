@@ -7,3 +7,8 @@ backend/key.pem
 .idea
 docs
 *.md
+mobile-client/.env*
+mobile-client/.expo
+mobile-client/ios
+mobile-client/android
+mobile-client/__tests__

@@ -10,11 +10,20 @@ export default defineRailway(() => {
     build: {
       builder: "DOCKERFILE",
       dockerfilePath: "Dockerfile",
+      // The image holds only the Go server and the mobile-client web build;
+      // edits to the retired frontend/ or to docs should not redeploy it.
+      watchPatterns: ["backend/**", "mobile-client/**", "Dockerfile", ".dockerignore"],
     },
     deploy: {
       startCommand: "./server_bin",
       preDeployCommand: null,
+      healthcheckPath: "/",
       sleepApplication: true,
+    },
+    variables: {
+      // Baked into the web bundle at build time (see Dockerfile); keep it in
+      // step with mobile-client/.env.prod and the service's public domain.
+      EXPO_PUBLIC_SERVER_URL: "wss://monopoly-deal-game.up.railway.app/ws",
     },
   });
   return project("miraculous-appreciation", {

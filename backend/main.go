@@ -84,7 +84,7 @@ func spaHandler(dir string) http.Handler {
 		path := filepath.Join(dir, filepath.Clean("/"+strings.TrimPrefix(r.URL.Path, "/")))
 		if info, err := os.Stat(path); err == nil && !info.IsDir() {
 			// Asset names carry a content hash, so they can be cached hard.
-			if strings.HasPrefix(r.URL.Path, "/assets/") {
+			if strings.HasPrefix(r.URL.Path, "/assets/") || strings.HasPrefix(r.URL.Path, "/_expo/static/") {
 				w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 			}
 			// A cached service worker is a version of the app that can never
@@ -107,6 +107,7 @@ func spaHandler(dir string) http.Handler {
 func findStaticDir() string {
 	candidates := []string{
 		envOr("STATIC_DIR", ""),
+		filepath.Join("..", "mobile-client", "dist"),
 		filepath.Join("..", "frontend", "dist"),
 		filepath.Join("frontend", "dist"),
 		"dist",

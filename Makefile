@@ -1,7 +1,7 @@
 .PHONY: build run dev tunnel serve-public test clean
 
 build:
-	cd frontend && npm install && npm run build
+	cd mobile-client && npm install && npx expo export --platform web --output-dir dist
 	cd backend && go build -o server_bin .
 
 run: build

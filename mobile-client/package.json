@@ -55,7 +55,9 @@
     "ios:device": "node scripts/sync-dev-ip.js && expo run:ios --device",
     "ios:release": "cp -f .env.prod .env && expo run:ios --device --configuration Release",
     "test": "jest --runInBand",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build:web": "expo export --platform web --output-dir dist --clear",
+    "build:web:prod": "cp -f .env.prod .env.production.local && expo export --platform web --output-dir dist --clear; rm -f .env.production.local"
   },
   "jest": {
     "preset": "jest-expo",
