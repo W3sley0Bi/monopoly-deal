@@ -20,15 +20,14 @@ import { displayFont, ls, uiFont } from '../../../lib/fonts';
 const SHEET_EASING = Easing.bezier(0.16, 1, 0.3, 1);
 
 /**
- * The phone's answer to every desktop popover (DESIGN-TOKENS §6.1) — a bottom
- * sheet capped at 78% of the screen, dismissed by the backdrop or the swipe
- * handle. RN's own `Modal` supplies the presentation and the Android back
- * button. The backdrop fades in place while the sheet keeps the familiar
- * bottom-up movement. Both use GPU properties and finish before unmounting.
+ * Phones use a bottom sheet capped at 78% of the screen. Tablet and desktop
+ * use the same content as a centred dialog window, dismissed by the backdrop.
+ * RN's own `Modal` supplies the presentation and the Android back button.
  */
 
 function SheetImpl({ open, onClose, title, children, tabs, activeTab, onTabChange, scroll = true }: SheetProps) {
-    const { height } = useWindowDimensions();
+    const { width, height } = useWindowDimensions();
+    const roomy = Math.min(width, height) >= 600 || (Platform.OS === 'web' && width >= 900);
     const insets = useSafeAreaInsets();
     const reducedMotion = useReducedMotion();
     const [mounted, setMounted] = useState(open);
@@ -54,7 +53,7 @@ function SheetImpl({ open, onClose, title, children, tabs, activeTab, onTabChang
     // RN's `Modal` is fixed to the *window*, so the sheet is laid out in a box
     // that never shrank, and it is the padding that lifts it clear.
     const room = Math.min(height * 0.78, height - 80 - (Platform.OS === 'web' ? 0 : keyboard));
-    const travel = room + 40;
+    const travel = roomy ? 0 : room + 40;
 
     useEffect(() => {
         if (open) setMounted(true);
@@ -81,6 +80,7 @@ function SheetImpl({ open, onClose, title, children, tabs, activeTab, onTabChang
     // Only the head takes the pan: the body is a ScrollView, and a sheet that
     // dismisses when you flick its content is a sheet you cannot read.
     const pan = Gesture.Pan()
+        .enabled(!roomy)
         .onUpdate((e) => {
             // Downwards only — pulling up must not stretch the sheet past open.
             progress.value = Math.min(1, Math.max(0, 1 - Math.max(0, e.translationY) / travel));
@@ -101,16 +101,18 @@ function SheetImpl({ open, onClose, title, children, tabs, activeTab, onTabChang
         <RNModal visible={mounted} transparent animationType="none" onRequestClose={onClose}>
             {/* Gestures inside an RN Modal need their own root: the app's
                 GestureHandlerRootView does not reach into the modal window. */}
-            <GestureHandlerRootView style={styles.root}>
+            <GestureHandlerRootView style={[styles.root, roomy && styles.rootRoomy]}>
                 <Animated.View style={[styles.backdrop, backdropStyle]}>
                     <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close" />
                 </Animated.View>
                 <Animated.View
                     style={[
                         styles.sheet,
+                        roomy && styles.sheetRoomy,
                         sheetStyle,
                         {
-                            maxHeight: room,
+                            width: roomy ? Math.min(width - 48, 620) : undefined,
+                            maxHeight: roomy ? Math.min(height - 48, height * 0.82) : room,
                             // Padding on native, a margin on the web. Padding
                             // only shrinks the content box while the sheet stays
                             // stuck to the bottom of the window, so a panel with
@@ -118,16 +120,16 @@ function SheetImpl({ open, onClose, title, children, tabs, activeTab, onTabChang
                             // simply overflowed it and sat back under the
                             // keyboard. Moving the whole box up instead leaves
                             // every one of those points usable.
-                            marginBottom: Platform.OS === 'web' ? keyboard : 0,
+                            marginBottom: roomy ? 0 : Platform.OS === 'web' ? keyboard : 0,
                             paddingBottom:
-                                Math.max(12, insets.bottom) + (Platform.OS === 'web' ? 0 : keyboard),
+                                roomy ? 16 : Math.max(12, insets.bottom) + (Platform.OS === 'web' ? 0 : keyboard),
                         },
                     ]}
                 >
                     <GestureDetector gesture={pan}>
-                        <View style={styles.head} accessible accessibilityRole="adjustable"
-                            accessibilityLabel="Drag down to close">
-                            <View style={styles.grabber} />
+                        <View style={[styles.head, roomy && styles.headRoomy]} accessible={!roomy} accessibilityRole={roomy ? undefined : 'adjustable'}
+                            accessibilityLabel={roomy ? undefined : 'Drag down to close'}>
+                            {!roomy ? <View style={styles.grabber} /> : null}
                             {title ? <Text style={styles.title}>{title}</Text> : null}
                         </View>
                     </GestureDetector>
@@ -171,6 +173,7 @@ function SheetImpl({ open, onClose, title, children, tabs, activeTab, onTabChang
 
 const styles = StyleSheet.create({
     root: { flex: 1, justifyContent: 'flex-end' },
+    rootRoomy: { alignItems: 'center', justifyContent: 'center', padding: 24 },
     backdrop: { ...StyleSheet.absoluteFill, backgroundColor: '#00060899' },
     sheet: {
         backgroundColor: surface.sheet,
@@ -181,8 +184,19 @@ const styles = StyleSheet.create({
         paddingHorizontal: 14,
         paddingTop: 8,
     },
+    sheetRoomy: {
+        borderRadius: radius.modal,
+        borderWidth: 1,
+        paddingHorizontal: 20,
+        paddingTop: 16,
+        shadowColor: '#000608',
+        shadowOpacity: 0.46,
+        shadowRadius: 28,
+        shadowOffset: { width: 0, height: 16 },
+    },
     // A generous grab area: the 4pt pill alone is not a touch target.
     head: { paddingTop: 2, paddingBottom: 2 },
+    headRoomy: { paddingBottom: 6 },
     grabber: {
         alignSelf: 'center',
         width: 38,

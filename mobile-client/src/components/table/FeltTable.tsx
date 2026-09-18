@@ -53,8 +53,10 @@ function scatter(id: string, shift: number, span: number) {
     return ((seed(id) >> shift) % steps) - span;
 }
 
-function MiniCard({ color, value, fresh, left, top, rotate = 0, complete = false }: {
+function MiniCard({ color, value, fresh, left, top, rotate = 0, complete = false, unit = 1 }: {
     color: string; value?: number; fresh: boolean; left: number; top: number; rotate?: number; complete?: boolean;
+    /** Screen points per layout point; see `unit` on the seat below. */
+    unit?: number;
 }) {
     const reduced = useReducedMotion();
     const motion = useStore(s => s.motion);
@@ -65,14 +67,22 @@ function MiniCard({ color, value, fresh, left, top, rotate = 0, complete = false
     const animated = useAnimatedStyle(() => ({
         opacity: progress.value,
         transform: [
-            { translateY: -12 * (1 - progress.value) },
+            { translateY: -12 * unit * (1 - progress.value) },
             { rotate: `${rotate * progress.value}deg` },
             { scale: 0.75 + 0.25 * progress.value },
         ],
     }));
-    return <Animated.View style={[styles.card, { left, top, borderColor: complete ? '#dce64e' : '#232c55' }, animated]}>
-        <View style={{ height: 7, backgroundColor: color }} />
-        {value !== undefined ? <Text style={styles.value}>{value}</Text> : null}
+    return <Animated.View style={[styles.card, {
+        left: left * unit,
+        top: top * unit,
+        width: CARD_W * unit,
+        height: CARD_H * unit,
+        borderWidth: 0.75 * unit,
+        borderRadius: 2 * unit,
+        borderColor: complete ? '#dce64e' : '#232c55',
+    }, animated]}>
+        <View style={{ height: 7 * unit, backgroundColor: color }} />
+        {value !== undefined ? <Text style={[styles.value, { fontSize: 8 * unit, lineHeight: 11 * unit }]}>{value}</Text> : null}
     </Animated.View>;
 }
 
@@ -214,6 +224,8 @@ export interface ChairAnchor {
 const CHIP_GAP = 10;
 /** Keeps the tilted ring's outermost chip off the very edge of the screen. */
 const TILT_MARGIN = 10;
+/** Gap between neighbouring seats on a tilted table, as a share of a seat. */
+const TILT_SEAT_GAP = 0.32;
 /** Points along the tilted table's outline; plenty for a smooth oval. */
 const OVAL_STEPS = 72;
 /** How far the table's apron shows below its near edge. */
@@ -328,8 +340,12 @@ export function FeltTable({
     // The ring is always calculated for five chairs. Empty chairs remain real
     // positions instead of causing every occupied chair to move. Include the
     // visual scale here, then pull the ring slightly away from edge overlays.
-    const minRadiusFor = (scale: number) =>
-        (SEAT * scale + SEAT_GAP) / (2 * Math.sin(Math.PI / TABLE_SEAT_COUNT)) * (1 - SEAT_RING_INSET);
+    const minRadiusFor = (scale: number) => tilted
+        // A tilted table has room to spare and big piles, so neighbours keep
+        // a gap in proportion to their size; the phone's fixed 22pt, pulled
+        // in besides, left big seats shoulder to shoulder.
+        ? (SEAT * scale * (1 + TILT_SEAT_GAP)) / (2 * Math.sin(Math.PI / TABLE_SEAT_COUNT))
+        : (SEAT * scale + SEAT_GAP) / (2 * Math.sin(Math.PI / TABLE_SEAT_COUNT)) * (1 - SEAT_RING_INSET);
     const chipSlots = assignedTableSlots.slice(1);
     const tiltedRing = tilted && size.width > 0
         ? fitTiltedRing({
@@ -709,6 +725,15 @@ export function FeltTable({
             const assignedProperties = player ? propertySlots.current.get(player.id) ?? [] : [];
             const setsByColor = new Map(player?.sets.map(set => [set.color, set]) ?? []);
             const { seatScale, seatSquash } = place;
+            /*
+             * Screen points per layout point. The pile is laid out at the size
+             * it is drawn, not drawn at a phone's size and scaled up: a scaled
+             * layer is rasterised at its layout size first, so on a big table
+             * the cards came out as stretched, soft pixels. Only rotation and
+             * foreshortening remain transforms.
+             */
+            const unit = pileScale * seatScale;
+            const u = (n: number) => n * unit;
             // Visuals only. The taps are handled by `SeatHits`, rendered above
             // every panel — down here a pile sat under whatever the layout put
             // on top of the felt and could not be reached at all.
@@ -720,29 +745,40 @@ export function FeltTable({
                     are smaller and sit a little flatter than your own. The
                     outermost squash is the camera's: the pile turns within
                     the mat first, then the mat is foreshortened on screen. */}
-                <View pointerEvents="none" style={[styles.piles, {
+                <View pointerEvents="none" style={{
+                    width: u(PILE_W),
+                    height: u(PILE_H),
                     transformOrigin: 'center',
                     transform: [
                         { scaleY: camera.cos },
                         { rotate: `${rotation}deg` },
-                        { scale: pileScale },
-                        { scale: seatScale },
                         { scaleY: seatSquash },
                     ],
-                }]}>
+                }}>
                     {/* The engraved mat is always present, including at empty
                         chairs, so all five spatial anchors remain visible. */}
                     {Array.from({ length: PROPERTY_SLOT_COUNT }, (_, slot) => (
                         <View key={`guide-${slot}`} style={[
                             styles.propertyGuide,
                             {
-                                left: (slot % COLS) * COL,
-                                top: Math.floor(slot / COLS) * ROW,
+                                left: u((slot % COLS) * COL),
+                                top: u(Math.floor(slot / COLS) * ROW),
+                                width: u(STACK_W),
+                                height: u(STACK_H),
+                                borderWidth: u(0.75),
+                                borderRadius: u(2),
                             },
                             !player && styles.emptyGuide,
                         ]} />
                     ))}
-                    <View style={[styles.bankGuide, !player && styles.emptyGuide]} />
+                    <View style={[styles.bankGuide, {
+                        left: u(BANK_LEFT),
+                        top: u(BANK_VERTICAL_INSET),
+                        width: u(BANK_W),
+                        height: u(PILE_H - BANK_VERTICAL_INSET * 2),
+                        borderWidth: u(0.75),
+                        borderRadius: u(2),
+                    }, !player && styles.emptyGuide]} />
 
                     {assignedProperties.map((color, slot) => {
                         if (!color) return null;
@@ -751,18 +787,18 @@ export function FeltTable({
                         return <View key={color} style={{
                             position: 'absolute',
                             zIndex: built(set) !== 'none' ? 2 : 1,
-                            left: (slot % COLS) * COL,
-                            top: Math.floor(slot / COLS) * ROW,
-                            width: STACK_W,
-                            height: STACK_H,
+                            left: u((slot % COLS) * COL),
+                            top: u(Math.floor(slot / COLS) * ROW),
+                            width: u(STACK_W),
+                            height: u(STACK_H),
                             alignItems: 'center',
                             justifyContent: 'flex-end',
                         }}>
                             {built(set) !== 'none' ? IS_WEB ? <MiniBuilding
                                 kind={built(set) as 'house' | 'hotel'}
                                 color={colorMeta(set.color).hex}
-                                renderScale={BUILDING_FOOTPRINT_SCALE}
-                                visualScale={BUILDING_FOOTPRINT_SCALE}
+                                renderScale={BUILDING_FOOTPRINT_SCALE * unit}
+                                visualScale={BUILDING_FOOTPRINT_SCALE * unit}
                                 seatRotation={rotation}
                                 seatSquash={seatSquash}
                                 seatTilt={camera.cos}
@@ -770,7 +806,7 @@ export function FeltTable({
                                 left={Math.min(i, FAN_STEPS) * FAN_OFFSET + scatter(card.id, 0, 1)}
                                 top={Math.min(i, FAN_STEPS) * FAN_OFFSET + scatter(card.id, 3, 1)}
                                 rotate={scatter(card.id, 6, 6)}
-                                fresh={fresh(card.id)} complete={set.complete} />)}
+                                fresh={fresh(card.id)} complete={set.complete} unit={unit} />)}
                         </View>;
                     })}
                     {bank.map((card, i) => <MiniCard key={card.id} color={moneyMeta(card.value).hex}
@@ -778,7 +814,7 @@ export function FeltTable({
                         left={BANK_LEFT + Math.min(bank.length - 1 - i, FAN_STEPS) * FAN_OFFSET + scatter(card.id, 0, 1)}
                         top={(PILE_H - STACK_H) / 2 + Math.min(bank.length - 1 - i, FAN_STEPS) * FAN_OFFSET + scatter(card.id, 3, 1)}
                         rotate={scatter(card.id, 6, 6)}
-                        fresh={fresh(card.id)} />)}
+                        fresh={fresh(card.id)} unit={unit} />)}
                 </View>
                 {!IS_WEB && assignedProperties.map((color, slot) => {
                     const set = color ? setsByColor.get(color) : undefined;
@@ -851,7 +887,6 @@ const styles = StyleSheet.create({
     },
     // Every seat owns this same mat. Only its rotation and depth change.
     seat: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
-    piles: { width: PILE_W, height: PILE_H },
     propertyGuide: {
         position: 'absolute',
         width: STACK_W,

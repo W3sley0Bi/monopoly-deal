@@ -391,32 +391,72 @@ function TableBody() {
         ? assets(me).map((a) => ({ card: a.card, source: (a.fromColor ?? 'bank') as 'bank' | Color }))
         : [];
 
-    const renderTurnControls = (roomy: boolean) => (
-        <GlassPanel style={[styles.controls, roomy && styles.controlsRoomy]}>
-            {roomy ? (
-                <View style={styles.controlToolsRoomy}>
-                    <Pressable disabled={tutorialActive} onPress={() => setMenu(true)} style={({ pressed }) => [styles.talkBtn, styles.talkBtnRoomy, tutorialActive && styles.controlDisabled, pressed && styles.talkBtnPressed]} accessibilityRole="button" accessibilityLabel={t('table.menu')}>
-                        <Icon name="gearshape.fill" fallback="☰" size={16} color={ink.muted60} />
-                    </Pressable>
-                    <Pressable disabled={tutorialActive} onPress={() => setLogOpen(true)} style={({ pressed }) => [styles.talkBtn, styles.talkBtnRoomy, tutorialActive && styles.controlDisabled, pressed && styles.talkBtnPressed]} accessibilityRole="button" accessibilityLabel={t('panel.log')}>
-                        <Icon name="list.bullet.rectangle" fallback="≡" size={16} color={ink.muted60} />
-                    </Pressable>
-                    <Pressable disabled={tutorialActive} onPress={() => setTalk(true)} style={({ pressed }) => [styles.talkBtn, styles.talkBtnRoomy, tutorialActive && styles.controlDisabled, pressed && styles.talkBtnPressed]} accessibilityRole="button" accessibilityLabel={t('panel.chat')}>
-                        <Icon name="bubble.left.and.bubble.right.fill" fallback="…" size={16} color={ink.muted60} />
-                    </Pressable>
-                </View>
-            ) : (
-                <>
-                    <Pressable disabled={tutorialActive} onPress={() => setMenu(true)} style={({ pressed }) => [styles.talkBtn, tutorialActive && styles.controlDisabled, pressed && styles.talkBtnPressed]} accessibilityRole="button" accessibilityLabel={t('table.menu')}>
-                        <Icon name="gearshape.fill" fallback="☰" size={18} color={ink.muted60} />
-                    </Pressable>
-                    <Pressable disabled={tutorialActive} onPress={() => setLogOpen(true)} style={({ pressed }) => [styles.talkBtn, tutorialActive && styles.controlDisabled, pressed && styles.talkBtnPressed]} accessibilityRole="button" accessibilityLabel={t('panel.log')}>
-                        <Icon name="list.bullet.rectangle" fallback="≡" size={18} color={ink.muted60} />
-                    </Pressable>
-                </>
-            )}
+    const renderRoomyHandTools = () => (
+        <View style={styles.roomyHandTools}>
+            <Pressable disabled={tutorialActive} onPress={() => setMenu(true)} style={({ pressed }) => [styles.talkBtn, styles.talkBtnRoomy, tutorialActive && styles.controlDisabled, pressed && styles.talkBtnPressed]} accessibilityRole="button" accessibilityLabel={t('table.menu')}>
+                <Icon name="gearshape.fill" fallback="☰" size={20} color={ink.muted60} />
+            </Pressable>
+            <Pressable disabled={tutorialActive} onPress={() => setLogOpen(true)} style={({ pressed }) => [styles.talkBtn, styles.talkBtnRoomy, tutorialActive && styles.controlDisabled, pressed && styles.talkBtnPressed]} accessibilityRole="button" accessibilityLabel={t('panel.log')}>
+                <Icon name="list.bullet.rectangle" fallback="≡" size={20} color={ink.muted60} />
+            </Pressable>
+            <Pressable disabled={tutorialActive} onPress={() => setTalk(true)} style={({ pressed }) => [styles.talkBtn, styles.talkBtnRoomy, tutorialActive && styles.controlDisabled, pressed && styles.talkBtnPressed]} accessibilityRole="button" accessibilityLabel={t('panel.chat')}>
+                <Icon name="bubble.left.and.bubble.right.fill" fallback="…" size={20} color={ink.muted60} />
+            </Pressable>
+        </View>
+    );
 
-            <View style={[styles.turnChip, roomy && styles.turnChipRoomy]}>
+    const renderRoomyTurnStatus = () => (
+        <View style={styles.roomyTurnStatus}>
+            <View style={[styles.turnChip, styles.turnChipRoomy]}>
+                <Text style={styles.turnText} numberOfLines={1}>
+                    {spectating
+                        ? t('table.watching')
+                        : myTurn
+                          ? t('table.your_turn')
+                          : t('table.turn_of', {
+                                name: g.players[g.current_turn % g.players.length]?.name ?? '',
+                            })}
+                </Text>
+                {myTurn ? <View style={styles.plays} accessibilityLabel={`${t('table.plays_hint')}: ${g.plays_left}`}>
+                    {Array.from({ length: 3 }, (_, i) => <View key={i} style={[styles.play, i < g.plays_left && styles.playLeft]} />)}
+                </View> : null}
+            </View>
+            {g.deadline_kind !== 'respond' ? (
+                <CountdownTimer
+                    deadlineMs={g.deadline_ms}
+                    totalSeconds={g.deadline_seconds}
+                    skewMs={skewMs}
+                    kind={g.deadline_kind === 'starting' ? 'starting' : 'turn'}
+                    compact
+                />
+            ) : null}
+            {myTurn && !pending && !spectating ? (
+                <View
+                    ref={endTurnTutorialRef}
+                    collapsable={false}
+                    onLayout={() => recordTutorialAnchor('controls', endTurnTutorialRef.current)}
+                >
+                    <Btn
+                        label={autoEndLeft > 0 ? t('table.auto_end', { seconds: autoEndLeft }) : t('table.end_turn')}
+                        variant="red"
+                        disabled={Boolean(tutorial && (tutorial.id !== 'end_turn' || tutorial.done))}
+                        onPress={() => act({ type: 'end_turn' })}
+                        style={[styles.endTurn, styles.endTurnRoomy]}
+                    />
+                </View>
+            ) : null}
+        </View>
+    );
+
+    const renderTurnControls = () => (
+        <GlassPanel style={styles.controls}>
+            <Pressable disabled={tutorialActive} onPress={() => setMenu(true)} style={({ pressed }) => [styles.talkBtn, tutorialActive && styles.controlDisabled, pressed && styles.talkBtnPressed]} accessibilityRole="button" accessibilityLabel={t('table.menu')}>
+                <Icon name="gearshape.fill" fallback="☰" size={18} color={ink.muted60} />
+            </Pressable>
+            <Pressable disabled={tutorialActive} onPress={() => setLogOpen(true)} style={({ pressed }) => [styles.talkBtn, tutorialActive && styles.controlDisabled, pressed && styles.talkBtnPressed]} accessibilityRole="button" accessibilityLabel={t('panel.log')}>
+                <Icon name="list.bullet.rectangle" fallback="≡" size={18} color={ink.muted60} />
+            </Pressable>
+            <View style={styles.turnChip}>
                 <Text style={styles.turnText} numberOfLines={1}>
                     {spectating
                         ? t('table.watching')
@@ -437,29 +477,25 @@ function TableBody() {
                     totalSeconds={g.deadline_seconds}
                     skewMs={skewMs}
                     kind={g.deadline_kind === 'starting' ? 'starting' : 'turn'}
-                    compact={roomy}
                 />
             ) : null}
 
-            {!roomy ? (
-                <Pressable disabled={tutorialActive} onPress={() => setTalk(true)} style={({ pressed }) => [styles.talkBtn, tutorialActive && styles.controlDisabled, pressed && styles.talkBtnPressed]} accessibilityRole="button" accessibilityLabel={t('panel.chat')}>
-                    <Icon name="bubble.left.and.bubble.right.fill" fallback="…" size={18} color={ink.muted60} />
-                </Pressable>
-            ) : null}
+            <Pressable disabled={tutorialActive} onPress={() => setTalk(true)} style={({ pressed }) => [styles.talkBtn, tutorialActive && styles.controlDisabled, pressed && styles.talkBtnPressed]} accessibilityRole="button" accessibilityLabel={t('panel.chat')}>
+                <Icon name="bubble.left.and.bubble.right.fill" fallback="…" size={18} color={ink.muted60} />
+            </Pressable>
 
             {myTurn && !pending && !spectating ? (
                 <View
                     ref={endTurnTutorialRef}
                     collapsable={false}
                     onLayout={() => recordTutorialAnchor('controls', endTurnTutorialRef.current)}
-                    style={roomy ? styles.endTurnRoomyWrap : undefined}
                 >
                     <Btn
                         label={autoEndLeft > 0 ? t('table.auto_end', { seconds: autoEndLeft }) : t('table.end_turn')}
                         variant="red"
                         disabled={Boolean(tutorial && (tutorial.id !== 'end_turn' || tutorial.done))}
                         onPress={() => act({ type: 'end_turn' })}
-                        style={[styles.endTurn, roomy && styles.endTurnRoomy]}
+                        style={styles.endTurn}
                     />
                 </View>
             ) : null}
@@ -708,6 +744,7 @@ function TableBody() {
 
             {/* ---- hand ---- */}
             <View style={roomyPlayerStation ? styles.roomyHandRow : undefined}>
+                {roomyPlayerStation ? renderRoomyHandTools() : null}
                 <GlassPanel
                     targetRef={handTutorialRef}
                     withGlass={!roomyPlayerStation}
@@ -786,7 +823,7 @@ function TableBody() {
                     {hand.length === 0 ? <Text style={styles.handHint}>{t('table.hand_empty')}</Text> : null}
                 </View>
                 </GlassPanel>
-                {roomyPlayerStation ? renderTurnControls(true) : null}
+                {roomyPlayerStation ? renderRoomyTurnStatus() : null}
             </View>
 
             </> : null}
@@ -841,9 +878,8 @@ function TableBody() {
                 </Panel>
             ) : null}
 
-            {/* The compact, horizontal turn bar remains mobile-only. Roomy
-                screens place the same controls beside the hand. */}
-            {!roomyPlayerStation ? renderTurnControls(false) : null}
+            {/* The compact, horizontal turn bar remains mobile-only. */}
+            {!roomyPlayerStation ? renderTurnControls() : null}
 
             {/* ---- seat taps ----
                 Above every panel, deliberately. The piles are painted inside
@@ -1490,12 +1526,14 @@ const styles = StyleSheet.create({
     },
     roomyHandRow: {
         width: '60%',
-        minHeight: 200,
+        minHeight: 180,
         alignSelf: 'center',
         flexDirection: 'row',
         alignItems: 'stretch',
         gap: 8,
     },
+    roomyHandTools: { width: 42, alignSelf: 'center', alignItems: 'center', gap: 8 },
+    roomyTurnStatus: { width: 86, alignSelf: 'center', alignItems: 'center', gap: 7 },
     grabberRow: { alignItems: 'center', paddingTop: 2 },
     grabber: { width: 34, height: 4, borderRadius: 2, backgroundColor: '#d8fff033' },
     handFan: { flexShrink: 0, alignItems: 'center', gap: 3, paddingTop: 0, paddingBottom: 4, paddingHorizontal: 6 },
@@ -1524,19 +1562,8 @@ const styles = StyleSheet.create({
         paddingHorizontal: 8,
         paddingVertical: 7,
     },
-    controlsRoomy: {
-        width: 80,
-        minHeight: 200,
-        alignSelf: 'stretch',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        borderRadius: 16,
-        padding: 6,
-    },
-    controlToolsRoomy: { flexDirection: 'column', alignItems: 'center', gap: 4 },
     turnChip: { flex: 1, gap: 4 },
-    turnChipRoomy: { flexGrow: 1, flexShrink: 1, alignItems: 'center', justifyContent: 'center' },
+    turnChipRoomy: { flexGrow: 0, flexShrink: 1, alignItems: 'center' },
     turnText: { fontFamily: uiFont(800), fontSize: 12, color: ink.body },
     // Dots rather than glyphs: ●/○ sit on different baselines in the UI face
     // and the row jittered as plays were spent.
@@ -1554,14 +1581,13 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: '#d8fff01f',
     },
-    talkBtnRoomy: { width: 24, height: 24, borderRadius: 12 },
+    talkBtnRoomy: { width: 42, height: 42, borderRadius: 21 },
     talkBtnPressed: { backgroundColor: '#d8fff026' },
     controlDisabled: { opacity: 0.34 },
     // Concentric with the bar: the bar's radius minus its padding, so the red
     // edge never crosses the glass border behind it.
     endTurn: { borderRadius: 15, paddingHorizontal: 14, minHeight: 40 },
-    endTurnRoomyWrap: { width: '100%' },
-    endTurnRoomy: { width: '100%', minHeight: 32, paddingHorizontal: 4, borderRadius: 12 },
+    endTurnRoomy: { minHeight: 42, paddingHorizontal: 18, borderRadius: 12 },
     sheetStat: { fontFamily: uiFont(700), fontSize: 13, color: ink.muted60 },
     logLine: { fontFamily: uiFont(700), fontSize: 12, color: ink.muted60, lineHeight: 18 },
     winOverlay: {
