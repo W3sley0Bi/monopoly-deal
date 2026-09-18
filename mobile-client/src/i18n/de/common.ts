@@ -44,6 +44,7 @@ const common: Catalog = {
     'turn.seconds': '{seconds}s',
     'turn.minutes': '{minutes} Min.',
 
+    'common.error': 'Etwas ist schiefgelaufen',
     'common.cancel': 'Abbrechen',
     'common.close': 'Schließen',
     'common.back': 'Zurück',

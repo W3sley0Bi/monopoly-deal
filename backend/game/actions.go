@@ -134,7 +134,12 @@ func (g *Game) playRent(p *Player, c Card, opt ActionOptions) error {
 
 	// Double The Rent cards cost one extra play each.
 	var extra []Card
+	seen := make(map[string]bool, len(opt.DoubleCardIDs))
 	for _, id := range opt.DoubleCardIDs {
+		if seen[id] {
+			return fault("err.duplicate_double_rent", "the same Double The Rent card cannot be used twice")
+		}
+		seen[id] = true
 		d, err := peekHand(p, id)
 		if err != nil {
 			return err
@@ -327,7 +332,7 @@ func (g *Game) settleAuto() {
 			t.Settled = true
 			continue
 		}
-		
+
 		// A player with no assets can do nothing about a debt.
 		if t.Responder == t.PlayerID && !t.Cancelled {
 			if pd.Kind == PendingPayment {

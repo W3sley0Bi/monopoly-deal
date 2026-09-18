@@ -22,6 +22,8 @@ const home: Catalog = {
     'home.account': 'Konto',
     'home.reconnecting': 'verbinde neu…',
     'home.offline_status': 'Offline · Solo-Spiele gegen Roboter sind verfügbar',
+    'home.retry_connection': 'Erneut versuchen',
+    'home.request_timeout': 'Der Server antwortet nicht. Prüfe die Verbindung und versuche es erneut.',
     'home.no_network': 'Keine Netzwerkverbindung',
 
     // Solo practice against robots.

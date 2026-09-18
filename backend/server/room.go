@@ -2,6 +2,9 @@ package server
 
 import (
 	"fmt"
+	"log"
+	"runtime/debug"
+	"sync"
 	"time"
 
 	"monopoly-deal-backend/game"
@@ -24,7 +27,8 @@ type Room struct {
 	emptySince time.Time
 	// botAt is when the robot the game is waiting on should move. Zero means
 	// nothing is pending, so the pause starts fresh on the next decision.
-	botAt time.Time
+	botAt        time.Time
+	botMoveDelay time.Duration
 
 	// chat is the table's group chat, newest last.
 	chat []ChatMessage
@@ -37,10 +41,12 @@ type Room struct {
 	summaryHash string
 
 	// Actor state
-	actions chan func()
-	clients map[*Client]struct{}
-	hub     *Hub
-	done    chan struct{}
+	actions   chan func()
+	clients   map[*Client]struct{}
+	hub       *Hub
+	done      chan struct{}
+	closeOnce sync.Once
+	stateMu   sync.RWMutex
 }
 
 // nextBot hands out the next robot sequence number for this table.
@@ -73,15 +79,16 @@ func (r *Room) append(m ChatMessage) {
 
 func newRoom(h *Hub, id, name string) *Room {
 	r := &Room{
-		ID:         id,
-		Name:       name,
-		Game:       game.NewGame(id),
-		spectators: map[string]string{},
-		chat:       []ChatMessage{},
-		actions:    make(chan func(), 128),
-		clients:    map[*Client]struct{}{},
-		hub:        h,
-		done:       make(chan struct{}),
+		ID:           id,
+		Name:         name,
+		Game:         game.NewGame(id),
+		spectators:   map[string]string{},
+		chat:         []ChatMessage{},
+		actions:      make(chan func(), 128),
+		clients:      map[*Client]struct{}{},
+		hub:          h,
+		done:         make(chan struct{}),
+		botMoveDelay: botMoveDelay,
 	}
 	go r.run()
 	return r
@@ -230,6 +237,12 @@ func (r *Room) view(playerID string) RoomView {
 // summary renders one home-screen row. live is how many connections the table
 // currently holds, which decides whether it counts as abandoned.
 func (r *Room) summary(playerID string, live int) RoomSummary {
+	r.stateMu.RLock()
+	defer r.stateMu.RUnlock()
+	return r.summaryLocked(playerID, live)
+}
+
+func (r *Room) summaryLocked(playerID string, live int) RoomSummary {
 	_, spectating := r.spectators[playerID]
 	abandoned := live == 0
 	return RoomSummary{
@@ -271,7 +284,7 @@ func (r *Room) computeSummaryHash(live int) string {
 }
 
 func (r *Room) Close() {
-	close(r.done)
+	r.closeOnce.Do(func() { close(r.done) })
 }
 
 func (r *Room) Do(f func()) {
@@ -295,48 +308,65 @@ func (r *Room) run() {
 		case <-r.done:
 			return
 		case f := <-r.actions:
+			r.stateMu.Lock()
 			wasHash := r.summaryHash
-			f()
+			r.runSafely("action", f)
 			newHash := r.computeSummaryHash(len(r.clients))
 			if newHash != wasHash {
 				r.summaryHash = newHash
 				r.hub.wake()
 			}
+			r.stateMu.Unlock()
 		case now := <-t.C:
-			wasLive := len(r.clients)
-			wasHash := r.summaryHash
-			roomChanged := false
-
-			if r.Game.Tick(now) {
-				r.absorbRequests()
-				roomChanged = true
-			}
-			
-			if r.stepBots(now) {
-				roomChanged = true
-			}
-
-			if wasLive == 0 {
-				if r.emptySince.IsZero() {
-					r.emptySince = now
-				} else if now.Sub(r.emptySince) > emptyRoomTTL {
-					go r.hub.deleteRoom(r.ID) // self-destruct asynchronously to not deadlock
-				}
-			} else {
-				r.emptySince = time.Time{}
-			}
-
-			if roomChanged {
-				r.broadcast()
-			}
-			
-			newHash := r.computeSummaryHash(len(r.clients))
-			if newHash != wasHash {
-				r.summaryHash = newHash
-				r.hub.wake()
-			}
+			r.stateMu.Lock()
+			r.runSafely("tick", func() { r.tick(now) })
+			r.stateMu.Unlock()
 		}
 	}
+}
+
+func (r *Room) tick(now time.Time) {
+	wasLive := len(r.clients)
+	wasHash := r.summaryHash
+	roomChanged := false
+
+	if r.Game.Tick(now) {
+		r.absorbRequests()
+		roomChanged = true
+	}
+	if r.stepBots(now) {
+		roomChanged = true
+	}
+
+	if wasLive == 0 {
+		if r.emptySince.IsZero() {
+			r.emptySince = now
+		} else if now.Sub(r.emptySince) > emptyRoomTTL {
+			go r.hub.deleteRoom(r.ID) // self-destruct asynchronously to not deadlock
+		}
+	} else {
+		r.emptySince = time.Time{}
+	}
+
+	if roomChanged {
+		r.broadcast()
+	}
+	newHash := r.computeSummaryHash(len(r.clients))
+	if newHash != wasHash {
+		r.summaryHash = newHash
+		r.hub.wake()
+	}
+}
+
+// runSafely contains an unexpected game bug to one room. An unhandled panic
+// in any goroutine terminates the entire Go process, taking every table down.
+func (r *Room) runSafely(source string, f func()) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			log.Printf("room %s %s panic: %v\n%s", r.ID, source, recovered, debug.Stack())
+		}
+	}()
+	f()
 }
 
 func (r *Room) stepBots(now time.Time) bool {
@@ -345,14 +375,14 @@ func (r *Room) stepBots(now time.Time) bool {
 		return false
 	}
 	if r.botAt.IsZero() {
-		r.botAt = now.Add(botMoveDelay)
+		r.botAt = now.Add(r.botMoveDelay)
 		return false
 	}
 	if now.Before(r.botAt) {
 		return false
 	}
 	moved := r.Game.BotAct()
-	r.botAt = now.Add(botMoveDelay)
+	r.botAt = now.Add(r.botMoveDelay)
 	if moved {
 		r.Game.PostAction()
 		r.absorbRequests()
@@ -360,9 +390,9 @@ func (r *Room) stepBots(now time.Time) bool {
 	return moved
 }
 
-func (r *Room) handleMessage(c *Client, msg ClientMessage) error {
+func (r *Room) handleMessage(playerID, playerName string, msg ClientMessage) error {
 	g := r.Game
-	owner := c.playerID == r.OwnerID
+	owner := playerID == r.OwnerID
 
 	switch msg.Type {
 	case MsgSetOptions:
@@ -398,13 +428,13 @@ func (r *Room) handleMessage(c *Client, msg ClientMessage) error {
 		return g.Reset()
 
 	case MsgTutorialNext:
-		return g.TutorialNext(c.playerID)
+		return g.TutorialNext(playerID)
 
 	case MsgTerminate:
-		if !r.isSeated(c.playerID) && !owner {
+		if !r.isSeated(playerID) && !owner {
 			return game.NewFault("err.end_seated_only", "only players at the table can end the game")
 		}
-		return g.Terminate(c.playerID)
+		return g.Terminate(playerID)
 
 	case MsgKick:
 		if !owner {
@@ -419,16 +449,16 @@ func (r *Room) handleMessage(c *Client, msg ClientMessage) error {
 		if r.seatsFree() == 0 {
 			return game.NewFault("err.table_full", "the table is full")
 		}
-		delete(r.spectators, c.playerID)
-		r.dropRequest(c.playerID)
-		return g.AddPlayer(c.playerID, c.name)
+		delete(r.spectators, playerID)
+		r.dropRequest(playerID)
+		return g.AddPlayer(playerID, playerName)
 
 	case MsgRequestSeat:
-		if r.isSeated(c.playerID) {
+		if r.isSeated(playerID) {
 			return game.NewFault("err.already_seated", "you already have a seat")
 		}
-		r.addRequest(c.playerID, c.name)
-		g.Announce("log.asked_for_seat", "name", c.name)
+		r.addRequest(playerID, playerName)
+		g.Announce("log.asked_for_seat", "name", playerName)
 		return nil
 
 	case MsgAddBot:
@@ -447,7 +477,7 @@ func (r *Room) handleMessage(c *Client, msg ClientMessage) error {
 		return g.RemoveBot()
 
 	case MsgCancelSeat:
-		r.dropRequest(c.playerID)
+		r.dropRequest(playerID)
 		return nil
 
 	case MsgChat:
@@ -455,15 +485,15 @@ func (r *Room) handleMessage(c *Client, msg ClientMessage) error {
 		if text != "👏" && text != "😈" && text != "😂" && text != "🤯" {
 			return nil // Drop text chat, only allow emojis
 		}
-		r.say(c.playerID, c.name, text)
+		r.say(playerID, playerName, text)
 		return nil
 	}
 
 	// Everything below is a move, so it needs a seat.
-	if !r.isSeated(c.playerID) {
+	if !r.isSeated(playerID) {
 		return game.NewFault("err.spectator", "spectators cannot play")
 	}
-	id := c.playerID
+	id := playerID
 
 	switch msg.Type {
 	case MsgPlayBank:
@@ -512,7 +542,7 @@ func (r *Room) kick(targetID string) error {
 	r.dropRequest(targetID)
 	r.Game.Announce("log.removed", "name", name)
 	r.ensureOwner()
-	
+
 	// tell hub to evict them
 	go r.hub.evict(r.ID, targetID)
 	return nil

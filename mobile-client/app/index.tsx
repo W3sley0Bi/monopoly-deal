@@ -21,13 +21,14 @@ import { Avatar, Btn, Icon, LabelCaps, LanguagePicker, Panel, Sheet } from '../s
 import { GameSoundSettings } from '../src/components/settings/GameSoundSettings';
 import { useI18n } from '../src/i18n';
 import { FIXTURES } from '../src/dev/fixtures';
+import { ConnectionStatus } from '../src/components/ConnectionStatus';
 import type { Difficulty } from '../src/types';
 
 export default function HomeScreen() {
     const { t } = useI18n();
     const router = useRouter();
     const insets = useSafeAreaInsets();
-    const { status: sock, home, room, notice, send, myId, name, setName } = useGameConnectionContext();
+    const { status: sock, home, room, notice, send, retryConnection, myId, name, setName } = useGameConnectionContext();
 
     const tutorialDone = useStore((s) => s.tutorialDone);
     const setTutorialDone = useStore((s) => s.setTutorialDone);
@@ -131,7 +132,7 @@ export default function HomeScreen() {
                 refreshControl={
                     // There is nothing to re-fetch — the server pushes a snapshot on
                     // every change — so the pull just nudges a reconnecting socket.
-                    <RefreshControl refreshing={false} onRefresh={() => send({ type: 'hello' })} tintColor={ink.muted60} />
+                    <RefreshControl refreshing={sock === 'connecting'} onRefresh={retryConnection} tintColor={ink.muted60} />
                 }
             >
                 {noticeText ? (
@@ -140,7 +141,7 @@ export default function HomeScreen() {
                     </View>
                 ) : null}
 
-                {!connected ? <Text style={styles.reconnect}>{t('home.offline_status')}</Text> : null}
+                <ConnectionStatus status={sock} onRetry={retryConnection} />
 
                 {/* ---- learn ---- */}
                 <Panel style={styles.card}>

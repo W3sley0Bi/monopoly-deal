@@ -22,5 +22,7 @@ const invite: Catalog = {
     'wheel.order': "Eure Zugreihenfolge",
     'timer.starting': "Der erste Spieler wird gewählt",
     'err.game_starting': "Die Startreihenfolge wird noch angezeigt.",
+    'invite.copy_failed': "Der Link konnte nicht kopiert werden. Halte ihn oben gedrückt, um ihn zu kopieren.",
+    'invite.share_failed': "Teilen ist gerade nicht möglich. Kopiere stattdessen den Link.",
 };
 export default invite;

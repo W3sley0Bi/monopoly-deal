@@ -238,8 +238,8 @@ export interface BtnProps {
     onPress: () => void;
     variant?: BtnVariant;
     disabled?: boolean;
-    /** Renders `…` and disables the press per TABLE-SPEC §5's Tutorial Next
-     *  round-trip, and the same pattern in dialogs waiting on the server. */
+    /** Renders a progress indicator and disables the press while waiting for
+     *  a server round-trip. */
     pending?: boolean;
     icon?: ReactNode;
     style?: object;
@@ -347,6 +347,8 @@ export interface PendingPanelProps {
      *  the whole screen and therefore hides the floating tutorial coach. */
     tutorialCopy?: { title: string; body: string; task: string; onSkip: () => void };
     youHasJsn?: boolean;
+    disabled?: boolean;
+    isPending?: boolean;
     onClose?: () => void;
     onRespond: (msg: { say_no?: boolean; card_ids?: string[] }) => void;
 }

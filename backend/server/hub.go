@@ -92,13 +92,15 @@ func (c *Client) writePump() {
 }
 
 type Hub struct {
-	mu      sync.Mutex
-	rooms   map[string]*Room
-	order   []string
-	clients map[*Client]struct{}
-	stop    chan struct{}
-	wakeCh  chan struct{}
-	pending []outbound
+	mu        sync.Mutex
+	rooms     map[string]*Room
+	order     []string
+	clients   map[*Client]struct{}
+	stop      chan struct{}
+	wakeCh    chan struct{}
+	pending   []outbound
+	ops       []roomOp
+	closeOnce sync.Once
 }
 
 func NewHub() *Hub {
@@ -112,7 +114,7 @@ func NewHub() *Hub {
 	return h
 }
 
-func (h *Hub) Close() { close(h.stop) }
+func (h *Hub) Close() { h.closeOnce.Do(func() { close(h.stop) }) }
 
 func (h *Hub) wake() {
 	select {
@@ -124,6 +126,34 @@ func (h *Hub) wake() {
 type outbound struct {
 	c   *Client
 	msg ServerMessage
+}
+
+// roomOp is a room action decided under h.mu but submitted only after it is
+// released. Room.Do blocks while that room's action queue is full, and holding
+// the hub lock through that wait would stall every connection on the server,
+// not just the ones at the busy table.
+type roomOp struct {
+	r *Room
+	f func()
+}
+
+func (h *Hub) doLocked(r *Room, f func()) {
+	h.ops = append(h.ops, roomOp{r, f})
+}
+
+// takeOpsLocked must be called in the same critical section that queued the
+// ops, so a caller only ever submits its own actions, in the order it decided
+// them.
+func (h *Hub) takeOpsLocked() []roomOp {
+	ops := h.ops
+	h.ops = nil
+	return ops
+}
+
+func runOps(ops []roomOp) {
+	for _, op := range ops {
+		op.r.Do(op.f)
+	}
 }
 
 func (h *Hub) loop() {
@@ -249,7 +279,7 @@ func (h *Hub) HandleConnections(w http.ResponseWriter, r *http.Request) {
 					}
 				}
 
-				r.Do(func() {
+				h.doLocked(r, func() {
 					r.detach(c, stillHere)
 					r.broadcast()
 				})
@@ -257,14 +287,16 @@ func (h *Hub) HandleConnections(w http.ResponseWriter, r *http.Request) {
 		}
 		c.roomID = ""
 		batch := h.flushPendingLocked()
+		ops := h.takeOpsLocked()
 		h.mu.Unlock()
+		runOps(ops)
 		deliver(batch)
 		c.stop()
 	}()
 
 	for {
-		var msg ClientMessage
-		if err := conn.ReadJSON(&msg); err != nil {
+		_, payload, err := conn.ReadMessage()
+		if err != nil {
 			if websocket.IsUnexpectedCloseError(err,
 				websocket.CloseNormalClosure,
 				websocket.CloseGoingAway,
@@ -274,6 +306,13 @@ func (h *Hub) HandleConnections(w http.ResponseWriter, r *http.Request) {
 				log.Printf("read error: %v", err)
 			}
 			return
+		}
+		var msg ClientMessage
+		if err := json.Unmarshal(payload, &msg); err != nil {
+			if sendErr := c.send(errorMessage(game.NewFault("err.bad_message", "message must be valid JSON"))); sendErr != nil {
+				return
+			}
+			continue
 		}
 		h.handle(c, msg)
 	}
@@ -331,22 +370,30 @@ func (h *Hub) handle(c *Client, msg ClientMessage) {
 		deliver(batch)
 	case MsgCreateRoom:
 		if err := h.createRoomLocked(c, msg); err != nil {
+			ops := h.takeOpsLocked()
 			h.mu.Unlock()
+			runOps(ops)
 			_ = c.send(errorMessage(err))
 		} else {
 			h.pending = append(h.pending, h.broadcastHomeLocked()...)
 			batch := h.flushPendingLocked()
+			ops := h.takeOpsLocked()
 			h.mu.Unlock()
+			runOps(ops)
 			deliver(batch)
 		}
 	case MsgJoinRoom:
 		if err := h.joinRoomLocked(c, msg); err != nil {
+			ops := h.takeOpsLocked()
 			h.mu.Unlock()
+			runOps(ops)
 			_ = c.send(errorMessage(err))
 		} else {
 			h.pending = append(h.pending, h.broadcastHomeLocked()...)
 			batch := h.flushPendingLocked()
+			ops := h.takeOpsLocked()
 			h.mu.Unlock()
+			runOps(ops)
 			deliver(batch)
 		}
 	case MsgLeaveRoom:
@@ -363,7 +410,7 @@ func (h *Hub) handle(c *Client, msg ClientMessage) {
 				}
 			}
 			if r != nil {
-				r.Do(func() {
+				h.doLocked(r, func() {
 					r.detach(c, stillHere)
 					r.broadcast()
 				})
@@ -372,7 +419,9 @@ func (h *Hub) handle(c *Client, msg ClientMessage) {
 		h.pending = append(h.pending, h.unicastLocked(c))
 		h.pending = append(h.pending, h.broadcastHomeLocked()...)
 		batch := h.flushPendingLocked()
+		ops := h.takeOpsLocked()
 		h.mu.Unlock()
+		runOps(ops)
 		deliver(batch)
 	case MsgCloseRoom:
 		id := normalizeCode(msg.RoomID)
@@ -386,8 +435,10 @@ func (h *Hub) handle(c *Client, msg ClientMessage) {
 			return
 		}
 
+		playerID := c.playerID
+		h.mu.Unlock()
 		r.Do(func() {
-			if c.playerID != r.OwnerID && len(r.clients) > 0 {
+			if playerID != r.OwnerID && len(r.clients) > 0 {
 				_ = c.send(errorMessage(game.NewFault("err.close_host_only", fmt.Sprintf("only %s can close that table while people are at it", r.ownerName()), "host", r.ownerName())))
 				return
 			}
@@ -410,16 +461,16 @@ func (h *Hub) handle(c *Client, msg ClientMessage) {
 			})
 			go r.hub.deleteRoom(r.ID)
 		})
-		h.mu.Unlock()
 	default:
 		r := h.rooms[c.roomID]
+		playerID, playerName := c.playerID, c.name
 		h.mu.Unlock()
 		if r == nil {
 			_ = c.send(errorMessage(game.NewFault("err.not_at_table", "you are not at a table")))
 			return
 		}
 		r.Do(func() {
-			err := r.handleMessage(c, msg)
+			err := r.handleMessage(playerID, playerName, msg)
 			if err != nil {
 				_ = c.send(errorMessage(err))
 			} else {
@@ -436,24 +487,8 @@ func (h *Hub) createRoomLocked(c *Client, msg ClientMessage) error {
 	if c.name == "" {
 		return errNoName
 	}
-
-	if c.roomID != "" {
-		r := h.rooms[c.roomID]
-		roomID := c.roomID
-		c.roomID = ""
-		stillHere := false
-		for other := range h.clients {
-			if other != c && other.roomID == roomID && other.playerID == c.playerID {
-				stillHere = true
-				break
-			}
-		}
-		if r != nil {
-			r.Do(func() {
-				r.detach(c, stillHere)
-				r.broadcast()
-			})
-		}
+	if msg.Bots < 0 || msg.Bots >= game.MaxPlayers {
+		return game.NewFault("err.bad_bot_count", fmt.Sprintf("choose between 0 and %d bots", game.MaxPlayers-1), "max", game.MaxPlayers-1)
 	}
 
 	name := trimRoomName(msg.RoomName)
@@ -462,6 +497,12 @@ func (h *Hub) createRoomLocked(c *Client, msg ClientMessage) error {
 	}
 	id := h.newRoomIDLocked()
 	r := newRoom(h, id, name)
+	created := false
+	defer func() {
+		if !created {
+			r.Close()
+		}
+	}()
 	r.Private = msg.Private
 	if msg.Mode != "" || msg.TurnSeconds != 0 {
 		mode := msg.Mode
@@ -488,12 +529,32 @@ func (h *Hub) createRoomLocked(c *Client, msg ClientMessage) error {
 	if err := r.Game.AddPlayer(c.playerID, c.name); err != nil {
 		return err
 	}
+	// Only leave the current room after the new room has passed every option
+	// check. A bad create request must not unexpectedly eject the player.
+	if c.roomID != "" {
+		oldRoomID := c.roomID
+		oldRoom := h.rooms[oldRoomID]
+		stillHere := false
+		for other := range h.clients {
+			if other != c && other.roomID == oldRoomID && other.playerID == c.playerID {
+				stillHere = true
+				break
+			}
+		}
+		if oldRoom != nil {
+			h.doLocked(oldRoom, func() {
+				oldRoom.detach(c, stillHere)
+				oldRoom.broadcast()
+			})
+		}
+	}
 	r.OwnerID = c.playerID
 	h.rooms[id] = r
 	h.order = append(h.order, id)
 	c.roomID = id
+	created = true
 
-	r.Do(func() {
+	h.doLocked(r, func() {
 		r.clients[c] = struct{}{}
 		for i := 0; i < msg.Bots; i++ {
 			r.Game.AddBot(fmt.Sprintf("bot_%s_%d", r.ID, r.nextBot()), "")
@@ -528,7 +589,7 @@ func (h *Hub) joinRoomLocked(c *Client, msg ClientMessage) error {
 				}
 			}
 			if oldR != nil {
-				oldR.Do(func() {
+				h.doLocked(oldR, func() {
 					oldR.detach(c, stillHere)
 					oldR.broadcast()
 				})
@@ -537,19 +598,22 @@ func (h *Hub) joinRoomLocked(c *Client, msg ClientMessage) error {
 	}
 
 	c.roomID = r.ID
+	// Captured now: the op runs after h.mu is released, and c.name is hub
+	// state a later frame may rewrite.
+	playerID, name := c.playerID, c.name
 
-	r.Do(func() {
+	h.doLocked(r, func() {
 		r.clients[c] = struct{}{}
 		err := func() error {
-			if r.isSeated(c.playerID) {
-				return r.Game.AddPlayer(c.playerID, c.name)
+			if r.isSeated(playerID) {
+				return r.Game.AddPlayer(playerID, name)
 			}
 			seatable := !msg.AsSpectator && r.Game.State == game.StateWaiting && r.seatsFree() > 0
 			if seatable {
-				delete(r.spectators, c.playerID)
-				return r.Game.AddPlayer(c.playerID, c.name)
+				delete(r.spectators, playerID)
+				return r.Game.AddPlayer(playerID, name)
 			}
-			r.spectators[c.playerID] = c.name
+			r.spectators[playerID] = name
 			return nil
 		}()
 		if err != nil {

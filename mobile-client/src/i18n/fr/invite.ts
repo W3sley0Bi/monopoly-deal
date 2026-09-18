@@ -23,6 +23,8 @@ const invite: Catalog = {
     'wheel.order': 'Ordre des tours',
     'timer.starting': 'Sélection du premier joueur',
     'err.game_starting': 'L’ordre de départ est encore en train d’être dévoilé.',
+    'invite.copy_failed': 'Impossible de copier le lien. Appuyez longuement dessus ci-dessus pour le copier.',
+    'invite.share_failed': 'Impossible d’ouvrir le partage. Copiez plutôt le lien.',
 };
 
 export default invite;

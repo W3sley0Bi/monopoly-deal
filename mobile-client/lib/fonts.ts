@@ -34,14 +34,16 @@ export const DISPLAY_FONT = {
 
 /** Load the Nunito weights the app uses. Gate first paint on `[loaded]`. */
 export function useAppFonts(): boolean {
-    const [loaded] = useFonts({
+    const [loaded, error] = useFonts({
         Nunito_400Regular,
         Nunito_600SemiBold,
         Nunito_700Bold,
         Nunito_800ExtraBold,
         Nunito_900Black,
     });
-    return loaded;
+    // Font loading should never strand the app behind its native splash. RN
+    // falls back to a system face if a bundled font cannot be registered.
+    return loaded || error !== null;
 }
 
 export type CssWeight = 600 | 700 | 800 | 850 | 900 | 950 | 1000;

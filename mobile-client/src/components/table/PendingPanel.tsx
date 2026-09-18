@@ -29,6 +29,8 @@ export function PendingPanel({
     skewMs,
     tutorialCopy,
     youHasJsn = false,
+    disabled = false,
+    isPending = false,
     onRespond,
 }: PendingPanelProps) {
     const { t, tCard, tColor } = useI18n();
@@ -146,6 +148,7 @@ export function PendingPanel({
                                                 on ? prev.filter((x) => x !== card.id) : [...prev, card.id],
                                             )
                                         }
+                                        disabled={disabled}
                                         style={styles.poolItem}
                                     >
                                         <Card card={card} size="xs" selected={on} pickTone={on ? 'give' : null} />
@@ -173,7 +176,8 @@ export function PendingPanel({
                     <Btn
                         label={t('pending.ui.just_say_no')}
                         variant="red"
-                        disabled={!youHasJsn}
+                        disabled={disabled || !youHasJsn}
+                        pending={isPending}
                         onPress={() => onRespond({ say_no: true })}
                         style={styles.flex}
                     />
@@ -182,7 +186,8 @@ export function PendingPanel({
                         <Btn
                             label={t('pending.ui.pay', { amount: selectedTotal })}
                             variant="gold"
-                            disabled={!canPay && pool.length > 0}
+                            disabled={disabled || (!canPay && pool.length > 0)}
+                            pending={isPending}
                             onPress={() => onRespond({ card_ids: picked })}
                             style={styles.flex}
                         />
@@ -193,6 +198,8 @@ export function PendingPanel({
                                     ? t('pending.ui.let_it_go')
                                     : t('pending.ui.allow_it')
                             }
+                            disabled={disabled}
+                            pending={isPending}
                             onPress={() => onRespond({})}
                             style={styles.flex}
                         />

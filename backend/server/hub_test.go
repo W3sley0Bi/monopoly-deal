@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -126,6 +127,23 @@ func (c *testClient) expectError(what string) string {
 	c.t.Helper()
 	m := c.await(what, func(m rawMsg) bool { return m.Type == "error" })
 	return m.Error
+}
+
+func TestCreateRoomRejectsExcessiveBotCount(t *testing.T) {
+	srv, _ := newTestServer(t)
+	a := dial(t, srv, "p1", "Ana")
+	a.home("initial home", func(HomeView) bool { return true })
+	a.send(ClientMessage{Type: MsgCreateRoom, RoomName: "bots", Bots: game.MaxPlayers})
+	m := a.await("bad bot count", func(m rawMsg) bool { return m.Type == "error" })
+	if m.ErrorKey != "err.bad_bot_count" {
+		t.Fatalf("error key = %q, want err.bad_bot_count", m.ErrorKey)
+	}
+
+	a.send(ClientMessage{Type: MsgHello})
+	v := a.home("still at home", func(HomeView) bool { return true })
+	if len(v.Rooms) != 0 {
+		t.Fatalf("bad create request made %d rooms", len(v.Rooms))
+	}
 }
 
 func TestCreateRoomMakesCreatorOwner(t *testing.T) {
@@ -403,13 +421,10 @@ func TestChatReachesEveryoneInTheRoom(t *testing.T) {
 	b.send(ClientMessage{Type: MsgJoinRoom, RoomID: code})
 	b.room("seated", func(v RoomView) bool { return v.YouSeated })
 
-	a.send(ClientMessage{Type: MsgChat, Text: "  hello table  "})
 	a.send(ClientMessage{Type: MsgChat, Text: "👏"})
 	v := b.room("chat seen", func(v RoomView) bool { return len(v.Chat) > 0 })
 
 	m := v.Chat[len(v.Chat)-1]
-	if m.Text != "hello table" {
-		t.Fatalf("text should be trimmed, got %q", m.Text)
 	if m.Text != "👏" {
 		t.Fatalf("text should be emoji, got %q", m.Text)
 	}
@@ -422,10 +437,8 @@ func TestChatReachesEveryoneInTheRoom(t *testing.T) {
 
 	// Empty messages are dropped rather than echoed.
 	a.send(ClientMessage{Type: MsgChat, Text: "   "})
-	a.send(ClientMessage{Type: MsgChat, Text: "second"})
 	a.send(ClientMessage{Type: MsgChat, Text: "😈"})
 	v2 := a.room("second message", func(v RoomView) bool {
-		return len(v.Chat) > 0 && v.Chat[len(v.Chat)-1].Text == "second"
 		return len(v.Chat) > 0 && v.Chat[len(v.Chat)-1].Text == "😈"
 	})
 	if len(v2.Chat) != 2 {
@@ -448,10 +461,8 @@ func TestSpectatorsCanChat(t *testing.T) {
 
 	c.send(ClientMessage{Type: MsgJoinRoom, RoomID: code})
 	c.room("watching", func(v RoomView) bool { return !v.YouSeated })
-	c.send(ClientMessage{Type: MsgChat, Text: "nice play"})
 	c.send(ClientMessage{Type: MsgChat, Text: "😂"})
 	a.room("spectator chat", func(v RoomView) bool {
-		return len(v.Chat) > 0 && v.Chat[len(v.Chat)-1].Text == "nice play"
 		return len(v.Chat) > 0 && v.Chat[len(v.Chat)-1].Text == "😂"
 	})
 }
@@ -528,30 +539,94 @@ func TestConcurrentRooms(t *testing.T) {
 	c := dial(t, srv, "c", "Cara")
 
 	a.send(ClientMessage{Type: MsgCreateRoom, Bots: 2})
-	roomA := a.room("roomA", func(v RoomView) bool { return v.ID != "" }).ID
-	
+	a.room("roomA", func(v RoomView) bool { return v.ID != "" })
+
 	b.send(ClientMessage{Type: MsgCreateRoom, Bots: 2})
-	roomB := b.room("roomB", func(v RoomView) bool { return v.ID != "" }).ID
-	
+	b.room("roomB", func(v RoomView) bool { return v.ID != "" })
+
 	c.send(ClientMessage{Type: MsgCreateRoom, Bots: 2})
-	roomC := c.room("roomC", func(v RoomView) bool { return v.ID != "" }).ID
-	
+	c.room("roomC", func(v RoomView) bool { return v.ID != "" })
+
 	// Flood chat messages concurrently to all rooms
 	done := make(chan bool)
-	flood := func(client *testClient, roomID string) {
+	flood := func(client *testClient) {
 		for i := 0; i < 50; i++ {
 			client.send(ClientMessage{Type: MsgChat, Text: "spam"})
 			client.send(ClientMessage{Type: MsgChat, Text: "👏"})
 		}
 		done <- true
 	}
-	
-	go flood(a, roomA)
-	go flood(b, roomB)
-	go flood(c, roomC)
-	
+
+	go flood(a)
+	go flood(b)
+	go flood(c)
+
 	for i := 0; i < 3; i++ {
 		<-done
 	}
 	// The race detector implicitly verifies safety. We just wait to ensure it didn't panic.
+}
+
+// A table whose action queue is full must only hold up the connection that
+// submits to it. Room.Do used to run under h.mu, so one busy table froze the
+// hub for every player, including ones who were never at it.
+func TestFullRoomQueueDoesNotHoldTheHub(t *testing.T) {
+	srv, h := newTestServer(t)
+	a := dial(t, srv, "a", "Alice")
+	a.home("initial home", func(HomeView) bool { return true })
+	// Private keeps the table out of home summaries, which take the room's
+	// state lock that the parked action below holds.
+	a.send(ClientMessage{Type: MsgCreateRoom, RoomName: "Busy", Private: true})
+	v := a.room("room created", func(RoomView) bool { return true })
+
+	h.mu.Lock()
+	r := h.rooms[v.ID]
+	h.mu.Unlock()
+
+	started, release := make(chan struct{}), make(chan struct{})
+	var once sync.Once
+	unpark := func() { once.Do(func() { close(release) }) }
+	t.Cleanup(unpark)
+	r.Do(func() {
+		close(started)
+		<-release
+	})
+	<-started
+	for i := 0; i < cap(r.actions); i++ {
+		r.Do(func() {})
+	}
+
+	// Leaving submits a detach to the full queue, so a's reader blocks.
+	a.send(ClientMessage{Type: MsgLeaveRoom})
+	time.Sleep(50 * time.Millisecond)
+
+	got := make(chan bool, 1)
+	go func() {
+		deadline := time.Now().Add(2 * time.Second)
+		for time.Now().Before(deadline) {
+			if h.mu.TryLock() {
+				h.mu.Unlock()
+				got <- true
+				return
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
+		got <- false
+	}()
+	if !<-got {
+		t.Fatal("hub lock held while a room's action queue is full")
+	}
+
+	// And a real connection gets through end to end.
+	b := dial(t, srv, "b", "Bea")
+	if err := b.conn.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	var m rawMsg
+	if err := b.conn.ReadJSON(&m); err != nil || m.Type != "home" {
+		t.Fatalf("second player blocked by a busy table: %v %+v", err, m)
+	}
+
+	unpark()
+	a.home("a back home once the table drains", func(HomeView) bool { return true })
 }

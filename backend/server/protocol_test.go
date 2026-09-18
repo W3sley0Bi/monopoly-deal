@@ -1,10 +1,36 @@
 package server
 
 import (
+	"strings"
 	"testing"
 
+	"github.com/gorilla/websocket"
 	"monopoly-deal-backend/game"
 )
+
+func TestMalformedMessageReturnsErrorAndKeepsConnectionOpen(t *testing.T) {
+	srv, _ := newTestServer(t)
+	a := dial(t, srv, "p1", "Ana")
+	a.home("initial home", func(HomeView) bool { return true })
+
+	if err := a.conn.WriteMessage(websocket.TextMessage, []byte(`{"type":`)); err != nil {
+		t.Fatalf("write malformed message: %v", err)
+	}
+	m := a.await("bad-message error", func(m rawMsg) bool { return m.Type == "error" })
+	if m.ErrorKey != "err.bad_message" {
+		t.Fatalf("error key = %q, want err.bad_message", m.ErrorKey)
+	}
+
+	a.send(ClientMessage{Type: MsgHello})
+	a.home("home after malformed message", func(HomeView) bool { return true })
+}
+
+func TestNamesAreTruncatedWithoutBreakingUTF8(t *testing.T) {
+	got := trimName(strings.Repeat("😀", 20))
+	if got != strings.Repeat("😀", 16) {
+		t.Fatalf("trimName = %q, want 16 complete runes", got)
+	}
+}
 
 func TestHomeAdvertisesProtocolVersion(t *testing.T) {
 	srv, _ := newTestServer(t)

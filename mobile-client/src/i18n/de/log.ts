@@ -62,21 +62,12 @@ const log: Catalog = {
     'log.win_classic': '🏆 {name} gewinnt mit {sets} vollständigen Sätzen!',
     'log.win_deathmatch': '🏆 {name} gewinnt das Deathmatch mit {sets} vollständigen Sätzen!',
 
-    // Chat lines the server announces.
-    'chat.radio_on': '{name} hat das Radio auf {station} gestellt',
-    'chat.radio_off': '{name} hat das Radio ausgeschaltet',
-    'chat.joined_call': '{name} ist dem Anruf beigetreten',
-    'chat.left_call': '{name} hat den Anruf verlassen',
-
     // Notices the server sends straight to one client.
     'notice.table_closed': '"{table}" wurde geschlossen.',
     'notice.you_closed_table': '"{table}" geschlossen.',
 
     // Panel chrome
     'log.empty': 'Noch nichts.',
-    'chat.empty': 'Noch keine Nachrichten. Sag hallo.',
-    'chat.placeholder': 'Nachricht an den Tisch…',
-    'chat.send': 'Senden',
     'panel.log': 'Log',
     'panel.chat': 'Chat',
     'panel.hide': 'Feld ausblenden',

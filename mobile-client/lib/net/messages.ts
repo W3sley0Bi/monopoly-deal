@@ -60,11 +60,39 @@ export interface UseGameConnection {
     skewMs: number;
     /** Stamps `player_id` + `player_name` onto every outbound frame. */
     send: (msg: Omit<ClientMessage, 'player_id'>) => void;
+    retryConnection: () => void;
+    isOffline?: boolean;
     myId: string;
     name: string;
     setName: (name: string) => void;
     /** `leave_room` + clears the held rejoin code. */
     leave: () => void;
+}
+
+const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null;
+
+/**
+ * Renderers index straight into nested payloads (`room.game.players[i]`), so a
+ * frame from a mismatched or misbehaving server must be dropped here rather
+ * than crash a screen. Only the shape the screens dereference unguarded is
+ * checked: Go omits empty strings (`omitempty`) and can marshal nil slices as
+ * `null`, so stricter checks on `home`/`error`/`notice` would drop real frames.
+ */
+export function isValidServerMessage(msg: unknown): msg is ServerMessage {
+    if (!isObject(msg)) return false;
+    switch (msg.type) {
+        case 'home':
+            return isObject(msg.payload);
+        case 'room': {
+            const p = msg.payload;
+            return isObject(p) && typeof p.id === 'string' && isObject(p.game) && Array.isArray(p.game.players);
+        }
+        case 'error':
+        case 'notice':
+            return true;
+        default:
+            return false;
+    }
 }
 
 /**
@@ -92,30 +120,10 @@ export function useGameConnection(
 
     // Ref, not state — read at send-time, not re-rendered on every change,
     // and mutated directly by the deep link + eviction paths per the spec.
-    const rejoin = useRef<string | null>(null);
-    const deepLinkConsumed = useRef(false);
-
-    // Seed rejoin from a deep link if present, else the persisted room id.
-    useEffect(() => {
-        if (deepLinkConsumed.current) return;
-        deepLinkConsumed.current = true;
-        Linking.getInitialURL().then((url) => {
-            const code = extractJoinCode(url);
-            if (code) {
-                rejoin.current = code.toUpperCase().trim();
-            } else if (initialRoomId) {
-                rejoin.current = initialRoomId;
-            }
-        });
-    }, [initialRoomId]);
-
-    useEffect(() => {
-        const sub = Linking.addEventListener('url', (event) => {
-            const code = extractJoinCode(event.url);
-            if (code) rejoin.current = code.toUpperCase().trim();
-        });
-        return () => sub.remove();
-    }, []);
+    // Seeded synchronously from the persisted code: waiting for
+    // getInitialURL() let a fast socket open before it and skip the rejoin.
+    const rejoin = useRef<string | null>(initialRoomId);
+    const roomHeld = useRef(false);
 
     const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const clearNoticeLater = useCallback(() => {
@@ -124,7 +132,8 @@ export function useGameConnection(
     }, []);
 
     const onMessage = useCallback(
-        (msg: ServerMessage) => {
+        (msg: unknown) => {
+            if (!isValidServerMessage(msg)) return;
             if (msg.type === 'home') {
                 // An older server ignores the version we stamp rather than
                 // refusing it, so this is the only way to catch that case.
@@ -140,17 +149,20 @@ export function useGameConnection(
                 // server ejected us; clear the rejoin. A home frame while
                 // already homeless is just the lobby list and must NOT
                 // clear a rejoin that hasn't been consumed yet.
-                setRoom((prev) => {
-                    if (prev !== null) {
-                        rejoin.current = null;
-                        persistRoomId(null);
-                    }
-                    return null;
-                });
+                // Read from a ref, not a setRoom updater: persistRoomId writes
+                // the store, and doing that inside an updater updates another
+                // component mid-render.
+                if (roomHeld.current) {
+                    rejoin.current = null;
+                    persistRoomId(null);
+                }
+                roomHeld.current = false;
+                setRoom(null);
                 return;
             }
 
             if (msg.type === 'room') {
+                roomHeld.current = true;
                 setRoom(msg.payload);
                 setSkewMs(msg.payload.game.now_ms - Date.now());
                 rejoin.current = msg.payload.id;
@@ -179,7 +191,7 @@ export function useGameConnection(
         [persistRoomId, clearNoticeLater],
     );
 
-    const { status, send: sendRaw } = useJsonSocket<ServerMessage, ClientMessage>(
+    const { status, send: sendRaw, reconnect } = useJsonSocket<ServerMessage, ClientMessage>(
         SERVER_URL,
         onMessage,
         {
@@ -227,6 +239,30 @@ export function useGameConnection(
         if (status !== 'open') lastOpenedFor.current = null;
     }, [status]);
 
+    // An invite link outranks the persisted room. Links can land after the
+    // open transition (the initial URL resolves late; a runtime link arrives
+    // any time), so if hello has already gone out, join now rather than
+    // waiting for a reconnect that may never come.
+    const followLink = useRef<(url: string | null) => void>(() => {});
+    useEffect(() => {
+        followLink.current = (url) => {
+            const code = extractJoinCode(url)?.trim().toUpperCase();
+            if (!code || code === rejoin.current) return;
+            rejoin.current = code;
+            if (lastOpenedFor.current !== null) send({ type: 'join_room', room_id: code });
+        };
+    }, [send]);
+
+    useEffect(() => {
+        Linking.getInitialURL()
+            .then((url) => followLink.current(url))
+            .catch(() => {
+                // No launch link is readable; the persisted room still applies.
+            });
+        const sub = Linking.addEventListener('url', (event) => followLink.current(event.url));
+        return () => sub.remove();
+    }, []);
+
     const setName = useCallback(
         (next: string) => {
             setNameState(next);
@@ -241,7 +277,7 @@ export function useGameConnection(
         persistRoomId(null);
     }, [send, persistRoomId]);
 
-    return { status, home, room, notice, incompatible, skewMs, send, myId: playerId, name, setName, leave };
+    return { status, home, room, notice, incompatible, skewMs, send, retryConnection: reconnect, isOffline: false, myId: playerId, name, setName, leave };
 }
 
 // =====================================================================
@@ -329,6 +365,7 @@ export function GameConnectionProvider({ children }: { children: ReactNode }) {
               // Solo games never touch the server, so its version is moot.
               incompatible: null,
               skewMs: 0,
+              isOffline: true,
               send: (msg) => { void sendOffline(msg); },
               leave: () => {
                   setOfflineGame(null);
@@ -338,6 +375,7 @@ export function GameConnectionProvider({ children }: { children: ReactNode }) {
           }
         : {
               ...connection,
+              isOffline: false,
               send: (msg) => {
                   if (!sendOffline(msg)) connection.send(msg);
               },
@@ -347,6 +385,9 @@ export function GameConnectionProvider({ children }: { children: ReactNode }) {
         ? {
               ...liveOrOffline,
               room: devRoom,
+              // Fixtures are applied locally, so a dropped socket must not
+              // disable their controls.
+              isOffline: true,
               send: (msg) => setDevRoom(applyDevMove(devRoom, msg)),
               leave: () => setDevRoom(null),
           }

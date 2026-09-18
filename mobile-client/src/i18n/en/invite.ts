@@ -22,5 +22,7 @@ const invite: Catalog = {
     'wheel.order': "Your turn order",
     'timer.starting': "Choosing the starting player",
     'err.game_starting': "The starting order is still being revealed.",
+    'invite.copy_failed': "Couldn't copy the link. Press and hold it above to copy it instead.",
+    'invite.share_failed': "Couldn't open the share sheet. Copy the link instead.",
 };
 export default invite;

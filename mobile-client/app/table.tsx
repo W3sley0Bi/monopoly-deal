@@ -29,6 +29,7 @@ import { CountdownTimer } from '../src/components/table/CountdownTimer';
 import { StartWheel } from '../src/components/table/StartWheel';
 import { PlayerBoardRow, propertyDensityForLayout } from '../src/components/table/PlayerBoardRow';
 import { GameSoundSettings } from '../src/components/settings/GameSoundSettings';
+import { ConnectionStatus } from '../src/components/ConnectionStatus';
 import { useI18n } from '../src/i18n';
 import { useGameAudio } from '../src/game/useGameAudio';
 import { FIXTURES } from '../src/dev/fixtures';
@@ -95,9 +96,11 @@ function TableBody() {
     // to clear and the felt starts at the top.
     const feltTop = insets.top + (roomyPlayerStation ? 8 : 72);
     const feltHeight = Math.max(180, windowHeight - feltTop - insets.bottom - 60);
-    const { room: live, send, leave, notice, skewMs } = useGameConnectionContext();
+    const { room: live, send, leave, notice, skewMs, status: sock, retryConnection, isOffline } = useGameConnectionContext();
     const dragLayer = useDragLayer();
     const audio = useGameAudio(live?.game ?? null);
+
+    const disconnected = !isOffline && sock !== 'open';
 
     const tapTray = useStore((s) => s.tapTray);
     const setTapTray = useStore((s) => s.setTapTray);
@@ -253,6 +256,19 @@ function TableBody() {
     useEffect(() => { setBoardOpen(ownTurn); }, [ownTurn, room?.id]);
     useEffect(() => { setHandOpen(ownTurn); }, [ownTurn, room?.id]);
 
+    // Any answer from the server — a fresh room or an error notice — settles
+    // the request; a dropped socket settles it too, because the queued frame
+    // is discarded as stale on reconnect and would otherwise spin forever.
+    const [pendingAction, setPendingAction] = useState<string | null>(null);
+    useEffect(() => setPendingAction(null), [live, notice, sock]);
+    // Backstop for a request the server answers with nothing at all, so a
+    // control can never stay locked behind a spinner.
+    useEffect(() => {
+        if (!pendingAction) return;
+        const timer = setTimeout(() => setPendingAction(null), 12_000);
+        return () => clearTimeout(timer);
+    }, [pendingAction]);
+
     const act = useCallback(
         (msg: Parameters<typeof send>[0], cardId?: string, optimistic?: PendingMove) => {
             audio.play('tap');
@@ -261,6 +277,7 @@ function TableBody() {
             if (optimistic) setGuess(optimistic);
             setSelected(null);
             setDialog(null);
+            setPendingAction(msg.type);
             send(msg);
         },
         [audio, send],
@@ -311,7 +328,7 @@ function TableBody() {
     const tutorialActive = g.mode === 'tutorial' && Boolean(tutorial);
     const spectating = !room.you_seated || !me;
     const myTurn = isYourTurn(g);
-    const canPlay = myTurn && !pending && g.plays_left > 0 && (!tutorial || (tutorial.task && !tutorial.done));
+    const canPlay = !disconnected && myTurn && !pending && g.plays_left > 0 && (!tutorial || (tutorial.task && !tutorial.done));
     const hand = (me?.hand ?? []).filter((c) => c.id !== sent);
     const cardEnabled = (card: CardT) => canPlay && tutorialAllowsCard(card, tutorial) &&
         (!tutorial || card.id === tutorialSourceCardId);
@@ -471,7 +488,8 @@ function TableBody() {
                     <Btn
                         label={autoEndLeft > 0 ? t('table.auto_end', { seconds: autoEndLeft }) : t('table.end_turn')}
                         variant="red"
-                        disabled={Boolean(tutorial && (tutorial.id !== 'end_turn' || tutorial.done))}
+                        disabled={disconnected || Boolean(tutorial && (tutorial.id !== 'end_turn' || tutorial.done))}
+                        pending={pendingAction === 'end_turn'}
                         onPress={() => act({ type: 'end_turn' })}
                         style={[styles.endTurn, styles.endTurnRoomy]}
                     />
@@ -531,7 +549,8 @@ function TableBody() {
                     <Btn
                         label={autoEndLeft > 0 ? t('table.auto_end', { seconds: autoEndLeft }) : t('table.end_turn')}
                         variant="red"
-                        disabled={Boolean(tutorial && (tutorial.id !== 'end_turn' || tutorial.done))}
+                        disabled={disconnected || Boolean(tutorial && (tutorial.id !== 'end_turn' || tutorial.done))}
+                        pending={pendingAction === 'end_turn'}
                         onPress={() => act({ type: 'end_turn' })}
                         style={styles.endTurn}
                     />
@@ -602,9 +621,32 @@ function TableBody() {
                     onChairs={setChairs}
                 />
             </BlurTargetView>
-            {notice ? (
-                <Text style={styles.notice}>{notice.key ? t(notice.key, notice.args) : notice.text}</Text>
-            ) : null}
+            {/* Floated, not in the column: in flow, every reconnect blip or
+                error pushed the rail, felt, board and hand down and back up,
+                moving drop targets under a finger. The top edge covers nothing
+                droppable — only the opponent rail, and only while offline
+                (nothing is playable then) or for a notice's few seconds. */}
+            <View
+                style={[styles.noticesOverlay, {
+                    top: insets.top + 4,
+                    left: Math.max(8, insets.left + 8),
+                    right: Math.max(8, insets.right + 8),
+                }]}
+                pointerEvents="box-none"
+            >
+                {!isOffline ? (
+                    <View style={styles.noticeBacking}>
+                        <ConnectionStatus status={sock} onRetry={retryConnection} />
+                    </View>
+                ) : null}
+                {notice ? (
+                    // Errors arrive mid-turn while the rail is live; a banner
+                    // must not eat the tap meant for a player chip beneath it.
+                    <Text pointerEvents="none" style={[styles.notice, styles.noticeBacking]}>
+                        {notice.key ? t(notice.key, notice.args) : notice.text}
+                    </Text>
+                ) : null}
+            </View>
 
             {/* ---- opponents ----
                 A row, not a rail: four opponents is the most this game can seat
@@ -1060,6 +1102,8 @@ function TableBody() {
                     deadlineMs={g.deadline_kind === 'respond' ? g.deadline_ms : 0}
                     deadlineSeconds={g.deadline_seconds}
                     skewMs={skewMs}
+                    disabled={disconnected}
+                    isPending={pendingAction === 'respond'}
                     tutorialCopy={tutorial ? {
                         title: t(`lesson.${tutorial.id}.title`),
                         body: t(`lesson.${tutorial.id}.body`),
@@ -1254,7 +1298,7 @@ function TableBody() {
                     </Text>
                     <View style={styles.winActions}>
                         {room.is_owner ? (
-                            <Btn label={t('win.play_again')} variant="gold" onPress={() => send({ type: 'new_game' })} />
+                            <Btn label={t('win.play_again')} variant="gold" disabled={disconnected} pending={pendingAction === 'new_game'} onPress={() => act({ type: 'new_game' })} />
                         ) : null}
                         <Btn label={t('win.leave')} onPress={leave} />
                     </View>
@@ -1448,7 +1492,13 @@ const styles = StyleSheet.create({
     codeRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingBottom: 4 },
     codeText: { flex: 1, gap: 1 },
     codeBig: { fontFamily: displayFont(900), fontSize: 20, color: brand.inviteCode, letterSpacing: ls(0.1, 20) },
-    notice: { fontFamily: uiFont(700), fontSize: 12, color: status.danger },
+    // Centred and capped so that on a roomy screen it clears the leave button
+    // pinned at the top-left corner.
+    noticesOverlay: { position: 'absolute', gap: 6, zIndex: 100, alignItems: 'center' },
+    // The banner's own fill is nearly clear; floated over the rail it needs an
+    // opaque ground to stay legible.
+    noticeBacking: { width: '100%', maxWidth: 420, borderRadius: radius.md, backgroundColor: surface.bodyBase, overflow: 'hidden' },
+    notice: { fontFamily: uiFont(700), fontSize: 12, color: status.danger, paddingHorizontal: 10, paddingVertical: 6 },
     opponentRail: { flexGrow: 0, flexShrink: 0, flexDirection: 'row', gap: 5 },
     // Equal shares on mobile, and `minWidth: 0` so a long name shrinks the slot
     // instead of pushing its neighbours off the screen.

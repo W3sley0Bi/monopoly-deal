@@ -22,6 +22,9 @@ const home: Catalog = {
     'home.account': 'Compte',
     'home.reconnecting': 'reconnexion…',
     'home.offline_status': 'Hors ligne · parties solo contre robots disponibles',
+    'home.retry_connection': 'Réessayer',
+    'home.request_timeout': 'Le serveur ne répond pas. Vérifiez la connexion et réessayez.',
+    'home.no_network': 'Pas de connexion réseau',
 
     // Solo practice against robots.
     'home.solo.title': 'Jouer hors ligne',

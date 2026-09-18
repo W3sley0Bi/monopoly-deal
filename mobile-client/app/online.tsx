@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
     Alert,
     Platform,
@@ -19,6 +19,7 @@ import { brand, ink, line, radius, status, surface } from '../lib/theme';
 import { displayFont, ls, uiFont } from '../lib/fonts';
 import { Btn, LabelCaps, Panel, Sheet, Toggle } from '../src/ui/kit';
 import { useI18n } from '../src/i18n';
+import { ConnectionStatus } from '../src/components/ConnectionStatus';
 import { formatTurn } from '../src/i18n/format';
 import type { Difficulty, Mode } from '../src/types';
 
@@ -26,7 +27,7 @@ export default function OnlineScreen() {
     const { t } = useI18n();
     const router = useRouter();
     const insets = useSafeAreaInsets();
-    const { status: sock, home, room, notice, send, name } = useGameConnectionContext();
+    const { status: sock, home, room, notice, send, retryConnection, name } = useGameConnectionContext();
 
     const [code, setCode] = useState('');
     const [creating, setCreating] = useState(false);
@@ -36,8 +37,37 @@ export default function OnlineScreen() {
     const [turnSeconds, setTurnSeconds] = useState(0);
     const [createBots, setCreateBots] = useState(0);
     const [createLevel, setCreateLevel] = useState<Difficulty>('normal');
+    const [pendingRequest, setPendingRequest] = useState<string | null>(null);
+    const [requestTimedOut, setRequestTimedOut] = useState(false);
+    const requestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const connected = sock === 'open';
+
+    const clearPendingRequest = () => {
+        if (requestTimer.current) clearTimeout(requestTimer.current);
+        requestTimer.current = null;
+        setPendingRequest(null);
+    };
+
+    const request = (key: string, message: Parameters<typeof send>[0]) => {
+        if (!connected || pendingRequest) return;
+        setRequestTimedOut(false);
+        setPendingRequest(key);
+        send(message);
+        requestTimer.current = setTimeout(() => {
+            requestTimer.current = null;
+            setPendingRequest(null);
+            setRequestTimedOut(true);
+        }, 12_000);
+    };
+
+    useEffect(() => () => {
+        if (requestTimer.current) clearTimeout(requestTimer.current);
+    }, []);
+
+    useEffect(() => {
+        if (room || notice || !connected) clearPendingRequest();
+    }, [room, notice, connected]);
 
     // ---- responsive: constrain content on wide screens (iPad / web) ----------
     const { width: vw, height: vh } = useWindowDimensions();
@@ -74,8 +104,8 @@ export default function OnlineScreen() {
                 ]}
                 refreshControl={
                     <RefreshControl
-                        refreshing={false}
-                        onRefresh={() => send({ type: 'hello' })}
+                        refreshing={sock === 'connecting'}
+                        onRefresh={retryConnection}
                         tintColor={ink.muted60}
                     />
                 }
@@ -86,11 +116,17 @@ export default function OnlineScreen() {
                     </View>
                 ) : null}
 
-                {!connected ? <Text style={styles.reconnect}>{t('home.offline_status')}</Text> : null}
+                {requestTimedOut ? (
+                    <View style={styles.notice}>
+                        <Text style={styles.noticeText}>{t('home.request_timeout')}</Text>
+                    </View>
+                ) : null}
+
+                <ConnectionStatus status={sock} onRetry={retryConnection} />
 
                 <Panel style={styles.card}>
                     <LabelCaps>{t('home.tables')}</LabelCaps>
-                    <Btn label={t('home.new_table')} variant="gold" onPress={() => setCreating(true)} />
+                    <Btn label={t('home.new_table')} variant="gold" disabled={!connected} onPress={() => setCreating(true)} />
 
                     <View style={styles.joinRow}>
                         <TextInput
@@ -105,8 +141,9 @@ export default function OnlineScreen() {
                         />
                         <Btn
                             label={t('home.join_by_code')}
-                            disabled={code.length !== 4 || !connected}
-                            onPress={() => send({ type: 'join_room', room_id: code })}
+                            disabled={code.length !== 4 || !connected || Boolean(pendingRequest)}
+                            pending={pendingRequest === `join:${code}`}
+                            onPress={() => request(`join:${code}`, { type: 'join_room', room_id: code })}
                             style={styles.joinBtn}
                         />
                     </View>
@@ -135,21 +172,24 @@ export default function OnlineScreen() {
                                         <Btn
                                             label={t('home.return')}
                                             variant="gold"
-                                            onPress={() => send({ type: 'join_room', room_id: r.id })}
+                                            disabled={!connected || Boolean(pendingRequest)}
+                                            pending={pendingRequest === `join:${r.id}`}
+                                            onPress={() => request(`join:${r.id}`, { type: 'join_room', room_id: r.id })}
                                         />
                                     ) : (
                                         <>
                                             <Btn
                                                 label={t('home.take_seat')}
                                                 variant="gold"
-                                                disabled={r.state !== 'waiting' || r.seats_free <= 0}
-                                                onPress={() => send({ type: 'join_room', room_id: r.id })}
+                                                disabled={!connected || Boolean(pendingRequest) || r.state !== 'waiting' || r.seats_free <= 0}
+                                                pending={pendingRequest === `join:${r.id}`}
+                                                onPress={() => request(`join:${r.id}`, { type: 'join_room', room_id: r.id })}
                                             />
                                             <Btn
                                                 label={t('home.watch')}
-                                                onPress={() =>
-                                                    send({ type: 'join_room', room_id: r.id, as_spectator: true })
-                                                }
+                                                disabled={!connected || Boolean(pendingRequest)}
+                                                pending={pendingRequest === `watch:${r.id}`}
+                                                onPress={() => request(`watch:${r.id}`, { type: 'join_room', room_id: r.id, as_spectator: true })}
                                             />
                                         </>
                                     )}
@@ -157,6 +197,7 @@ export default function OnlineScreen() {
                                         <Btn
                                             label={t('home.close')}
                                             variant="red"
+                                            disabled={!connected || Boolean(pendingRequest)}
                                             onPress={() =>
                                                 Alert.alert(
                                                     r.abandoned
@@ -183,7 +224,7 @@ export default function OnlineScreen() {
                 </Panel>
             </ScrollView>
 
-            <Sheet open={creating} onClose={() => setCreating(false)} title={t('home.new_table')}>
+            <Sheet open={creating} onClose={() => { if (!pendingRequest) setCreating(false); }} title={t('home.new_table')}>
                 <LabelCaps>{t('home.table_name')}</LabelCaps>
                 <TextInput
                     value={tableName}
@@ -284,9 +325,10 @@ export default function OnlineScreen() {
                 <Btn
                     label={t('home.open_table')}
                     variant="gold"
-                    disabled={!connected}
+                    disabled={!connected || Boolean(pendingRequest)}
+                    pending={pendingRequest === 'create'}
                     onPress={() => {
-                        send({
+                        request('create', {
                             type: 'create_room',
                             room_name: tableName.trim() || t('home.table_name_placeholder', { name }),
                             private: privateRoom,
@@ -295,8 +337,6 @@ export default function OnlineScreen() {
                             bots: createBots,
                             bot_difficulty: createLevel,
                         });
-                        setCreating(false);
-                        setTableName('');
                     }}
                 />
             </Sheet>

@@ -1019,6 +1019,9 @@ func (g *Game) requireTurn(playerID string) (*Player, error) {
 	if g.Pending != nil {
 		return nil, fault("err.resolve_first", "resolve the current action first")
 	}
+	if g.CurrentTurn < 0 || g.CurrentTurn >= len(g.Players) {
+		return nil, fault("err.invalid_game_state", "the current turn is invalid")
+	}
 	idx := g.playerIndex(playerID)
 	if idx == -1 {
 		return nil, fault("err.player_not_found", "player not found")

@@ -10,15 +10,30 @@ import { displayFont, ls, uiFont } from '../lib/fonts';
 import { Avatar, Btn, LabelCaps, Panel, Sheet } from '../src/ui/kit';
 import { useI18n } from '../src/i18n';
 import { formatTurn } from '../src/i18n/format';
+import { ConnectionStatus } from '../src/components/ConnectionStatus';
 import type { Difficulty, Mode } from '../src/types';
 
 export default function LobbyScreen() {
     const { t } = useI18n();
     const router = useRouter();
     const insets = useSafeAreaInsets();
-    const { room, send, leave, notice } = useGameConnectionContext();
+    const { room, send, leave, notice, status: sock, retryConnection, isOffline } = useGameConnectionContext();
     const [invite, setInvite] = useState(false);
     const [copied, setCopied] = useState(false);
+    // Any answer from the server — a fresh room or an error notice — settles
+    // the request; a dropped socket settles it too, because the queued frame
+    // is discarded as stale on reconnect and would otherwise spin forever.
+    const [pendingAction, setPendingAction] = useState<string | null>(null);
+    useEffect(() => setPendingAction(null), [room, notice, sock]);
+    // Backstop for a request the server answers with nothing at all, so a
+    // control can never stay locked behind a spinner.
+    useEffect(() => {
+        if (!pendingAction) return;
+        const timer = setTimeout(() => setPendingAction(null), 12_000);
+        return () => clearTimeout(timer);
+    }, [pendingAction]);
+
+    const disconnected = !isOffline && sock !== 'open';
 
     // ---- responsive: constrain content on wide screens (iPad / web) ----------
     const { width: vw, height: vh } = useWindowDimensions();
@@ -46,7 +61,8 @@ export default function LobbyScreen() {
         turn_seconds?: number;
         respond_seconds?: number;
         bot_difficulty?: Difficulty;
-    }) =>
+    }) => {
+        setPendingAction('options');
         send({
             type: 'set_options',
             mode: patch.mode ?? g.mode,
@@ -54,6 +70,7 @@ export default function LobbyScreen() {
             ...(patch.respond_seconds !== undefined ? { respond_seconds: patch.respond_seconds } : {}),
             ...(patch.bot_difficulty ? { bot_difficulty: patch.bot_difficulty } : {}),
         });
+    };
 
     const botCount = g.players.filter((p) => p.bot).length;
 
@@ -71,6 +88,8 @@ export default function LobbyScreen() {
                         <Btn label={t('invite.open')} onPress={() => setInvite(true)} />
                     </View>
                 </View>
+
+                {!isOffline ? <ConnectionStatus status={sock} onRetry={retryConnection} /> : null}
 
                 {notice ? (
                     <Text style={styles.notice}>
@@ -96,6 +115,7 @@ export default function LobbyScreen() {
                             {host && p.id !== room.owner_id ? (
                                 <Pressable
                                     accessibilityLabel={t('lobby.remove')}
+                                    disabled={disconnected}
                                     onPress={() =>
                                         Alert.alert(t('lobby.remove_from_table'), p.name, [
                                             { text: t('common.cancel'), style: 'cancel' },
@@ -117,8 +137,9 @@ export default function LobbyScreen() {
                     {!room.you_seated ? (
                         <Btn
                             label={room.seats_free > 0 ? t('lobby.take_seat') : t('lobby.table_full')}
-                            disabled={room.seats_free <= 0}
-                            onPress={() => send({ type: 'take_seat' })}
+                            disabled={disconnected || room.seats_free <= 0}
+                            pending={pendingAction === 'take_seat'}
+                            onPress={() => { setPendingAction('take_seat'); send({ type: 'take_seat' }); }}
                         />
                     ) : null}
                 </Panel>
@@ -129,14 +150,16 @@ export default function LobbyScreen() {
                     <View style={styles.row}>
                         <Btn
                             label={t('lobby.add_bot')}
-                            disabled={!host || room.seats_free <= 0}
-                            onPress={() => send({ type: 'add_bot' })}
+                            disabled={disconnected || !host || room.seats_free <= 0}
+                            pending={pendingAction === 'add_bot'}
+                            onPress={() => { setPendingAction('add_bot'); send({ type: 'add_bot' }); }}
                             style={styles.flex}
                         />
                         <Btn
                             label={t('lobby.remove_bot')}
-                            disabled={!host || botCount === 0}
-                            onPress={() => send({ type: 'remove_bot' })}
+                            disabled={disconnected || !host || botCount === 0}
+                            pending={pendingAction === 'remove_bot'}
+                            onPress={() => { setPendingAction('remove_bot'); send({ type: 'remove_bot' }); }}
                             style={styles.flex}
                         />
                     </View>
@@ -146,9 +169,9 @@ export default function LobbyScreen() {
                         {room.difficulties.map((d) => (
                             <Pressable
                                 key={d}
-                                disabled={!host}
+                                disabled={disconnected || !host || pendingAction === 'options'}
                                 onPress={() => options({ bot_difficulty: d })}
-                                style={[styles.seg, g.bot_difficulty === d && styles.segOn, !host && styles.segOff]}
+                                style={[styles.seg, g.bot_difficulty === d && styles.segOn, (!host || disconnected || pendingAction === 'options') && styles.segOff]}
                             >
                                 <Text style={[styles.segText, g.bot_difficulty === d && styles.segTextOn]}>
                                     {t(`difficulty.${d}`)}
@@ -165,12 +188,12 @@ export default function LobbyScreen() {
                         {room.modes.map((m) => (
                             <Pressable
                                 key={m.id}
-                                disabled={!host || !m.available}
+                                disabled={disconnected || !host || !m.available || pendingAction === 'options'}
                                 onPress={() => options({ mode: m.id })}
                                 style={[
                                     styles.seg,
                                     g.mode === m.id && styles.segOn,
-                                    (!host || !m.available) && styles.segOff,
+                                    (disconnected || !host || !m.available || pendingAction === 'options') && styles.segOff,
                                 ]}
                             >
                                 <Text style={[styles.segText, g.mode === m.id && styles.segTextOn]}>
@@ -186,9 +209,9 @@ export default function LobbyScreen() {
                         {room.turn_options.map((s) => (
                             <Pressable
                                 key={s}
-                                disabled={!host}
+                                disabled={disconnected || !host || pendingAction === 'options'}
                                 onPress={() => options({ turn_seconds: s })}
-                                style={[styles.seg, g.turn_seconds === s && styles.segOn, !host && styles.segOff]}
+                                style={[styles.seg, g.turn_seconds === s && styles.segOn, (!host || disconnected || pendingAction === 'options') && styles.segOff]}
                             >
                                 <Text style={[styles.segText, g.turn_seconds === s && styles.segTextOn]}>
                                     {formatTurn(t, s)}
@@ -202,9 +225,9 @@ export default function LobbyScreen() {
                         {room.respond_options.map((s) => (
                             <Pressable
                                 key={s}
-                                disabled={!host}
+                                disabled={disconnected || !host || pendingAction === 'options'}
                                 onPress={() => options({ respond_seconds: s })}
-                                style={[styles.seg, g.respond_seconds === s && styles.segOn, !host && styles.segOff]}
+                                style={[styles.seg, g.respond_seconds === s && styles.segOn, (!host || disconnected || pendingAction === 'options') && styles.segOff]}
                             >
                                 <Text style={[styles.segText, g.respond_seconds === s && styles.segTextOn]}>
                                     {formatTurn(t, s)}
@@ -224,8 +247,9 @@ export default function LobbyScreen() {
                                 : t('lobby.need_player')
                         }
                         variant="gold"
-                        disabled={g.players.length < 2}
-                        onPress={() => send({ type: 'start_game' })}
+                        disabled={disconnected || g.players.length < 2}
+                        pending={pendingAction === 'start'}
+                        onPress={() => { setPendingAction('start'); send({ type: 'start_game' }); }}
                     />
                 ) : (
                     <Text style={styles.hint}>
@@ -235,7 +259,7 @@ export default function LobbyScreen() {
                     </Text>
                 )}
 
-                <Btn label={t('lobby.leave')} variant="red" onPress={leave} />
+                <Btn label={t('lobby.leave')} variant="red" pending={pendingAction === 'leave'} onPress={() => { setPendingAction('leave'); leave(); }} />
             </ScrollView>
 
             <Sheet open={invite} onClose={() => setInvite(false)} title={t('invite.title')}>
@@ -248,8 +272,14 @@ export default function LobbyScreen() {
                 <Btn
                     label={copied ? t('invite.copied') : t('invite.copy')}
                     onPress={async () => {
-                        await Clipboard.setStringAsync(link);
-                        setCopied(true);
+                        try {
+                            await Clipboard.setStringAsync(link);
+                            setCopied(true);
+                        } catch {
+                            // The raw error is device-language native text;
+                            // the link stays selectable above as a fallback.
+                            Alert.alert(t('common.error'), t('invite.copy_failed'));
+                        }
                     }}
                 />
                 {/* The web client could only copy a link; a phone can hand it
@@ -257,7 +287,17 @@ export default function LobbyScreen() {
                 <Btn
                     label={t('invite.open')}
                     variant="gold"
-                    onPress={() => Share.share({ message: link })}
+                    onPress={async () => {
+                        try {
+                            await Share.share({ message: link });
+                        } catch (err) {
+                            // Closing the sheet normally resolves with
+                            // dismissedAction, but some platforms reject
+                            // instead; backing out is not a failure.
+                            if (isShareDismissal(err)) return;
+                            Alert.alert(t('common.error'), t('invite.share_failed'));
+                        }
+                    }}
                 />
             </Sheet>
         </>
@@ -307,3 +347,8 @@ const styles = StyleSheet.create({
     },
     link: { fontFamily: uiFont(700), fontSize: 12, color: ink.muted60 },
 });
+
+function isShareDismissal(err: unknown): boolean {
+    const text = err instanceof Error ? `${(err as Error & { code?: unknown }).code ?? ''} ${err.message}` : String(err);
+    return /cancel|dismiss/i.test(text);
+}

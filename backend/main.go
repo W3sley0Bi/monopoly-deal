@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"log"
 	"mime"
 	"net"
@@ -8,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"monopoly-deal-backend/server"
 )
@@ -39,7 +41,13 @@ func main() {
 		log.Printf("  -> Network: http://%s:%s (ws: ws://%s:%s/ws)", ip, port, ip, port)
 	}
 
-	if err := http.ListenAndServe(addr, mux); err != nil {
+	srv := &http.Server{
+		Addr:              addr,
+		Handler:           mux,
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       90 * time.Second,
+	}
+	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatal("ListenAndServe: ", err)
 	}
 }

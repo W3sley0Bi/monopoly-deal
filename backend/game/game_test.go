@@ -314,6 +314,37 @@ func TestDoubleRentCostsTwoPlays(t *testing.T) {
 	}
 }
 
+func TestDoubleRentRejectsDuplicateCardID(t *testing.T) {
+	g := newTwoPlayer(t)
+	a := g.Player("a")
+	a.Sets = []*PropertySet{{Color: ColorBrown, Cards: []Card{
+		prop("Med", 1, ColorBrown), prop("Baltic", 1, ColorBrown),
+	}}}
+	h := give(g, "a",
+		Card{Type: CardTypeRent, Name: "Rent: Brown/Light Blue", Value: 1, Colors: []Color{ColorBrown, ColorLightBlue}},
+		Card{Type: CardTypeAction, Action: ActionDoubleRent, Name: "Double The Rent", Value: 1},
+	)
+	g.PlaysLeft = 3
+	err := g.PlayAction("a", h[0].ID, ActionOptions{
+		Color: ColorBrown, DoubleCardIDs: []string{h[1].ID, h[1].ID},
+	})
+	if f, ok := FaultOf(err); !ok || f.Key != "err.duplicate_double_rent" {
+		t.Fatalf("error = %v, want err.duplicate_double_rent", err)
+	}
+	if len(a.Hand) != 2 || g.Pending != nil || g.PlaysLeft != 3 {
+		t.Fatalf("rejected move changed state: hand=%d pending=%v plays=%d", len(a.Hand), g.Pending, g.PlaysLeft)
+	}
+}
+
+func TestMoveRejectsInvalidCurrentTurnWithoutPanicking(t *testing.T) {
+	g := newTwoPlayer(t)
+	g.CurrentTurn = len(g.Players)
+	err := g.EndTurn("a")
+	if f, ok := FaultOf(err); !ok || f.Key != "err.invalid_game_state" {
+		t.Fatalf("error = %v, want err.invalid_game_state", err)
+	}
+}
+
 func TestPayWithEverythingWhenShort(t *testing.T) {
 	g := newTwoPlayer(t)
 	a, b := g.Player("a"), g.Player("b")

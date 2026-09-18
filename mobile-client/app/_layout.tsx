@@ -3,7 +3,8 @@
 import 'react-native-url-polyfill/auto';
 
 import { useEffect } from 'react';
-import { DarkTheme, Stack, ThemeProvider } from 'expo-router';
+import { DarkTheme, Stack, ThemeProvider, type ErrorBoundaryProps } from 'expo-router';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -18,11 +19,30 @@ import { UpdateRequired } from '../src/components/UpdateRequired';
 import { surface } from '../lib/theme';
 
 // Must run at module scope, before the first render — EXPO-57.md §2.
-SplashScreen.preventAutoHideAsync();
+void SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
 // Same reason, and a no-op off the web: the page has to stop being zoomable
 // before it has been painted, not after the player has already pinched it.
 lockViewport();
+
+/** Last-resort recovery for render and route failures. This intentionally has
+ * no app-context dependencies because a provider itself may be what failed. */
+export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
+    return (
+        <View style={errorStyles.screen} accessibilityViewIsModal>
+            <Text style={errorStyles.title} accessibilityRole="header">Something went wrong</Text>
+            <Text style={errorStyles.body}>The game hit an unexpected problem. Your saved name and settings are still safe.</Text>
+            {__DEV__ ? <Text style={errorStyles.detail}>{error.message}</Text> : null}
+            <Pressable
+                accessibilityRole="button"
+                onPress={() => void retry()}
+                style={({ pressed }) => [errorStyles.button, pressed && errorStyles.buttonPressed]}
+            >
+                <Text style={errorStyles.buttonText}>Try again</Text>
+            </Pressable>
+        </View>
+    );
+}
 
 export default function RootLayout() {
     const hydrated = useStore((s) => s.hydrated);
@@ -112,3 +132,26 @@ export default function RootLayout() {
         </GestureHandlerRootView>
     );
 }
+
+const errorStyles = StyleSheet.create({
+    screen: {
+        flex: 1,
+        justifyContent: 'center',
+        gap: 12,
+        padding: 24,
+        backgroundColor: surface.bodyBase,
+    },
+    title: { color: '#f4f2e9', fontSize: 24, fontWeight: '800' },
+    body: { color: '#c2ccc7', fontSize: 15, lineHeight: 21 },
+    detail: { color: '#e9a9a9', fontSize: 12, lineHeight: 17 },
+    button: {
+        minHeight: 44,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: 10,
+        backgroundColor: '#d4bd3e',
+        paddingHorizontal: 18,
+    },
+    buttonPressed: { opacity: 0.8 },
+    buttonText: { color: '#24240e', fontSize: 15, fontWeight: '800' },
+});

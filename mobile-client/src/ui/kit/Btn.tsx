@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { BtnProps } from '../../../lib/contracts';
 import { brand, ink, radius, status } from '../../../lib/theme';
@@ -27,7 +27,7 @@ function BtnImpl({ label, onPress, variant = 'ghost', disabled, pending, icon, s
     return (
         <Pressable
             accessibilityRole="button"
-            accessibilityState={{ disabled: !!off }}
+            accessibilityState={{ disabled: !!off, busy: !!pending }}
             disabled={off}
             onPress={onPress}
             style={({ pressed }) => [
@@ -44,9 +44,9 @@ function BtnImpl({ label, onPress, variant = 'ghost', disabled, pending, icon, s
                 style,
             ]}
         >
-            {icon ? <View style={styles.icon}>{icon}</View> : null}
+            {pending ? <ActivityIndicator size="small" color={v.fg} /> : icon ? <View style={styles.icon}>{icon}</View> : null}
             <Text style={[styles.label, { color: v.fg }, textStyle]} numberOfLines={1}>
-                {pending ? '…' : label}
+                {label}
             </Text>
         </Pressable>
     );

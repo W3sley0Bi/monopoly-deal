@@ -16,6 +16,8 @@ export type SocketStatus = 'connecting' | 'open' | 'closed';
 export interface UseJsonSocket<Out> {
     status: SocketStatus;
     send: (msg: Out) => void;
+    /** Immediately abandon the current attempt and open a fresh socket. */
+    reconnect: () => void;
 }
 
 export interface UseJsonSocketOptions<Out> {
@@ -55,19 +57,51 @@ export function useJsonSocket<In, Out>(
 
     const wsRef = useRef<WebSocket | null>(null);
     const queueRef = useRef<Out[]>([]);
+    const reconnectRef = useRef<() => void>(() => undefined);
 
     useEffect(() => {
         let closed = false;
         let attempt = 0;
         let retry: ReturnType<typeof setTimeout> | null = null;
+        let connectWatchdog: ReturnType<typeof setTimeout> | null = null;
+
+        function clearConnectWatchdog() {
+            if (!connectWatchdog) return;
+            clearTimeout(connectWatchdog);
+            connectWatchdog = null;
+        }
+
+        function scheduleRetry() {
+            if (closed || retry) return;
+            setStatus('closed');
+            attempt += 1;
+            retry = setTimeout(() => {
+                retry = null;
+                connect();
+            }, Math.min(500 * attempt, 4000));
+        }
 
         function connect() {
             if (closed) return;
             setStatus('connecting');
-            const ws = new WebSocket(socketUrl);
+            let ws: WebSocket;
+            try {
+                ws = new WebSocket(socketUrl);
+            } catch {
+                scheduleRetry();
+                return;
+            }
             wsRef.current = ws;
+            connectWatchdog = setTimeout(() => {
+                if (closed || wsRef.current !== ws || ws.readyState === WebSocket.OPEN) return;
+                ws.onclose = null;
+                wsRef.current = null;
+                ws.close();
+                scheduleRetry();
+            }, 12_000);
 
             ws.onopen = () => {
+                clearConnectWatchdog();
                 attempt = 0;
                 setStatus('open');
                 // Drain the whole queue in FIFO order, swapped to [] first so
@@ -81,7 +115,13 @@ export function useJsonSocket<In, Out>(
                         dropped.push(msg);
                         continue;
                     }
-                    ws.send(JSON.stringify(msg));
+                    try {
+                        ws.send(JSON.stringify(msg));
+                    } catch {
+                        queueRef.current.unshift(msg);
+                        ws.close();
+                        break;
+                    }
                 }
                 if (dropped.length) opts.current?.onDropped?.(dropped);
             };
@@ -97,9 +137,9 @@ export function useJsonSocket<In, Out>(
 
             ws.onclose = () => {
                 if (closed) return;
-                setStatus('closed');
-                attempt += 1;
-                retry = setTimeout(connect, Math.min(500 * attempt, 4000));
+                clearConnectWatchdog();
+                if (wsRef.current === ws) wsRef.current = null;
+                scheduleRetry();
             };
 
             ws.onerror = () => {
@@ -109,23 +149,40 @@ export function useJsonSocket<In, Out>(
 
         connect();
 
+        reconnectRef.current = () => {
+            if (closed) return;
+            if (retry) {
+                clearTimeout(retry);
+                retry = null;
+            }
+            const ws = wsRef.current;
+            clearConnectWatchdog();
+            wsRef.current = null;
+            if (ws) {
+                ws.onclose = null;
+                ws.close();
+            }
+            connect();
+        };
+
+        let previousAppState = AppState.currentState;
         const appStateSub = AppState.addEventListener('change', (state) => {
-            if (state !== 'active') return;
+            const returningToForeground = previousAppState !== 'active' && state === 'active';
+            previousAppState = state;
+            if (!returningToForeground) return;
             const ws = wsRef.current;
             // Foreground reconnect: mobile OSes kill idle sockets without a
             // close event firing reliably, so force one on return.
-            if (!ws || ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
-                if (retry) {
-                    clearTimeout(retry);
-                    retry = null;
-                }
-                connect();
+            if (!ws || ws.readyState !== WebSocket.CONNECTING) {
+                reconnectRef.current();
             }
         });
 
         return () => {
             closed = true;
+            reconnectRef.current = () => undefined;
             if (retry) clearTimeout(retry);
+            clearConnectWatchdog();
             appStateSub.remove();
             const ws = wsRef.current;
             wsRef.current = null;
@@ -141,8 +198,16 @@ export function useJsonSocket<In, Out>(
     function send(msg: Out) {
         const ws = wsRef.current;
         if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify(msg));
-        } else {
+            try {
+                ws.send(JSON.stringify(msg));
+                return;
+            } catch {
+                // The socket can close between readyState and send. Preserve
+                // the frame under the same bounded-queue rules as offline use.
+            }
+        }
+
+        {
             // Survives reconnects, up to the cap.
             queueRef.current.push(msg);
             const limit = opts.current?.queueLimit;
@@ -153,5 +218,5 @@ export function useJsonSocket<In, Out>(
         }
     }
 
-    return { status, send };
+    return { status, send, reconnect: () => reconnectRef.current() };
 }

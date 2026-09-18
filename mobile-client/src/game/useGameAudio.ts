@@ -1,9 +1,27 @@
 import { useCallback, useEffect, useRef } from 'react';
+import { Platform } from 'react-native';
 import { useAudioPlayer } from 'expo-audio';
 
 import { useStore } from '../../lib/store';
 import type { SoundCue } from '../../lib/contracts';
 import type { GameView, LogEntry } from '../types';
+import { armWebAudio, playWebSfx } from './webSfx';
+
+const IS_WEB = Platform.OS === 'web';
+
+const SFX = {
+    tap: require('../../assets/sfx/tap.wav') as number,
+    draw: require('../../assets/sfx/draw.wav') as number,
+    card: require('../../assets/sfx/play.wav') as number,
+    bank: require('../../assets/sfx/bank.wav') as number,
+    turn: require('../../assets/sfx/turn.wav') as number,
+    threat: require('../../assets/sfx/threat.wav') as number,
+    win: require('../../assets/sfx/win.wav') as number,
+};
+
+// Armed at import, not on table mount, so a tap on home or the lobby already
+// counts as the gesture that unlocks sound for the table.
+if (IS_WEB) armWebAudio(Object.values(SFX));
 
 function logSignature(entry: LogEntry): string {
     return `${entry.key}:${JSON.stringify(entry.args || {})}`;
@@ -28,15 +46,19 @@ export function useGameAudio(game: GameView | null) {
     const settings = useStore((state) => state.audio);
     const setAudio = useStore((state) => state.setAudio);
 
-    const tap = useAudioPlayer(require('../../assets/sfx/tap.wav'));
-    const draw = useAudioPlayer(require('../../assets/sfx/draw.wav'));
-    const card = useAudioPlayer(require('../../assets/sfx/play.wav'));
-    const bank = useAudioPlayer(require('../../assets/sfx/bank.wav'));
-    const turn = useAudioPlayer(require('../../assets/sfx/turn.wav'));
-    const threat = useAudioPlayer(require('../../assets/sfx/threat.wav'));
-    const win = useAudioPlayer(require('../../assets/sfx/win.wav'));
+    // On web the players get no source: their <audio> elements are what iOS
+    // Safari blocks (see webSfx.ts), so web plays through Web Audio instead.
+    const src = (mod: number) => (IS_WEB ? null : mod);
+    const tap = useAudioPlayer(src(SFX.tap));
+    const draw = useAudioPlayer(src(SFX.draw));
+    const card = useAudioPlayer(src(SFX.card));
+    const bank = useAudioPlayer(src(SFX.bank));
+    const turn = useAudioPlayer(src(SFX.turn));
+    const threat = useAudioPlayer(src(SFX.threat));
+    const win = useAudioPlayer(src(SFX.win));
 
     useEffect(() => {
+        if (IS_WEB) return;
         [tap, draw, card, bank, turn, threat, win].forEach((player) => {
             player.volume = settings.sfxVolume;
         });
@@ -44,21 +66,26 @@ export function useGameAudio(game: GameView | null) {
 
     const play = useCallback((cue: SoundCue) => {
         if (!settings.sfxEnabled) return;
-        const player = cue === 'tap'
-            ? tap
+        const key: keyof typeof SFX = cue === 'tap'
+            ? 'tap'
             : cue === 'card_draw' || cue === 'shuffle' || cue === 'spin'
-              ? draw
+              ? 'draw'
               : cue === 'card_play'
-                ? card
+                ? 'card'
                 : cue === 'bank' || cue === 'payment'
-                  ? bank
+                  ? 'bank'
                   : cue === 'turn'
-                    ? turn
+                    ? 'turn'
                     : cue === 'win'
-                      ? win
-                      : threat;
+                      ? 'win'
+                      : 'threat';
+        if (IS_WEB) {
+            playWebSfx(SFX[key], settings.sfxVolume);
+            return;
+        }
+        const player = { tap, draw, card, bank, turn, threat, win }[key];
         void player.seekTo(0).then(() => player.play()).catch(() => {});
-    }, [bank, card, draw, settings.sfxEnabled, tap, threat, turn, win]);
+    }, [bank, card, draw, settings.sfxEnabled, settings.sfxVolume, tap, threat, turn, win]);
 
     const previousGameId = useRef<string | null>(null);
     const previousLog = useRef<string[] | null>(null);

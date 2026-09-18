@@ -22,5 +22,7 @@ const invite: Catalog = {
     'wheel.order': "Il vostro ordine di gioco",
     'timer.starting': "Scelta del primo giocatore",
     'err.game_starting': "La scelta dell’ordine di gioco è ancora in corso.",
+    'invite.copy_failed': "Impossibile copiare il link. Tienilo premuto qui sopra per copiarlo.",
+    'invite.share_failed': "Impossibile aprire la condivisione. Copia invece il link.",
 };
 export default invite;

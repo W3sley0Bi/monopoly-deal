@@ -2,6 +2,7 @@ package server
 
 import (
 	"strings"
+	"unicode/utf8"
 
 	"monopoly-deal-backend/game"
 )
@@ -12,29 +13,26 @@ var (
 )
 
 func trimName(s string) string {
-	s = strings.TrimSpace(s)
-	if len(s) > 16 {
-		s = s[:16]
-	}
-	return s
+	return truncate(strings.TrimSpace(s), 16)
 }
 
 func trimRoomName(s string) string {
-	s = strings.TrimSpace(s)
-	if len(s) > 28 {
-		s = s[:28]
-	}
-	return s
+	return truncate(strings.TrimSpace(s), 28)
 }
 
 func trimChat(s string) string {
-	s = strings.TrimSpace(s)
-	if len(s) > 400 {
-		s = s[:400]
-	}
-	return s
+	return truncate(strings.TrimSpace(s), 400)
 }
 
+// truncate limits user-visible strings by characters rather than bytes. Byte
+// slicing can split a multi-byte rune and leave invalid UTF-8 in room state.
+func truncate(s string, maxRunes int) string {
+	if utf8.RuneCountInString(s) <= maxRunes {
+		return s
+	}
+	runes := []rune(s)
+	return string(runes[:maxRunes])
+}
 
 // normalizeCode makes table codes case- and space-insensitive.
 func normalizeCode(s string) string {
