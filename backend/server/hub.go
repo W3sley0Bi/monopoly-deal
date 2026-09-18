@@ -28,10 +28,11 @@ var botMoveDelay = 1100 * time.Millisecond
 
 // WebSocket keepalive and per-connection writer configuration.
 const (
-	pingInterval = 30 * time.Second
-	pongWait     = 45 * time.Second
-	writeWait    = 10 * time.Second
-	sendChSize   = 16
+	pingInterval   = 30 * time.Second
+	pongWait       = 45 * time.Second
+	writeWait      = 10 * time.Second
+	sendChSize     = 16
+	maxMessageSize = 4096
 )
 
 // Client is one websocket connection.
@@ -282,6 +283,7 @@ func (h *Hub) HandleConnections(w http.ResponseWriter, r *http.Request) {
 		done:   make(chan struct{}),
 	}
 
+	conn.SetReadLimit(maxMessageSize)
 	conn.SetReadDeadline(time.Now().Add(pongWait))
 	conn.SetPongHandler(func(string) error {
 		conn.SetReadDeadline(time.Now().Add(pongWait))

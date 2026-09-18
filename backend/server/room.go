@@ -32,6 +32,9 @@ type Room struct {
 	// bots counts every robot ever seated here, so ids never collide with a
 	// seat that was removed and re-added.
 	bots int
+
+	// summaryHash is the last broadcast state of this room for the lobby.
+	summaryHash string
 }
 
 // nextBot hands out the next robot sequence number for this table.
@@ -236,4 +239,21 @@ func (r *Room) summary(playerID string, live int) RoomSummary {
 		Abandoned:      abandoned,
 		YouMayClose:    playerID == r.OwnerID || abandoned,
 	}
+}
+
+// computeSummaryHash returns a string representing the globally visible summary state.
+// It is used by the hub to know when a change requires broadcasting an updated lobby view.
+func (r *Room) computeSummaryHash(live int) string {
+	return fmt.Sprintf("%v|%v|%v|%v|%v|%v|%v|%v|%v|%v",
+		r.Name,
+		r.OwnerID,
+		r.Game.Mode,
+		r.Game.TurnSeconds,
+		r.Game.BotDifficulty,
+		r.Game.State,
+		live == 0, // abandoned
+		len(r.spectators),
+		r.Game.Bots(),
+		r.playerSeats(),
+	)
 }
