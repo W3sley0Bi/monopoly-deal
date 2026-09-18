@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { Easing, runOnJS, useAnimatedStyle, useReducedMotion, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
 import type { Card as CardT, Color, PlayerView, SetView } from '../../types';
@@ -10,7 +10,21 @@ import { useStore } from '../../../lib/store';
 import { useI18n } from '../../i18n';
 import { brand } from '../../../lib/theme';
 import { uiFont } from '../../../lib/fonts';
-import { PROPERTY_SLOT_COUNT, TABLE_SEAT_COUNT, reconcilePropertySlots, tableSeatSlots } from '../../game/feltLayout';
+import {
+    FLAT_CAMERA,
+    PROPERTY_SLOT_COUNT,
+    TABLE_SEAT_COUNT,
+    TILTED_CAMERA,
+    fitTiltedRing,
+    projectFelt,
+    reconcilePropertySlots,
+    seatAngle,
+    tableSeatSlots,
+    tiltedChair,
+    tiltedPileScale,
+    tableRadii,
+} from '../../game/feltLayout';
+import Svg, { Defs, LinearGradient as SvgGradient, Polygon, Stop } from 'react-native-svg';
 
 /**
  * A stable pseudo-random number for a card, so the scatter below is a property
@@ -187,6 +201,24 @@ export interface SeatHit {
     h: number;
 }
 
+/** Where a remote player's chip stands, in coordinates local to the felt. */
+export interface ChairAnchor {
+    id: string;
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+}
+
+/** Clear space between a seat's cards and the chip standing behind them. */
+const CHIP_GAP = 10;
+/** Keeps the tilted ring's outermost chip off the very edge of the screen. */
+const TILT_MARGIN = 10;
+/** Points along the tilted table's outline; plenty for a smooth oval. */
+const OVAL_STEPS = 72;
+/** How far the table's apron shows below its near edge. */
+const APRON = 9;
+
 interface Flight {
     key: string;
     to: { x: number; y: number };
@@ -209,6 +241,9 @@ export function FeltTable({
     onDrawTwo,
     debugSeats,
     hotelVisual = 'hotel',
+    tilted = false,
+    chip,
+    onChairs,
 }: {
     players: PlayerView[];
     you: string;
@@ -235,11 +270,21 @@ export function FeltTable({
     debugSeats?: boolean;
     /** Optional artwork experiment; gameplay remains a normal hotel. */
     hotelVisual?: HotelVisual;
+    /**
+     * Lean the mat away from the player (roomy screens). The ring, the chairs
+     * and the seat maths are the same; only the camera changes.
+     */
+    tilted?: boolean;
+    /** The chip size to reserve beside each remote chair; tilted tables only. */
+    chip?: { w: number; h: number };
+    /** Where each remote chair's chip goes, for the table screen to render. */
+    onChairs?: (chairs: ChairAnchor[]) => void;
 }) {
     const { t } = useI18n();
     const reduced = useReducedMotion();
     const motion = useStore(s => s.motion);
     const [size, setSize] = useState({ width: 0, height: 0 });
+    const viewport = useWindowDimensions();
     const previous = useRef<Set<string> | null>(null);
     const ids = new Set(players.flatMap(p => [...p.bank, ...p.sets.flatMap(s => s.cards)].map(c => c.id)));
     const fresh = (id: string) => previous.current !== null && !previous.current.has(id);
@@ -278,15 +323,38 @@ export function FeltTable({
      * ring is a circle, so five equal angles also make five equal sides.
      */
     const field = Math.max(90, cardAreaHeight);
-    const centre = { x: size.width / 2, y: field * 0.54 };
-    const pileScale = pileScaleForWidth(size.width);
-    const scaledSeat = SEAT * pileScale;
+    const camera = tilted ? TILTED_CAMERA : FLAT_CAMERA;
 
     // The ring is always calculated for five chairs. Empty chairs remain real
     // positions instead of causing every occupied chair to move. Include the
     // visual scale here, then pull the ring slightly away from edge overlays.
-    const spread = (scaledSeat + SEAT_GAP) / (2 * Math.sin(Math.PI / TABLE_SEAT_COUNT));
-    const radius = Math.max(spread * (1 - SEAT_RING_INSET), Math.min(
+    const minRadiusFor = (scale: number) =>
+        (SEAT * scale + SEAT_GAP) / (2 * Math.sin(Math.PI / TABLE_SEAT_COUNT)) * (1 - SEAT_RING_INSET);
+    const chipSlots = assignedTableSlots.slice(1);
+    const tiltedRing = tilted && size.width > 0
+        ? fitTiltedRing({
+              width: size.width,
+              height: field,
+              margin: TILT_MARGIN,
+              minRadius: minRadiusFor,
+              pileW: PILE_W,
+              pileH: PILE_H,
+              pileScale: tiltedPileScale(size.width, viewport.height),
+              // Never smaller than the phone's own cards.
+              minPileScale: pileScaleForWidth(size.width) * 0.8,
+              chip,
+              chipGap: CHIP_GAP,
+              chipSlots,
+          })
+        : null;
+    // A tilted table may have shrunk its piles to fit a short window.
+    const pileScale = tiltedRing?.pileScale ?? pileScaleForWidth(size.width);
+    const scaledSeat = SEAT * pileScale;
+    // The deck, the discard and the turn lamp grow with the piles, or a
+    // big table ends up with a phone's deck lost in the middle of it.
+    const centreScale = tiltedRing ? pileScale / pileScaleForWidth(size.width) : 1;
+    const centre = tiltedRing?.centre ?? { x: size.width / 2, y: field * 0.54 };
+    const radius = tiltedRing?.radius ?? Math.max(minRadiusFor(pileScale), Math.min(
         (size.width - scaledSeat) / 2 - 6,
         centre.y - scaledSeat / 2 - 4,
         field - centre.y - scaledSeat / 2 - 4,
@@ -294,9 +362,27 @@ export function FeltTable({
 
     /** One fixed chair: permanent anchor, inward turn and transformed bounds. */
     const seatAt = (tableSlot: number) => {
+        if (tilted) {
+            // Leaning away, a far chair is smaller because it *is* further
+            // off — the perspective scale replaces the flat ring's fake depth.
+            const chair = tiltedChair(tableSlot, radius, {
+                pileW: PILE_W, pileH: PILE_H, pileScale, chip, chipGap: CHIP_GAP, chipLean: tiltedRing?.chipLean,
+            });
+            return {
+                x: centre.x + chair.seat.cx - chair.seat.w / 2,
+                y: centre.y + chair.seat.cy - chair.seat.h / 2,
+                w: chair.seat.w,
+                h: chair.seat.h,
+                angle: chair.angle,
+                rotation: chair.rotation,
+                seatScale: chair.k,
+                seatSquash: 1,
+                chip: chair.chip,
+            };
+        }
         // Slot 0 is always the local player's near edge. The remaining four
         // positions are permanent points clockwise around the five-seat mat.
-        const angle = Math.PI / 2 + tableSlot * 2 * Math.PI / TABLE_SEAT_COUNT;
+        const angle = seatAngle(tableSlot);
         // The local player's mat stays horizontal. Every remote mat follows
         // the tangent of the five-seat ring, so the top edge of its cards
         // points directly at the shared deck and the five mats read as a star.
@@ -314,6 +400,11 @@ export function FeltTable({
             h,
             angle,
             rotation,
+            // Depth: a seat across the table is further away, so its cards
+            // are smaller and sit a little flatter than your own.
+            seatScale: 1 - DEPTH * (0.5 - Math.sin(angle) * 0.5),
+            seatSquash: 1 - DEPTH * 0.5 * (0.5 - Math.sin(angle) * 0.5),
+            chip: null,
         };
     };
 
@@ -323,9 +414,47 @@ export function FeltTable({
         const dy = Math.floor(slot / COLS) * ROW + STACK_H / 2 - PILE_H / 2;
         const turn = rotation * Math.PI / 180;
         const rotatedX = (dx * Math.cos(turn) - dy * Math.sin(turn)) * pileScale * seatScale;
-        const rotatedY = (dx * Math.sin(turn) + dy * Math.cos(turn)) * pileScale * seatScale * seatSquash;
+        const rotatedY = (dx * Math.sin(turn) + dy * Math.cos(turn)) * pileScale * seatScale * seatSquash * camera.cos;
         return { x: place.w / 2 + rotatedX, y: place.h / 2 + rotatedY };
     };
+
+    // The chips, for the table screen to stand at each remote chair.
+    const chairs: ChairAnchor[] = tilted && chip && size.width > 0
+        ? seats.slice(1).flatMap((player, index) => {
+              const place = seatAt(assignedTableSlots[index + 1] ?? index + 1);
+              if (!place.chip) return [];
+              return [{
+                  id: player.id,
+                  x: centre.x + place.chip.cx - place.chip.w / 2,
+                  y: centre.y + place.chip.cy - place.chip.h / 2,
+                  w: place.chip.w,
+                  h: place.chip.h,
+              }];
+          })
+        : [];
+    const chairsKey = chairs.map(c => `${c.id}:${Math.round(c.x)}:${Math.round(c.y)}`).join('|');
+    useEffect(() => {
+        onChairs?.(chairs);
+        // Same trick as `hitsKey` below: a fresh array every render.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [chairsKey]);
+
+    /*
+     * The tilted table top: an oval on the mat, centred on the ring, pushed
+     * through the same projection as the seats and drawn as a polygon. No 3D
+     * transform, so it is the same shape on the web and inside the iOS blur
+     * snapshot (see `stage` below), and it cannot disagree with the seats.
+     */
+    const tableOval = (() => {
+        if (!tiltedRing) return null;
+        const { rx, ry } = tableRadii(radius, PILE_W, PILE_H, pileScale);
+        const outline = (inset: number, dy = 0) => Array.from({ length: OVAL_STEPS }, (_, i) => {
+            const t = i / OVAL_STEPS * 2 * Math.PI;
+            const p = projectFelt(Math.cos(t) * (rx - inset), Math.sin(t) * (ry - inset), camera);
+            return `${(centre.x + p.x).toFixed(1)},${(centre.y + p.y + dy).toFixed(1)}`;
+        }).join(' ');
+        return { top: outline(0), apron: outline(0, APRON), rim: outline(RIM) };
+    })();
 
     // The seat rectangles, in felt-local coordinates, for the hit layer the
     // table screen renders on top of everything.
@@ -388,7 +517,7 @@ export function FeltTable({
      */
     const turnIndex = Math.max(0, seats.findIndex(p => p.id === turnId));
     const turnTableSlot = assignedTableSlots[turnIndex] ?? 0;
-    const turnAngle = Math.PI / 2 + turnTableSlot * 2 * Math.PI / TABLE_SEAT_COUNT;
+    const turnAngle = seatAngle(turnTableSlot);
     const marker = useSharedValue(turnAngle);
     const markerReady = useRef(false);
     useEffect(() => {
@@ -424,16 +553,24 @@ export function FeltTable({
         transform: [{ scale: 1 + 0.06 * pulse.value }],
     }));
 
-    const markerStyle = useAnimatedStyle(() => ({
-        opacity: 0.55 + 0.3 * pulse.value,
-        transform: [
-            // Outside the seats, not among them: at the seats' own radius the
-            // marker sat on top of somebody's cards.
-            { translateX: centre.x + Math.cos(marker.value) * (radius + MARKER_OUT) - MARKER_W / 2 },
-            { translateY: centre.y + Math.sin(marker.value) * (radius + MARKER_OUT) - MARKER_H / 2 },
-            { scale: 1 + 0.05 * pulse.value },
-        ],
-    }));
+    const markerStyle = useAnimatedStyle(() => {
+        // Inside the seats, not among them: at the seats' own radius the
+        // marker sat on top of somebody's cards. Projected like everything
+        // else on the mat, so it keeps to the ring when the table leans.
+        const at = projectFelt(
+            Math.cos(marker.value) * (radius + MARKER_OUT),
+            Math.sin(marker.value) * (radius + MARKER_OUT),
+            camera,
+        );
+        return {
+            opacity: 0.55 + 0.3 * pulse.value,
+            transform: [
+                { translateX: centre.x + at.x - MARKER_W / 2 },
+                { translateY: centre.y + at.y - MARKER_H / 2 },
+                { scale: (1 + 0.05 * pulse.value) * at.k * centreScale },
+            ],
+        };
+    });
 
     return <View style={styles.scene} pointerEvents="box-none"
         onLayout={e => setSize(e.nativeEvent.layout)}>
@@ -443,27 +580,46 @@ export function FeltTable({
             table looks like from a chair — the old dome was a top-down view
             with a rounded lid, which is why nothing on it looked seated. */}
         <LinearGradient pointerEvents="none" colors={ROOM} style={styles.room} />
-        <LinearGradient
-            pointerEvents="none"
-            colors={MAT}
-            locations={[0, 0.5, 1]}
-            style={[styles.mat, {
-                width: size.width * 1.3,
-                left: -size.width * 0.15,
-                height: Math.max(150, Math.max(90, cardAreaHeight) * 1.62),
-                borderRadius: size.width * 0.65,
-            }]}
-        >
-            {/* The rim line, a hair inside the table edge — `.arena-surface::after`
-                on the web. It is what stops the mat reading as a flat shape:
-                the eye takes the double edge as a moulded lip. */}
-            <View pointerEvents="none" style={[styles.rim, { borderRadius: size.width * 0.65 - RIM }]} />
-        </LinearGradient>
+        {tableOval ? (
+            <Svg pointerEvents="none" width={size.width} height={size.height} style={styles.oval}>
+                <Defs>
+                    <SvgGradient id="felt-mat" x1="0" y1="0" x2="0" y2="1">
+                        {MAT.map((color, i) => <Stop key={color} offset={i / (MAT.length - 1)} stopColor={color} />)}
+                    </SvgGradient>
+                </Defs>
+                {/* The table's thickness, showing under the near edge: what
+                    makes it a slab standing in the room rather than a shape
+                    painted on the wall behind it. */}
+                <Polygon points={tableOval.apron} fill="#1a2046" />
+                <Polygon points={tableOval.top} fill="url(#felt-mat)" stroke="#c8d2ff42" strokeWidth={2} />
+                {/* The rim line, a hair inside the edge — the eye takes the
+                    double edge as a moulded lip. */}
+                <Polygon points={tableOval.rim} fill="none" stroke="#ccd5ff40" strokeWidth={1} />
+            </Svg>
+        ) : (
+            <LinearGradient
+                pointerEvents="none"
+                colors={MAT}
+                locations={[0, 0.5, 1]}
+                style={[styles.mat, {
+                    width: size.width * 1.3,
+                    left: -size.width * 0.15,
+                    height: Math.max(150, Math.max(90, cardAreaHeight) * 1.62),
+                    borderRadius: size.width * 0.65,
+                }]}
+            >
+                {/* The rim line, a hair inside the table edge — `.arena-surface::after`
+                    on the web. It is what stops the mat reading as a flat shape:
+                    the eye takes the double edge as a moulded lip. */}
+                <View pointerEvents="none" style={[styles.rim, { borderRadius: size.width * 0.65 - RIM }]} />
+            </LinearGradient>
+        )}
 
         {size.width > 0 ? (
             <View style={[styles.centre, {
                 left: centre.x - DECK_W - 4,
-                top: centre.y - DECK_H / 2,
+                top: centre.y - DECK_H / 2 * centreScale,
+                transform: [{ scale: centreScale }, { scaleY: 0.9 }],
             }]} pointerEvents="box-none">
                 {/* The draw pile: a few backs, each sitting slightly off true.
                     Inert unless a Pass Go is in hand, when the whole pile
@@ -552,8 +708,7 @@ export function FeltTable({
             const bank = player ? [...player.bank].sort((a, b) => a.value - b.value).slice(-4) : [];
             const assignedProperties = player ? propertySlots.current.get(player.id) ?? [] : [];
             const setsByColor = new Map(player?.sets.map(set => [set.color, set]) ?? []);
-            const seatScale = 1 - DEPTH * (0.5 - Math.sin(angle) * 0.5);
-            const seatSquash = 1 - DEPTH * 0.5 * (0.5 - Math.sin(angle) * 0.5);
+            const { seatScale, seatSquash } = place;
             // Visuals only. The taps are handled by `SeatHits`, rendered above
             // every panel — down here a pile sat under whatever the layout put
             // on top of the felt and could not be reached at all.
@@ -562,10 +717,13 @@ export function FeltTable({
                 pointerEvents="none"
                 style={[styles.seat, { left: place.x, top: place.y, width: place.w, height: place.h }, debugSeats && styles.debugSeat]}>
                 {/* Depth: a seat across the table is further away, so its cards
-                    are smaller and sit a little flatter than your own. */}
+                    are smaller and sit a little flatter than your own. The
+                    outermost squash is the camera's: the pile turns within
+                    the mat first, then the mat is foreshortened on screen. */}
                 <View pointerEvents="none" style={[styles.piles, {
                     transformOrigin: 'center',
                     transform: [
+                        { scaleY: camera.cos },
                         { rotate: `${rotation}deg` },
                         { scale: pileScale },
                         { scale: seatScale },
@@ -607,6 +765,7 @@ export function FeltTable({
                                 visualScale={BUILDING_FOOTPRINT_SCALE}
                                 seatRotation={rotation}
                                 seatSquash={seatSquash}
+                                seatTilt={camera.cos}
                             /> : null : set.cards.map((card, i) => <MiniCard key={card.id} color={colorMeta(set.color).hex}
                                 left={Math.min(i, FAN_STEPS) * FAN_OFFSET + scatter(card.id, 0, 1)}
                                 top={Math.min(i, FAN_STEPS) * FAN_OFFSET + scatter(card.id, 3, 1)}
@@ -654,6 +813,7 @@ const styles = StyleSheet.create({
     // 2D instead, by scaling each seat with its distance from the near edge.
     stage: { flex: 1 },
     room: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 },
+    oval: { position: 'absolute', left: 0, top: 0 },
     marker: {
         position: 'absolute',
         top: 0,

@@ -5,7 +5,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import * as Clipboard from 'expo-clipboard';
 import { BlurTargetView } from 'expo-blur';
-import { FeltTable, type SeatHit } from '../src/components/table/FeltTable';
+import { FeltTable, type ChairAnchor, type SeatHit } from '../src/components/table/FeltTable';
+import { tiltedChipScale } from '../src/game/feltLayout';
 import { GlassPanel, TableGlassProvider } from '../src/components/table/TableGlass';
 
 import { useGameConnectionContext, type UseGameConnection } from '../lib/net/messages';
@@ -50,6 +51,16 @@ import type { ActionDialogIntent, PendingViewerRole } from '../lib/contracts';
 
 const EMPTY_CHAT: ChatMessage[] = [];
 
+/**
+ * A remote player's chip where it stands at the tilted table's edge, at its
+ * base size. Fixed, because the felt reserves this much room beside each chair
+ * before it sizes the ring — a chip that grew with its content would land on
+ * the cards. Laid out at the width where every figure fits (narrower, the
+ * chip's own type scale truncated "$0M" to "$…"), then drawn smaller whole,
+ * so the reserved box and the drawn chip can never disagree.
+ */
+const CHAIR_CHIP = { w: 150, h: 78 };
+
 export default function TableScreen() {
     // The body has to live inside the layer to read what is being carried.
     return (
@@ -81,9 +92,10 @@ function TableBody() {
     // Just the rail now (~64, the chips being one row shorter) plus the top
     // padding. It has to clear the rail rather than merely start near it: the
     // rail is a ScrollView and would take the taps meant for the seats beneath.
-    const feltTop = insets.top + 72;
+    // Roomy screens seat the chips at the table itself, so there is no rail
+    // to clear and the felt starts at the top.
+    const feltTop = insets.top + (roomyPlayerStation ? 8 : 72);
     const feltHeight = Math.max(180, windowHeight - feltTop - insets.bottom - 60);
-    const cardAreaHeight = Math.max(120, feltHeight * 0.55);
     const { room: live, send, leave, notice, skewMs } = useGameConnectionContext();
     const dragLayer = useDragLayer();
     const audio = useGameAudio(live?.game ?? null);
@@ -109,9 +121,21 @@ function TableBody() {
     const [bankOpen, setBankOpen] = useState(false);
     const [discardOpen, setDiscardOpen] = useState(false);
     const [seatHits, setSeatHits] = useState<SeatHit[]>([]);
+    const [chairs, setChairs] = useState<ChairAnchor[]>([]);
     // Where your own panels start. The seat hit layer is clipped to stop above
     // it: your controls always win a contested touch.
     const [localTop, setLocalTop] = useState<number | null>(null);
+    // The tilted ring is fitted to the felt between the top and your own
+    // board, which on a roomy screen is a fixed-height row — measured, so the
+    // near chair never slides under it.
+    const chipScale = tiltedChipScale(windowWidth, windowHeight);
+    const chairChip = useMemo(
+        () => ({ w: CHAIR_CHIP.w * chipScale, h: CHAIR_CHIP.h * chipScale }),
+        [chipScale],
+    );
+    const cardAreaHeight = roomyPlayerStation && localTop !== null
+        ? Math.max(160, localTop - feltTop - 4)
+        : Math.max(120, feltHeight * 0.55);
     // Dev only: paints the seat tap targets and the overlay band they live in.
     const [showHits, setShowHits] = useState(false);
     const [copied, setCopied] = useState(false);
@@ -367,6 +391,81 @@ function TableBody() {
         ? assets(me).map((a) => ({ card: a.card, source: (a.fromColor ?? 'bank') as 'bank' | Color }))
         : [];
 
+    const renderTurnControls = (roomy: boolean) => (
+        <GlassPanel style={[styles.controls, roomy && styles.controlsRoomy]}>
+            {roomy ? (
+                <View style={styles.controlToolsRoomy}>
+                    <Pressable disabled={tutorialActive} onPress={() => setMenu(true)} style={({ pressed }) => [styles.talkBtn, styles.talkBtnRoomy, tutorialActive && styles.controlDisabled, pressed && styles.talkBtnPressed]} accessibilityRole="button" accessibilityLabel={t('table.menu')}>
+                        <Icon name="gearshape.fill" fallback="☰" size={16} color={ink.muted60} />
+                    </Pressable>
+                    <Pressable disabled={tutorialActive} onPress={() => setLogOpen(true)} style={({ pressed }) => [styles.talkBtn, styles.talkBtnRoomy, tutorialActive && styles.controlDisabled, pressed && styles.talkBtnPressed]} accessibilityRole="button" accessibilityLabel={t('panel.log')}>
+                        <Icon name="list.bullet.rectangle" fallback="≡" size={16} color={ink.muted60} />
+                    </Pressable>
+                    <Pressable disabled={tutorialActive} onPress={() => setTalk(true)} style={({ pressed }) => [styles.talkBtn, styles.talkBtnRoomy, tutorialActive && styles.controlDisabled, pressed && styles.talkBtnPressed]} accessibilityRole="button" accessibilityLabel={t('panel.chat')}>
+                        <Icon name="bubble.left.and.bubble.right.fill" fallback="…" size={16} color={ink.muted60} />
+                    </Pressable>
+                </View>
+            ) : (
+                <>
+                    <Pressable disabled={tutorialActive} onPress={() => setMenu(true)} style={({ pressed }) => [styles.talkBtn, tutorialActive && styles.controlDisabled, pressed && styles.talkBtnPressed]} accessibilityRole="button" accessibilityLabel={t('table.menu')}>
+                        <Icon name="gearshape.fill" fallback="☰" size={18} color={ink.muted60} />
+                    </Pressable>
+                    <Pressable disabled={tutorialActive} onPress={() => setLogOpen(true)} style={({ pressed }) => [styles.talkBtn, tutorialActive && styles.controlDisabled, pressed && styles.talkBtnPressed]} accessibilityRole="button" accessibilityLabel={t('panel.log')}>
+                        <Icon name="list.bullet.rectangle" fallback="≡" size={18} color={ink.muted60} />
+                    </Pressable>
+                </>
+            )}
+
+            <View style={[styles.turnChip, roomy && styles.turnChipRoomy]}>
+                <Text style={styles.turnText} numberOfLines={1}>
+                    {spectating
+                        ? t('table.watching')
+                        : myTurn
+                          ? t('table.your_turn')
+                          : t('table.turn_of', {
+                                name: g.players[g.current_turn % g.players.length]?.name ?? '',
+                            })}
+                </Text>
+                {myTurn ? <View style={styles.plays} accessibilityLabel={`${t('table.plays_hint')}: ${g.plays_left}`}>
+                    {Array.from({ length: 3 }, (_, i) => <View key={i} style={[styles.play, i < g.plays_left && styles.playLeft]} />)}
+                </View> : null}
+            </View>
+
+            {g.deadline_kind !== 'respond' ? (
+                <CountdownTimer
+                    deadlineMs={g.deadline_ms}
+                    totalSeconds={g.deadline_seconds}
+                    skewMs={skewMs}
+                    kind={g.deadline_kind === 'starting' ? 'starting' : 'turn'}
+                    compact={roomy}
+                />
+            ) : null}
+
+            {!roomy ? (
+                <Pressable disabled={tutorialActive} onPress={() => setTalk(true)} style={({ pressed }) => [styles.talkBtn, tutorialActive && styles.controlDisabled, pressed && styles.talkBtnPressed]} accessibilityRole="button" accessibilityLabel={t('panel.chat')}>
+                    <Icon name="bubble.left.and.bubble.right.fill" fallback="…" size={18} color={ink.muted60} />
+                </Pressable>
+            ) : null}
+
+            {myTurn && !pending && !spectating ? (
+                <View
+                    ref={endTurnTutorialRef}
+                    collapsable={false}
+                    onLayout={() => recordTutorialAnchor('controls', endTurnTutorialRef.current)}
+                    style={roomy ? styles.endTurnRoomyWrap : undefined}
+                >
+                    <Btn
+                        label={autoEndLeft > 0 ? t('table.auto_end', { seconds: autoEndLeft }) : t('table.end_turn')}
+                        variant="red"
+                        disabled={Boolean(tutorial && (tutorial.id !== 'end_turn' || tutorial.done))}
+                        onPress={() => act({ type: 'end_turn' })}
+                        style={[styles.endTurn, roomy && styles.endTurnRoomy]}
+                    />
+                </View>
+            ) : null}
+        </GlassPanel>
+    );
+
     return (
         <TableGlassProvider target={feltTarget}>
         {/* The bar is a floating pill now, so it sits in the home-indicator
@@ -396,6 +495,9 @@ function TableBody() {
                     playsLeft={g.plays_left}
                     onSeats={setSeatHits}
                     debugSeats={showHits}
+                    tilted={roomyPlayerStation}
+                    chip={roomyPlayerStation ? chairChip : undefined}
+                    onChairs={setChairs}
                 />
             </BlurTargetView>
             {notice ? (
@@ -407,17 +509,13 @@ function TableBody() {
                 (`game.MaxPlayers` is five), and they all belong on screen at
                 once. Scrolling hid a player behind a gesture, which is a poor
                 way to learn somebody just completed a set. */}
-            <View style={[styles.opponentRail, roomyPlayerStation && styles.opponentRailRoomy]}>
+            {!roomyPlayerStation ? <View style={styles.opponentRail}>
                 {rivals.map((p) => {
                     const isTurn = g.players[g.current_turn % g.players.length]?.id === p.id;
                     return (
                         <View
                             key={p.id}
-                            style={[
-                                styles.railSlot,
-                                roomyPlayerStation && styles.railSlotRoomy,
-                                roomyPlayerStation && isTurn && styles.railSlotTurnRoomy,
-                            ]}
+                            style={styles.railSlot}
                         >
                             <PlayerChip
                                 player={p}
@@ -433,7 +531,7 @@ function TableBody() {
                         </View>
                     );
                 })}
-            </View>
+            </View> : null}
 
             {/* This space grows above the local sections, keeping them bottom-anchored. */}
             <View pointerEvents="box-none" style={styles.sharedTable}>
@@ -609,16 +707,16 @@ function TableBody() {
             </PlayerBoardRow>
 
             {/* ---- hand ---- */}
-            <GlassPanel
-                targetRef={handTutorialRef}
-                withGlass={!roomyPlayerStation}
-                style={[
-                    styles.handZone,
-                    roomyPlayerStation && styles.playerStationRoomy,
-                    roomyPlayerStation && styles.handZoneRoomy,
-                ]}
-                onLayout={() => recordTutorialAnchor('hand', handTutorialRef.current)}
-            >
+            <View style={roomyPlayerStation ? styles.roomyHandRow : undefined}>
+                <GlassPanel
+                    targetRef={handTutorialRef}
+                    withGlass={!roomyPlayerStation}
+                    style={[
+                        styles.handZone,
+                        roomyPlayerStation && styles.handZoneRoomy,
+                    ]}
+                    onLayout={() => recordTutorialAnchor('hand', handTutorialRef.current)}
+                >
                 {/* The hand folds like the board does, and a bare header row did
                     not read as something you could collapse. */}
                 {!roomyPlayerStation ? <View style={styles.grabberRow} pointerEvents="none">
@@ -687,7 +785,9 @@ function TableBody() {
                     />
                     {hand.length === 0 ? <Text style={styles.handHint}>{t('table.hand_empty')}</Text> : null}
                 </View>
-            </GlassPanel>
+                </GlassPanel>
+                {roomyPlayerStation ? renderTurnControls(true) : null}
+            </View>
 
             </> : null}
 
@@ -741,63 +841,9 @@ function TableBody() {
                 </Panel>
             ) : null}
 
-            {/* ---- bottom bar ---- */}
-            <GlassPanel style={[styles.controls, roomyPlayerStation && styles.playerStationRoomy]}>
-                {/* Table-level controls, all in one bar: the header above was a
-                    36pt strip carrying a single button, and the felt wanted
-                    those points more than the gear did. */}
-                <Pressable disabled={tutorialActive} onPress={() => setMenu(true)} style={({ pressed }) => [styles.talkBtn, tutorialActive && styles.controlDisabled, pressed && styles.talkBtnPressed]} accessibilityRole="button" accessibilityLabel={t('table.menu')}>
-                    <Icon name="gearshape.fill" fallback="☰" size={18} color={ink.muted60} />
-                </Pressable>
-
-                <Pressable disabled={tutorialActive} onPress={() => setLogOpen(true)} style={({ pressed }) => [styles.talkBtn, tutorialActive && styles.controlDisabled, pressed && styles.talkBtnPressed]} accessibilityRole="button" accessibilityLabel={t('panel.log')}>
-                    <Icon name="list.bullet.rectangle" fallback="≡" size={18} color={ink.muted60} />
-                </Pressable>
-
-                <View style={styles.turnChip}>
-                    <Text style={styles.turnText} numberOfLines={1}>
-                        {spectating
-                            ? t('table.watching')
-                            : myTurn
-                              ? t('table.your_turn')
-                              : t('table.turn_of', {
-                                    name: g.players[g.current_turn % g.players.length]?.name ?? '',
-                                })}
-                    </Text>
-                    {myTurn ? <View style={styles.plays} accessibilityLabel={`${t('table.plays_hint')}: ${g.plays_left}`}>
-                        {Array.from({ length: 3 }, (_, i) => <View key={i} style={[styles.play, i < g.plays_left && styles.playLeft]} />)}
-                    </View> : null}
-                </View>
-
-                {g.deadline_kind !== 'respond' ? (
-                    <CountdownTimer
-                        deadlineMs={g.deadline_ms}
-                        totalSeconds={g.deadline_seconds}
-                        skewMs={skewMs}
-                        kind={g.deadline_kind === 'starting' ? 'starting' : 'turn'}
-                    />
-                ) : null}
-
-                <Pressable disabled={tutorialActive} onPress={() => setTalk(true)} style={({ pressed }) => [styles.talkBtn, tutorialActive && styles.controlDisabled, pressed && styles.talkBtnPressed]} accessibilityRole="button" accessibilityLabel={t('panel.chat')}>
-                    <Icon name="bubble.left.and.bubble.right.fill" fallback="…" size={18} color={ink.muted60} />
-                </Pressable>
-
-                {myTurn && !pending && !spectating ? (
-                    <View
-                        ref={endTurnTutorialRef}
-                        collapsable={false}
-                        onLayout={() => recordTutorialAnchor('controls', endTurnTutorialRef.current)}
-                    >
-                        <Btn
-                            label={autoEndLeft > 0 ? t('table.auto_end', { seconds: autoEndLeft }) : t('table.end_turn')}
-                            variant="red"
-                            disabled={Boolean(tutorial && (tutorial.id !== 'end_turn' || tutorial.done))}
-                            onPress={() => act({ type: 'end_turn' })}
-                            style={styles.endTurn}
-                        />
-                    </View>
-                ) : null}
-            </GlassPanel>
+            {/* The compact, horizontal turn bar remains mobile-only. Roomy
+                screens place the same controls beside the hand. */}
+            {!roomyPlayerStation ? renderTurnControls(false) : null}
 
             {/* ---- seat taps ----
                 Above every panel, deliberately. The piles are painted inside
@@ -841,6 +887,39 @@ function TableBody() {
                         }
                     />
                 ))}
+
+                {/* ---- opponents, at the table ----
+                    Roomy screens stand each chip at its own chair, as the old
+                    web table did: who a pile belongs to is where they sit, not
+                    an entry in a list. Last, so a chip wins over a seat's tap
+                    rectangle wherever the two touch. */}
+                {roomyPlayerStation ? chairs.map((chair) => {
+                    const p = g.players.find((x) => x.id === chair.id);
+                    if (!p) return null;
+                    const isTurn = turnPlayer?.id === p.id;
+                    return (
+                        <View
+                            key={chair.id}
+                            style={[styles.chair, {
+                                left: chair.x + (chair.w - CHAIR_CHIP.w) / 2,
+                                top: chair.y + (chair.h - CHAIR_CHIP.h) / 2,
+                                width: CHAIR_CHIP.w,
+                                height: CHAIR_CHIP.h,
+                                transform: [{ scale: chipScale }],
+                            }]}
+                        >
+                            <PlayerChip
+                                player={p}
+                                isTurn={isTurn}
+                                isTargeted={!!pending?.targets?.some((x) => !x.settled && x.player_id === p.id)}
+                                isOwner={p.id === room.owner_id}
+                                isYou={false}
+                                playBubbleText={said[p.id]?.text ?? null}
+                                onPress={() => setSheetPlayer(p.id)}
+                            />
+                        </View>
+                    );
+                }) : null}
             </View>
 
             {/* ---- overlays ---- */}
@@ -1293,14 +1372,10 @@ const styles = StyleSheet.create({
     codeBig: { fontFamily: displayFont(900), fontSize: 20, color: brand.inviteCode, letterSpacing: ls(0.1, 20) },
     notice: { fontFamily: uiFont(700), fontSize: 12, color: status.danger },
     opponentRail: { flexGrow: 0, flexShrink: 0, flexDirection: 'row', gap: 5 },
-    opponentRailRoomy: { width: '60%', alignSelf: 'center' },
     // Equal shares on mobile, and `minWidth: 0` so a long name shrinks the slot
     // instead of pushing its neighbours off the screen.
     railSlot: { flex: 1, minWidth: 0 },
-    railSlotRoomy: { flexGrow: 1, flexBasis: 0 },
-    // The active seat carries the turn context, so it earns more room without
-    // making the whole opponent rail dominate a desktop or tablet.
-    railSlotTurnRoomy: { flexGrow: 1.4 },
+    chair: { position: 'absolute', justifyContent: 'center' },
     // Gives up height faster than your own board does: when the tray opens, the
     // shared table is the part you are least likely to be reading.
     // Longhands for the same reason as `board`: `flex: 1` sets a shrink of its
@@ -1404,11 +1479,22 @@ const styles = StyleSheet.create({
     bankTotal: { fontFamily: displayFont(900), fontSize: 16, color: status.bank },
     handZone: { flexShrink: 0, gap: 2, paddingHorizontal: 4, paddingBottom: 4, paddingTop: 2, overflow: 'hidden' },
     handZoneRoomy: {
+        flex: 1,
+        minWidth: 0,
+        justifyContent: 'center',
         borderWidth: 0,
         borderRadius: 0,
         boxShadow: 'none',
         padding: 0,
         overflow: 'visible',
+    },
+    roomyHandRow: {
+        width: '60%',
+        minHeight: 200,
+        alignSelf: 'center',
+        flexDirection: 'row',
+        alignItems: 'stretch',
+        gap: 8,
     },
     grabberRow: { alignItems: 'center', paddingTop: 2 },
     grabber: { width: 34, height: 4, borderRadius: 2, backgroundColor: '#d8fff033' },
@@ -1438,7 +1524,19 @@ const styles = StyleSheet.create({
         paddingHorizontal: 8,
         paddingVertical: 7,
     },
+    controlsRoomy: {
+        width: 80,
+        minHeight: 200,
+        alignSelf: 'stretch',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        borderRadius: 16,
+        padding: 6,
+    },
+    controlToolsRoomy: { flexDirection: 'column', alignItems: 'center', gap: 4 },
     turnChip: { flex: 1, gap: 4 },
+    turnChipRoomy: { flexGrow: 1, flexShrink: 1, alignItems: 'center', justifyContent: 'center' },
     turnText: { fontFamily: uiFont(800), fontSize: 12, color: ink.body },
     // Dots rather than glyphs: ●/○ sit on different baselines in the UI face
     // and the row jittered as plays were spent.
@@ -1456,11 +1554,14 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: '#d8fff01f',
     },
+    talkBtnRoomy: { width: 24, height: 24, borderRadius: 12 },
     talkBtnPressed: { backgroundColor: '#d8fff026' },
     controlDisabled: { opacity: 0.34 },
     // Concentric with the bar: the bar's radius minus its padding, so the red
     // edge never crosses the glass border behind it.
     endTurn: { borderRadius: 15, paddingHorizontal: 14, minHeight: 40 },
+    endTurnRoomyWrap: { width: '100%' },
+    endTurnRoomy: { width: '100%', minHeight: 32, paddingHorizontal: 4, borderRadius: 12 },
     sheetStat: { fontFamily: uiFont(700), fontSize: 13, color: ink.muted60 },
     logLine: { fontFamily: uiFont(700), fontSize: 12, color: ink.muted60, lineHeight: 18 },
     winOverlay: {

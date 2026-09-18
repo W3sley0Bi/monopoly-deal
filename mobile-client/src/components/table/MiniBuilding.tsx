@@ -112,8 +112,10 @@ const MODELS = { house: model('house'), hotel: model('hotel') };
 // TODO: Add a generic custom-building asset slot for both `house` and `hotel`.
 // The Statue of Liberty SVG experiment is deliberately disabled until then;
 // avoid hard-coding a particular landmark as a hotel-only visual.
-export const MiniBuilding = memo(function MiniBuilding({ kind, color, seatRotation = 0, seatSquash = 1, renderScale = 1, visualScale = 1, anchor, hotelVisual: _hotelVisual = 'hotel' }: {
+export const MiniBuilding = memo(function MiniBuilding({ kind, color, seatRotation = 0, seatSquash = 1, seatTilt = 1, renderScale = 1, visualScale = 1, anchor, hotelVisual: _hotelVisual = 'hotel' }: {
     kind: Exclude<BuildingKind, 'none'>; color: string; seatRotation?: number; seatSquash?: number; renderScale?: number;
+    /** The camera's foreshortening, applied outside the seat's rotation. */
+    seatTilt?: number;
     visualScale?: number;
     /** Centre position when rendered outside a transformed pile. */
     anchor?: { x: number; y: number };
@@ -149,11 +151,12 @@ export const MiniBuilding = memo(function MiniBuilding({ kind, color, seatRotati
         left: anchor.x - m.width * visualScale / 2,
         top: anchor.y - m.height * visualScale / 2,
     }, {
-        // Parent is rotation × uniform depth × squash. Invert squash then
-        // rotation so upright walls and lighting share one camera at all seats.
+        // Parent is tilt × rotation × uniform depth × squash. Invert squash,
+        // rotation, then tilt so upright walls and lighting share one camera
+        // at all seats — a building stands up off a leaning table.
         // Rotate around the visual centre so the model remains centred on the
         // card stack it replaces, including at the side seats.
-        transform: [{ scaleY: 1 / seatSquash }, { rotate: `${-seatRotation}deg` }],
+        transform: [{ scaleY: 1 / seatSquash }, { rotate: `${-seatRotation}deg` }, { scaleY: 1 / seatTilt }],
     }]}>
         <Animated.View collapsable={false} shouldRasterizeIOS={false} renderToHardwareTextureAndroid={false}
             style={[styles.root, { width: m.width * drawScale, height: m.height * drawScale }, animated]}>
