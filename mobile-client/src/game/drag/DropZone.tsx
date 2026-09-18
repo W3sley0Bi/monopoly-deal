@@ -38,9 +38,11 @@ interface Props {
     onLayout?: (event: LayoutChangeEvent) => void;
     /** Exposes the native zone only for cross-tree tutorial measurement. */
     targetRef?: Ref<View>;
+    /** Whether the idle background should be more transparent. */
+    transparentBase?: boolean;
 }
 
-export function DropZone({ id, active, onDrop, hint, grow, children, style, glass, onLayout, targetRef }: Props) {
+export function DropZone({ id, active, onDrop, hint, grow, children, style, glass, onLayout, targetRef, transparentBase }: Props) {
     const layer = useDragLayer();
     const shared = useDragShared();
     const ref = useRef<View>(null);
@@ -111,7 +113,7 @@ export function DropZone({ id, active, onDrop, hint, grow, children, style, glas
             // on the container would sit behind it and never be seen.
             backgroundColor: glass
                 ? surface.dropSlot
-                : interpolateColor(e + o, [0, 1, 2], [surface.dropSlot, '#e5cc8914', '#f9d46029']),
+                : interpolateColor(e + o, [0, 1, 2], [transparentBase ? '#00131773' : surface.dropSlot, '#e5cc8914', '#f9d46029']),
             opacity: 1 - 0.45 * inert.value,
             transform: [{ scale: withTiming(o ? 1.06 : 1, { duration: 140 }) }],
         };

@@ -249,6 +249,7 @@ export function FeltTable({
     turnId,
     playsLeft = 3,
     onSeats,
+    hoveredSeatId,
     onOpenDiscard,
     onDrawTwo,
     debugSeats,
@@ -271,6 +272,7 @@ export function FeltTable({
     /** Plays the active player has left, drawn as the marker's three dots. */
     playsLeft?: number;
     onSeats?: (seats: SeatHit[]) => void;
+    hoveredSeatId?: string | null;
     onOpenDiscard?: () => void;
     /**
      * Set only while the player is holding a Pass Go they could play now. The
@@ -371,7 +373,7 @@ export function FeltTable({
     const scaledSeat = SEAT * pileScale;
     // The deck, the discard and the turn lamp grow with the piles, or a
     // big table ends up with a phone's deck lost in the middle of it.
-    const centreScale = tiltedRing ? pileScale / pileScaleForWidth(size.width) * 1.93 : 1;
+    const centreScale = tiltedRing ? (pileScale / pileScaleForWidth(size.width) * 1.93) * 0.85 : (tilted ? 0.85 : 1);
     const centre = tiltedRing?.centre ?? { x: size.width / 2, y: field * 0.54 };
     const centreWidth = centreAction ? DECK_W * 2 + 16 + 40 : DECK_W * 2 + 8;
     const radius = tiltedRing?.radius ?? Math.max(minRadiusFor(pileScale), Math.min(
@@ -577,9 +579,10 @@ export function FeltTable({
         // Inside the seats, not among them: at the seats' own radius the
         // marker sat on top of somebody's cards. Projected like everything
         // else on the mat, so it keeps to the ring when the table leans.
+        const markerOut = tilted ? MARKER_OUT - 20 : MARKER_OUT;
         const at = projectFelt(
-            Math.cos(marker.value) * (radius + MARKER_OUT),
-            Math.sin(marker.value) * (radius + MARKER_OUT),
+            Math.cos(marker.value) * (radius + markerOut),
+            Math.sin(marker.value) * (radius + markerOut),
             camera,
         );
         return {
@@ -587,7 +590,7 @@ export function FeltTable({
             transform: [
                 { translateX: centre.x + at.x - MARKER_W / 2 },
                 { translateY: centre.y + at.y - MARKER_H / 2 },
-                { scale: (1 + 0.05 * pulse.value) * at.k * centreScale },
+                { scale: (1 + 0.05 * pulse.value) * at.k * centreScale * (tilted ? 0.60 : 1) },
             ],
         };
     });
@@ -774,6 +777,7 @@ export function FeltTable({
                                 borderRadius: u(2),
                             },
                             !player && styles.emptyGuide,
+                            player?.id === hoveredSeatId && styles.guideHovered,
                         ]} />
                     ))}
                     <View style={[styles.bankGuide, {
@@ -783,7 +787,7 @@ export function FeltTable({
                         height: u(PILE_H - BANK_VERTICAL_INSET * 2),
                         borderWidth: u(0.75),
                         borderRadius: u(2),
-                    }, !player && styles.emptyGuide]} />
+                    }, !player && styles.emptyGuide, player?.id === hoveredSeatId && styles.guideHovered]} />
 
                     {assignedProperties.map((color, slot) => {
                         if (!color) return null;
@@ -900,6 +904,11 @@ const styles = StyleSheet.create({
         borderColor: '#dbe2ff24',
         borderRadius: 2,
         backgroundColor: '#dbe2ff08',
+    },
+    guideHovered: {
+        borderColor: '#ffffff66',
+        backgroundColor: '#ffffff1a',
+        boxShadow: '0px 0px 8px #ffffff33',
     },
     bankGuide: {
         position: 'absolute',

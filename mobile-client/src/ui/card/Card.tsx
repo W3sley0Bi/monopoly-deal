@@ -257,7 +257,17 @@ function CardImpl({
             accessibilityRole="button"
             accessibilityLabel={tCard(card)}
         >
-            {body}
+            {({ pressed, hovered }: any) => (
+                <View
+                    style={[
+                        (pressed || hovered) && !disabled
+                            ? { transform: [{ translateY: -6 }, { scale: 1.04 }], zIndex: 10 }
+                            : undefined,
+                    ]}
+                >
+                    {body}
+                </View>
+            )}
         </Pressable>
     );
 }

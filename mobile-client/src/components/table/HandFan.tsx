@@ -1,5 +1,5 @@
-import type { Ref } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { useState, type Ref } from 'react';
+import { StyleSheet, Text, View, Platform } from 'react-native';
 
 import { Draggable } from '../../game/drag/Draggable';
 import {
@@ -64,9 +64,12 @@ export function HandFan({
     scale = 1,
     debug,
 }: Props) {
+    const [hoveredId, setHoveredId] = useState<string | null>(null);
+    const effectiveSelectedId = hoveredId || selectedId;
+
     return <>
         {fanLayout(cards, width, scale).map((row, rowIndex) => {
-            const popped = row.cards.findIndex((card) => card.id === selectedId);
+            const popped = row.cards.findIndex((card) => card.id === effectiveSelectedId);
             // Paint order is child order, so the popped card goes last. Keys
             // keep each card's identity across the reorder.
             const painted = row.cards
@@ -102,7 +105,7 @@ export function HandFan({
                                             card={card}
                                             size="hand"
                                             activeColor={shown ?? null}
-                                            selected={card.id === selectedId}
+                                            selected={card.id === effectiveSelectedId}
                                             disabled={!isPlayable(card)}
                                             dimmed={!isPlayable(card) || card.id === carriedId}
                                         />
@@ -148,7 +151,9 @@ export function HandFan({
                                 accessible
                                 accessibilityRole="button"
                                 accessibilityLabel={card.name}
-                                accessibilityState={{ selected: card.id === selectedId }}
+                                accessibilityState={{ selected: card.id === effectiveSelectedId }}
+                                onPointerEnter={Platform.OS === 'web' ? () => setHoveredId(card.id) : undefined}
+                                onPointerLeave={Platform.OS === 'web' ? () => setHoveredId(null) : undefined}
                                 style={[{ width: stripWidth, height: row.height }, debug && styles.debugStrip]}
                                 onLayout={debug ? (event) => {
                                     const box = event.nativeEvent.layout;

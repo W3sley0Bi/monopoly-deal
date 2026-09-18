@@ -121,6 +121,7 @@ function TableBody() {
     const [bankOpen, setBankOpen] = useState(false);
     const [discardOpen, setDiscardOpen] = useState(false);
     const [seatHits, setSeatHits] = useState<SeatHit[]>([]);
+    const [hoveredSeatId, setHoveredSeatId] = useState<string | null>(null);
     const [chairs, setChairs] = useState<ChairAnchor[]>([]);
     // Where your own panels start. The seat hit layer is clipped to stop above
     // it: your controls always win a contested touch.
@@ -534,6 +535,7 @@ function TableBody() {
                                 targetRef={actionTutorialRef}
                                 active={actionActive}
                                 grow={0}
+                                transparentBase={true}
                                 onDrop={(card) => playAction(card)}
                                 onLayout={() => recordTutorialAnchor('action', actionTutorialRef.current)}
                                 style={styles.centreActionZone}
@@ -545,6 +547,7 @@ function TableBody() {
                     turnId={turnPlayer?.id}
                     playsLeft={g.plays_left}
                     onSeats={setSeatHits}
+                    hoveredSeatId={hoveredSeatId}
                     debugSeats={showHits}
                     tilted={roomyPlayerStation}
                     chip={roomyPlayerStation ? chairChip : undefined}
@@ -936,6 +939,8 @@ function TableBody() {
                         onPreviewEnd={() =>
                             setSheetPlayer((current) => (current === seat.id ? null : current))
                         }
+                        onPointerEnter={Platform.OS === 'web' ? () => setHoveredSeatId(seat.id) : undefined}
+                        onPointerLeave={Platform.OS === 'web' ? () => setHoveredSeatId(null) : undefined}
                     />
                 ))}
 
@@ -1352,7 +1357,7 @@ function sameRect(a: LayoutRectangle | undefined, b: LayoutRectangle): boolean {
  * One seat's tap target: a tap opens that player's board, a hold previews it
  * and releases back. Transparent — it sits over the pile painted on the felt.
  */
-function SeatTap({ style, accessibilityLabel, label, onOpen, onPreview, onPreviewEnd }: {
+function SeatTap({ style, accessibilityLabel, label, onOpen, onPreview, onPreviewEnd, onPointerEnter, onPointerLeave }: {
     style: StyleProp<ViewStyle>;
     accessibilityLabel: string;
     /** Dev only: drawn inside the box so a hit target can be seen and named. */
@@ -1360,6 +1365,8 @@ function SeatTap({ style, accessibilityLabel, label, onOpen, onPreview, onPrevie
     onOpen: () => void;
     onPreview: () => void;
     onPreviewEnd: () => void;
+    onPointerEnter?: () => void;
+    onPointerLeave?: () => void;
 }) {
     const holding = useRef(false);
     const suppressTap = useRef(false);
@@ -1369,6 +1376,8 @@ function SeatTap({ style, accessibilityLabel, label, onOpen, onPreview, onPrevie
             style={style}
             accessibilityRole="button"
             accessibilityLabel={accessibilityLabel}
+            onPointerEnter={onPointerEnter}
+            onPointerLeave={onPointerLeave}
             delayLongPress={260}
             onLongPress={() => {
                 holding.current = true;
@@ -1495,7 +1504,7 @@ const styles = StyleSheet.create({
         fontSize: 11,
         lineHeight: 14,
     },
-    centreActionTilt: { width: 40, height: 58, transform: [{ rotate: '-7deg' }], transformOrigin: 'center' },
+    centreActionTilt: { width: 40, height: 58, transform: [{ rotate: '-7deg' }, { scale: 1 / 0.85 }], transformOrigin: 'center' },
     centreActionZone: { width: 40, minHeight: 58, height: 58, paddingHorizontal: 3, paddingVertical: 4, borderRadius: 5 },
     centreActionLabel: { fontFamily: uiFont(800), fontSize: 8, lineHeight: 11, letterSpacing: 0.5, color: ink.muted60, textAlign: 'center' },
     boardProgressRoomy: { flexShrink: 0 },
