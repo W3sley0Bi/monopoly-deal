@@ -22,6 +22,7 @@ const home: Catalog = {
     'home.account': 'Account',
     'home.reconnecting': 'reconnecting…',
     'home.offline_status': 'Offline · solo robot games are available',
+    'home.no_network': 'No network connection',
 
     // Solo practice against robots.
     'home.solo.title': 'Play offline',

@@ -177,7 +177,7 @@ export const useStore = create<Store>((set, get) => ({
             }
         }
 
-        const motion = await readBool(KEY_MOTION, true);
+        const motion = __DEV__ ? await readBool(KEY_MOTION, true) : true;
         const tapTray = await readBool(KEY_TAP_TRAY, false);
         const cryReaction = await readBool(KEY_CRY_REACTION, false);
         const livePlay = await readBool(KEY_LIVE_PLAY, false);
@@ -229,6 +229,7 @@ export const useStore = create<Store>((set, get) => ({
     },
 
     setMotion: (on) => {
+        if (!__DEV__) return;
         set({ motion: on });
         void writeBool(KEY_MOTION, on);
     },

@@ -38,6 +38,7 @@ const MATERIAL: Partial<Record<SFName, AndroidSymbol>> = {
     'hand.tap.fill': 'touch_app',
     'checkmark.circle.fill': 'check_circle',
     'arrow.right.circle.fill': 'arrow_circle_right',
+    'wifi.slash': 'wifi_off',
 };
 
 /**

@@ -167,10 +167,11 @@ export default function HomeScreen() {
                 <Panel style={styles.card}>
                     <LabelCaps>{t('home.tables')}</LabelCaps>
                     <Btn
-                        label={t('home.tables')}
-                        variant="gold"
+                        label={connected ? t('home.tables') : t('home.no_network')}
+                        variant={connected ? 'gold' : 'ghost'}
+                        icon={!connected ? <Icon name="wifi.slash" fallback="⊘" size={18} color={ink.muted60} /> : undefined}
                         style={styles.bigPlayBtn}
-                        textStyle={styles.bigPlayText}
+                        textStyle={[styles.bigPlayText, !connected && styles.bigPlayTextOffline]}
                         disabled={!connected}
                         onPress={() => router.push('/online')}
                     />
@@ -314,6 +315,12 @@ const styles = StyleSheet.create({
         fontFamily: uiFont(900),
         fontSize: 16,
         letterSpacing: ls(0.04, 16),
+    },
+    bigPlayTextOffline: {
+        fontFamily: uiFont(800),
+        fontSize: 14,
+        letterSpacing: ls(0.02, 14),
+        color: ink.muted60,
     },
     blurb: { fontFamily: uiFont(700), fontSize: 12, color: ink.muted60, lineHeight: 17 },
     input: {

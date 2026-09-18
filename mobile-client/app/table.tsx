@@ -1163,14 +1163,6 @@ function TableBody() {
 
                 <GameSoundSettings />
                 <Toggle
-                    label={t('table.motion')}
-                    value={motion}
-                    onChange={(on) => {
-                        void Haptics.selectionAsync();
-                        setMotion(on);
-                    }}
-                />
-                <Toggle
                     label={t('table.live_play')}
                     hint={t('table.live_play_hint')}
                     value={livePlay}
@@ -1195,7 +1187,15 @@ function TableBody() {
                     purpose — these strings never reach a player. */}
                 {__DEV__ ? (
                     <View style={styles.dev}>
-                        <LabelCaps>Dev tables</LabelCaps>
+                        <LabelCaps>Dev settings & tables</LabelCaps>
+                        <Toggle
+                            label={t('table.motion')}
+                            value={motion}
+                            onChange={(on) => {
+                                void Haptics.selectionAsync();
+                                setMotion(on);
+                            }}
+                        />
                         <Btn
                             label={showHits ? 'Hide hitboxes' : 'Show hitboxes'}
                             onPress={() => {

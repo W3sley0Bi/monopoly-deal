@@ -22,6 +22,7 @@ const home: Catalog = {
     'home.account': 'Account',
     'home.reconnecting': 'riconnessione…',
     'home.offline_status': 'Offline · puoi giocare in solitaria contro i robot',
+    'home.no_network': 'Nessuna connessione di rete',
 
     // Solo practice against robots.
     'home.solo.title': 'Gioca offline',
