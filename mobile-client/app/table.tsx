@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Platform, Pressable, ScrollView, Share, StyleSheet, Text, View, useWindowDimensions, type LayoutRectangle, type StyleProp, type ViewStyle } from 'react-native';
+import { Alert, LayoutAnimation, Platform, Pressable, ScrollView, Share, StyleSheet, Text, View, useWindowDimensions, type LayoutRectangle, type StyleProp, type ViewStyle } from 'react-native';
+import Animated, { LinearTransition, Easing } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
@@ -671,7 +672,7 @@ function TableBody() {
                         }
                         placeProperty(card);
                     }}
-                    style={[styles.propertyZone, !boardShown && styles.hidden]}
+                    style={[styles.propertyZone]}
                 >
                 <ScrollView style={styles.boardScroll}>
                     <PropertySets
@@ -694,7 +695,7 @@ function TableBody() {
             </GlassPanel>
 
                 {/* The two landing places a card can go that are not a set. */}
-                <View style={[styles.dropRow, roomyPlayerStation && styles.dropRowRoomy]}>
+                <Animated.View style={[styles.dropRow, roomyPlayerStation && styles.dropRowRoomy]} layout={Platform.OS === 'web' ? undefined : LinearTransition.duration(250).easing(Easing.out(Easing.back(0.8)))}>
                     <DropZone
                         id="bank"
                         targetRef={bankTutorialRef}
@@ -757,11 +758,11 @@ function TableBody() {
                             </View>
                         </DropZone>
                     ) : null}
-                </View>
+                </Animated.View>
             </PlayerBoardRow>
 
             {/* ---- hand ---- */}
-            <View style={roomyPlayerStation ? styles.roomyHandRow : undefined}>
+            <Animated.View style={roomyPlayerStation ? styles.roomyHandRow : undefined} layout={Platform.OS === 'web' ? undefined : LinearTransition.duration(250).easing(Easing.out(Easing.back(0.8)))}>
                 {roomyPlayerStation ? renderRoomyHandTools() : null}
                 <GlassPanel
                     targetRef={handTutorialRef}
@@ -842,7 +843,7 @@ function TableBody() {
                 </View>
                 </GlassPanel>
                 {roomyPlayerStation ? renderRoomyTurnStatus() : null}
-            </View>
+            </Animated.View>
 
             </> : null}
 
@@ -1446,11 +1447,9 @@ const styles = StyleSheet.create({
     hidden: { display: 'none' },
     // What `flex: 0` means on native — grow 0, shrink 0, basis auto — written
     // out, so the folded board is sized by its header on both platforms.
-    // `flex: 0` itself cannot be used here: react-native-web compiles each
-    // flex prop to its own class, so layered over the board's growth it zeroed
-    // the grow but kept `flex-basis: 0`, collapsing the panel to its padding
-    // with the header clipped away inside it.
-    boardFolded: { flexGrow: 0, flexShrink: 0, flexBasis: 'auto', minHeight: 0, paddingVertical: 3 },
+    // We set height explicitly to 54 so we don't need display:none on children,
+    // which allows the contents to be cleanly clipped during animation.
+    boardFolded: { flexGrow: 0, flexShrink: 0, height: 54, paddingVertical: 3 },
     foldHead: {
         minHeight: 48,
         gap: 8,

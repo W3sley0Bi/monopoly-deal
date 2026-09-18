@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, type Ref, type RefObject, type ReactNode } from 'react';
-import { AccessibilityInfo, StyleSheet, View, type ViewProps } from 'react-native';
+import { AccessibilityInfo, Platform, StyleSheet, View, type ViewProps } from 'react-native';
 import { BlurView } from 'expo-blur';
-
+import Animated, { LinearTransition, Easing } from 'react-native-reanimated';
 const GlassContext = createContext<{ target: RefObject<View | null>; reduced: boolean } | null>(null);
 
 export function TableGlassProvider({ target, children }: { target: RefObject<View | null>; children: ReactNode }) {
@@ -40,13 +40,12 @@ export function GlassPanel({ children, style, targetRef, withGlass = true, ...pr
     const glass = useContext(GlassContext);
     // The blur is a clipped child, so it has to follow whatever radius the
     // caller set — at the panel default it squares off the corners of a
-    // rounder panel and the fill shows through behind the border.
     const flat = StyleSheet.flatten([styles.panel, style]);
     const corner = typeof flat.borderRadius === 'number' ? flat.borderRadius : 20;
-    return <View ref={targetRef} {...props} style={[styles.panel, style, glass?.reduced && styles.solid]}>
+    return <Animated.View ref={targetRef} {...props} style={[styles.panel, style, glass?.reduced && styles.solid]} layout={Platform.OS === 'web' ? undefined : LinearTransition.duration(250).easing(Easing.out(Easing.back(0.8)))}>
         {withGlass ? <GlassLayer radius={corner - 1} /> : null}
         {children}
-    </View>;
+    </Animated.View>;
 }
 
 const styles = StyleSheet.create({

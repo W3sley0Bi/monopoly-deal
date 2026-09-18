@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
-import { StyleSheet, View, type LayoutChangeEvent } from 'react-native';
+import { Platform, StyleSheet, type LayoutChangeEvent } from 'react-native';
+import Animated, { LinearTransition, Easing } from 'react-native-reanimated';
 import type { Density } from '../../../lib/contracts';
 
 type PlayerBoardRowProps = {
@@ -16,12 +17,12 @@ export function propertyDensityForLayout(roomy: boolean, setCount: number): Dens
     return 'normal';
 }
 
-/** Keeps the local board stack spacious on phones and horizontal on roomy screens. */
 export function PlayerBoardRow({ children, expanded, roomy, onLayout }: PlayerBoardRowProps) {
     return (
-        <View
+        <Animated.View
             testID="player-board-row"
             onLayout={onLayout}
+            layout={Platform.OS === 'web' ? undefined : LinearTransition.duration(250).easing(Easing.out(Easing.back(0.8)))}
             style={[
                 styles.base,
                 !roomy && !expanded && styles.folded,
@@ -29,7 +30,7 @@ export function PlayerBoardRow({ children, expanded, roomy, onLayout }: PlayerBo
             ]}
         >
             {children}
-        </View>
+        </Animated.View>
     );
 }
 
