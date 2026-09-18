@@ -23,7 +23,7 @@ import { useChatBubbles } from '../src/game/useChatBubbles';
 
 const AUTO_END_MS = 2500;
 import { PendingPanel } from '../src/components/table/PendingPanel';
-import { ChatPanel } from '../src/components/table/ChatPanel';
+import { EmojiPicker } from '../src/components/table/EmojiPicker';
 import { TutorialCoach, TutorialDone, type TutorialAnchors } from '../src/components/table/TutorialCoach';
 import { CountdownTimer } from '../src/components/table/CountdownTimer';
 import { StartWheel } from '../src/components/table/StartWheel';
@@ -49,8 +49,6 @@ import { Card } from '../src/ui/card';
 import { applyOptimistic, moveSettled, type PendingMove } from '../src/game/optimistic';
 import type { Card as CardT, ChatMessage, Color, RoomView, TutorialState } from '../src/types';
 import type { ActionDialogIntent, PendingViewerRole } from '../lib/contracts';
-
-const EMPTY_CHAT: ChatMessage[] = [];
 
 /**
  * A remote player's chip where it stands at the tilted table's edge, at its
@@ -115,7 +113,6 @@ function TableBody() {
     const [selected, setSelected] = useState<CardT | null>(null);
     const [dialog, setDialog] = useState<{ card: CardT; intent: ActionDialogIntent; fromColor?: Color } | null>(null);
     const [wildColor, setWildColor] = useState<Record<string, Color>>({});
-    const [talk, setTalk] = useState(false);
     const [logOpen, setLogOpen] = useState(false);
     const [menu, setMenu] = useState(false);
     const [sheetPlayer, setSheetPlayer] = useState<string | null>(null);
@@ -252,7 +249,7 @@ function TableBody() {
     const [fanWidth, setFanWidth] = useState(0);
     // Bubbles carry what players *said*. What they did is on the felt and in
     // the log; narrating it over their head as well made the table chatter.
-    const said = useChatBubbles(room?.chat ?? EMPTY_CHAT, room?.id);
+    const said = useChatBubbles(room?.chat ?? [], room?.id);
     useEffect(() => { setBoardOpen(ownTurn); }, [ownTurn, room?.id]);
     useEffect(() => { setHandOpen(ownTurn); }, [ownTurn, room?.id]);
 
@@ -401,9 +398,11 @@ function TableBody() {
             <Pressable disabled={tutorialActive} onPress={() => setLogOpen(true)} style={({ pressed }) => [styles.talkBtn, styles.talkBtnRoomy, tutorialActive && styles.controlDisabled, pressed && styles.talkBtnPressed]} accessibilityRole="button" accessibilityLabel={t('panel.log')}>
                 <Icon name="list.bullet.rectangle" fallback="≡" size={20} color={ink.muted60} />
             </Pressable>
-            <Pressable disabled={tutorialActive} onPress={() => setTalk(true)} style={({ pressed }) => [styles.talkBtn, styles.talkBtnRoomy, tutorialActive && styles.controlDisabled, pressed && styles.talkBtnPressed]} accessibilityRole="button" accessibilityLabel={t('panel.chat')}>
-                <Icon name="bubble.left.and.bubble.right.fill" fallback="…" size={20} color={ink.muted60} />
-            </Pressable>
+            <EmojiPicker
+                roomy
+                disabled={tutorialActive}
+                onSend={(emoji) => send({ type: 'chat', text: emoji })}
+            />
         </View>
     );
 
@@ -482,9 +481,10 @@ function TableBody() {
                 />
             ) : null}
 
-            <Pressable disabled={tutorialActive} onPress={() => setTalk(true)} style={({ pressed }) => [styles.talkBtn, tutorialActive && styles.controlDisabled, pressed && styles.talkBtnPressed]} accessibilityRole="button" accessibilityLabel={t('panel.chat')}>
-                <Icon name="bubble.left.and.bubble.right.fill" fallback="…" size={18} color={ink.muted60} />
-            </Pressable>
+            <EmojiPicker
+                disabled={tutorialActive}
+                onSend={(emoji) => send({ type: 'chat', text: emoji })}
+            />
 
             {myTurn && !pending && !spectating ? (
                 <View
@@ -578,7 +578,7 @@ function TableBody() {
                                 isTargeted={!!pending?.targets?.some((x) => !x.settled && x.player_id === p.id)}
                                 isOwner={p.id === room.owner_id}
                                 isYou={false}
-                                playBubbleText={said[p.id]?.text ?? null}
+                                reactionEmoji={said[p.id]?.emoji ?? null}
                                 onPress={() => {
                                     if (!tutorialActive) setSheetPlayer(p.id);
                                 }}
@@ -972,7 +972,7 @@ function TableBody() {
                                 isTargeted={!!pending?.targets?.some((x) => !x.settled && x.player_id === p.id)}
                                 isOwner={p.id === room.owner_id}
                                 isYou={false}
-                                playBubbleText={said[p.id]?.text ?? null}
+                                reactionEmoji={said[p.id]?.emoji ?? null}
                                 onPress={() => setSheetPlayer(p.id)}
                             />
                         </View>
@@ -1074,15 +1074,7 @@ function TableBody() {
                 ) : null}
             </Sheet>
 
-            {/* `scroll={false}`: the chat scrolls itself, and a ScrollView
-                inside the sheet's own would collapse its list to nothing. */}
-            <Sheet open={talk} onClose={() => setTalk(false)} title={t('panel.chat')} scroll={false}>
-                <ChatPanel
-                    chat={room.chat}
-                    you={room.you}
-                    onSend={(text) => send({ type: 'chat', text })}
-                />
-            </Sheet>
+
 
             <Sheet open={logOpen} onClose={() => setLogOpen(false)} title={t('panel.log')}>
                 {g.log

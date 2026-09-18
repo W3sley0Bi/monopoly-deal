@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
     Alert,
+    Platform,
     Pressable,
     RefreshControl,
     ScrollView,
@@ -8,6 +9,7 @@ import {
     Text,
     TextInput,
     View,
+    useWindowDimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -52,6 +54,11 @@ export default function HomeScreen() {
 
     const connected = sock === 'open';
 
+    // ---- responsive: constrain content on wide screens (iPad / web) ----------
+    const { width: vw, height: vh } = useWindowDimensions();
+    const wide = Math.min(vw, vh) >= 600 || (Platform.OS === 'web' && vw >= 900);
+    const wideMargin = wide ? Math.min(vw * 0.2, 400) : 0;
+
     // The server decides which screen we belong on; the router just follows.
     useEffect(() => {
         if (room) router.replace(room.game.state === 'waiting' ? '/lobby' : '/table');
@@ -65,7 +72,7 @@ export default function HomeScreen() {
     // ---- welcome gate: nothing is reachable without a name -------------------
     if (!name) {
         return (
-            <ScrollView contentContainerStyle={[styles.welcomeWrap, { paddingBottom: insets.bottom + 24 }]}>
+            <ScrollView contentContainerStyle={[styles.welcomeWrap, { paddingBottom: insets.bottom + 24, marginHorizontal: wideMargin }]}>
                 <LanguagePicker />
 
                 <Panel style={styles.welcomeCard}>
@@ -105,7 +112,7 @@ export default function HomeScreen() {
     return (
         <>
             <ScrollView
-                contentContainerStyle={[styles.wrap, { paddingBottom: insets.bottom + 24 }]}
+                contentContainerStyle={[styles.wrap, { paddingBottom: insets.bottom + 24, marginHorizontal: wideMargin }]}
                 refreshControl={
                     // There is nothing to re-fetch — the server pushes a snapshot on
                     // every change — so the pull just nudges a reconnecting socket.

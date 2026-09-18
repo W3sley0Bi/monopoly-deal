@@ -439,10 +439,7 @@ export interface PlayerChipProps {
     isTargeted: boolean;
     isOwner: boolean;
     isYou: boolean;
-    /** The last thing they said in chat — not a log line: a bubble over a
-     *  player's head is speech (useChatBubbles). Suppressed while a reaction
-     *  bubble shows. */
-    playBubbleText?: string | null;
+
     /** A reaction emoji live for 5s of server time. */
     reactionEmoji?: string | null;
     onPress: () => void;

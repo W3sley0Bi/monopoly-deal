@@ -1,6 +1,7 @@
 import { memo, useCallback, useState } from 'react';
 import type { LayoutChangeEvent } from 'react-native';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View, Platform } from 'react-native';
+import Animated, { ZoomIn, FadeOut, Easing } from 'react-native-reanimated';
 
 import type { PlayerChipProps } from '../../../lib/contracts';
 import { brand, ink, line, radius, status, surface } from '../../../lib/theme';
@@ -22,7 +23,6 @@ function PlayerChipImpl({
     isTargeted,
     isOwner,
     isYou,
-    playBubbleText,
     reactionEmoji,
     onPress,
 }: PlayerChipProps) {
@@ -108,15 +108,9 @@ function PlayerChipImpl({
             </View>
 
             {reactionEmoji ? (
-                <View style={styles.reaction}>
-                    <Text style={styles.reactionText}>{reactionEmoji}</Text>
-                </View>
-            ) : playBubbleText ? (
-                <View style={styles.bubble}>
-                    <Text style={styles.bubbleText} numberOfLines={2}>
-                        {playBubbleText}
-                    </Text>
-                </View>
+                <Animated.View entering={ZoomIn.duration(150).easing(Easing.out(Easing.quad))} exiting={FadeOut.duration(150)} style={styles.reactionBubble}>
+                    <Text style={styles.reactionBubbleText}>{reactionEmoji}</Text>
+                </Animated.View>
             ) : null}
         </Pressable>
     );
@@ -153,19 +147,23 @@ const styles = StyleSheet.create({
     swatches: { flexDirection: 'row', gap: 2, height: 4 },
     swatch: { flex: 1, height: 4, borderRadius: radius.xs },
     swatchComplete: { borderWidth: 1, borderColor: brand.brass },
-    bubble: {
+
+    reactionBubble: {
         position: 'absolute',
-        left: 4,
-        right: 4,
-        bottom: 4,
-        paddingHorizontal: 5,
-        paddingVertical: 3,
-        borderRadius: 9,
-        backgroundColor: '#f6f2e3',
+        top: -16,
+        right: -8,
+        backgroundColor: ink.cream,
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 16,
+        borderBottomLeftRadius: 4,
+        shadowColor: '#000',
+        shadowOpacity: 0.15,
+        shadowRadius: 4,
+        shadowOffset: { width: 0, height: 2 },
+        elevation: 4,
     },
-    bubbleText: { fontFamily: uiFont(700), fontSize: 9, color: ink.seatPlay, lineHeight: 12 },
-    reaction: { position: 'absolute', right: 3, top: 3 },
-    reactionText: { fontSize: 20 },
+    reactionBubbleText: { fontSize: 24, lineHeight: Platform.OS === 'ios' ? 26 : 28 },
 });
 
 export const PlayerChip = memo(PlayerChipImpl);

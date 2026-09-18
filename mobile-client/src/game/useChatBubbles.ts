@@ -1,24 +1,22 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ChatMessage } from '../types';
+import { isReaction } from './reactions';
 
-/** How long a message stays in the air above the seat that sent it. */
+/** How long a reaction stays in the air above the seat that sent it. */
 const HOLD_MS = 5200;
 
 export interface ChatBubble {
     /** Changes on every message, so repeating yourself still animates. */
     id: number;
-    text: string;
+    emoji: string;
 }
 
 /**
- * The last thing each player *said*, keyed by player id.
+ * The last reaction each player sent, keyed by player id.
  *
- * Deliberately not the log: a bubble over someone's head is speech, and filling
- * it with "Otto banked $3M" makes the table look like it is narrating itself.
- * What a player did is already on the felt and in the log; what they typed has
- * nowhere else to appear.
- *
- * System lines are skipped for the same reason — nobody said them.
+ * Only bare reaction emojis surface here — free-form text chat lines (which
+ * may still arrive from the web frontend) are silently ignored, because the
+ * mobile client no longer has a chat panel to show them in.
  */
 export function useChatBubbles(chat: ChatMessage[], roomId?: string): Record<string, ChatBubble> {
     const [bubbles, setBubbles] = useState<Record<string, ChatBubble>>({});
@@ -33,21 +31,21 @@ export function useChatBubbles(chat: ChatMessage[], roomId?: string): Record<str
             setBubbles({});
         }
 
-        const spoken = chat.filter(m => !m.system && !!m.text);
-        const newest = spoken.length ? spoken[spoken.length - 1].id : null;
+        const reactions = chat.filter(m => !m.system && isReaction(m.text));
+        const newest = reactions.length ? reactions[reactions.length - 1].id : null;
         const last = seen.current;
         seen.current = newest;
         // The first snapshot is a baseline: joining a table in progress must not
         // replay the whole conversation at once.
         if (last === null || newest === null || newest === last) return;
 
-        const from = spoken.findIndex(m => m.id === last);
-        const fresh = from < 0 ? spoken.slice(-1) : spoken.slice(from + 1);
+        const from = reactions.findIndex(m => m.id === last);
+        const fresh = from < 0 ? reactions.slice(-1) : reactions.slice(from + 1);
 
         const next: Record<string, ChatBubble> = {};
         for (const message of fresh) {
             counter.current += 1;
-            next[message.player_id] = { id: counter.current, text: message.text ?? '' };
+            next[message.player_id] = { id: counter.current, emoji: message.text! };
         }
         if (Object.keys(next).length === 0) return;
         setBubbles(current => ({ ...current, ...next }));

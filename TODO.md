@@ -37,7 +37,7 @@ Priority levels:
   - Fix defense window triggering: Display the response dialog and standard countdown timer for any targeted player when a hostile action is played (e.g. Deal Breaker, Sly Deal, Forced Deal, Rent), regardless of whether they hold a Just Say No card.
   - Prevent hand state exposure: If the target does not possess a Just Say No, keep the timer running to maintain bluffing secrecy, but disable the action button.
   - Standardize button placement: Render the "Just Say No" button on the left (enabled if held, disabled if not) and the "Accept / Concede" button on the right.
-- [ ] **P1:** **Fix wild card drag rotation glitch**
+- [X] **P1:** **Fix wild card drag rotation glitch**
   - Fix visual regression where a flipped/assigned two-color property wild card snaps back to its default rotation during a drag gesture.
   - Preserve the active assigned color/orientation state in the drag layer throughout the entire drag lifecycle so preview matches final dropped placement.
 
@@ -53,12 +53,12 @@ Priority levels:
 ## P2 — Medium: Layout, Cross-Platform Responsiveness & UX Polish
 
 ### Cross-Platform Adaptation (iPad & PC Desktop)
-- [ ] **P2:** **Implement iPad / tablet responsive layout**
+- [X] **P2:** **Implement iPad / tablet responsive layout**
   - Compact the player action panel to maximize table estate while maintaining identical rule execution logic.
   - Scale up card dimensions with enhanced visual detail.
   - Ensure seamless orientation support for both Portrait and Landscape.
   - Relocate opponent property stacks to sit beside each player's table seat rather than stacking over top.
-- [ ] **P2:** **Implement PC / desktop mouse interaction parity**
+- [X] **P2:** **Implement PC / desktop mouse interaction parity**
   - Implement desktop hover preview: Hovering over a card in hand elevates/lifts the card, mirroring the tap-to-preview behavior on mobile and tablet touch viewports.
   - Maintain keyboard accessibility (arrow keys, Enter, Escape) and full-fidelity desktop table controls.
 

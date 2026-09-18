@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Alert, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
+import { Alert, Platform, Pressable, ScrollView, Share, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Clipboard from 'expo-clipboard';
@@ -11,7 +11,6 @@ import { Avatar, Btn, LabelCaps, Panel, Sheet } from '../src/ui/kit';
 import { useI18n } from '../src/i18n';
 import { formatTurn } from '../src/i18n/format';
 import type { Difficulty, Mode } from '../src/types';
-import { ChatPanel } from '../src/components/table/ChatPanel';
 
 export default function LobbyScreen() {
     const { t } = useI18n();
@@ -19,8 +18,12 @@ export default function LobbyScreen() {
     const insets = useSafeAreaInsets();
     const { room, send, leave, notice } = useGameConnectionContext();
     const [invite, setInvite] = useState(false);
-    const [chatOpen, setChatOpen] = useState(false);
     const [copied, setCopied] = useState(false);
+
+    // ---- responsive: constrain content on wide screens (iPad / web) ----------
+    const { width: vw, height: vh } = useWindowDimensions();
+    const wide = Math.min(vw, vh) >= 600 || (Platform.OS === 'web' && vw >= 900);
+    const wideMargin = wide ? Math.min(vw * 0.2, 400) : 0;
 
     useEffect(() => {
         if (!room) router.replace('/');
@@ -56,7 +59,7 @@ export default function LobbyScreen() {
 
     return (
         <>
-            <ScrollView contentContainerStyle={[styles.wrap, { paddingBottom: insets.bottom + 24 }]}>
+            <ScrollView contentContainerStyle={[styles.wrap, { paddingBottom: insets.bottom + 24, marginHorizontal: wideMargin }]}>
                 <View style={styles.headRow}>
                     <View style={styles.headText}>
                         <Text style={styles.code}>{room.id}</Text>
@@ -65,7 +68,6 @@ export default function LobbyScreen() {
                         </Text>
                     </View>
                     <View style={styles.headActions}>
-                        <Btn label={t('lobby.chat')} onPress={() => setChatOpen(true)} />
                         <Btn label={t('invite.open')} onPress={() => setInvite(true)} />
                     </View>
                 </View>
@@ -256,14 +258,6 @@ export default function LobbyScreen() {
                     label={t('invite.open')}
                     variant="gold"
                     onPress={() => Share.share({ message: link })}
-                />
-            </Sheet>
-
-            <Sheet open={chatOpen} onClose={() => setChatOpen(false)} title={t('lobby.chat')} scroll={false}>
-                <ChatPanel
-                    chat={room.chat}
-                    you={room.you}
-                    onSend={(text) => send({ type: 'chat', text })}
                 />
             </Sheet>
         </>
