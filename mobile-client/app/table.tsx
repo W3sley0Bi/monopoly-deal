@@ -254,7 +254,7 @@ function TableBody() {
     // the log; narrating it over their head as well made the table chatter.
     const said = useChatBubbles(room?.chat ?? EMPTY_CHAT, room?.id);
     useEffect(() => { setBoardOpen(ownTurn); }, [ownTurn, room?.id]);
-    useEffect(() => { setHandOpen(ownTurn || hasPending); }, [ownTurn, hasPending, room?.id]);
+    useEffect(() => { setHandOpen(ownTurn); }, [ownTurn, room?.id]);
 
     const act = useCallback(
         (msg: Parameters<typeof send>[0], cardId?: string, optimistic?: PendingMove) => {
@@ -770,6 +770,7 @@ function TableBody() {
                     style={[
                         styles.handZone,
                         roomyPlayerStation && styles.handZoneRoomy,
+                        !handShown && styles.handFolded,
                     ]}
                     onLayout={() => recordTutorialAnchor('hand', handTutorialRef.current)}
                 >
@@ -802,7 +803,7 @@ function TableBody() {
 
 
                 <View
-                    style={[styles.handFan, !handShown && styles.hidden]}
+                    style={[styles.handFan]}
                     onLayout={(e) => {
                         setFanWidth(e.nativeEvent.layout.width - 12);
                         measureTutorialAnchors();
@@ -1541,6 +1542,7 @@ const styles = StyleSheet.create({
     },
     bankTotal: { fontFamily: displayFont(900), fontSize: 16, color: status.bank },
     handZone: { flexShrink: 0, gap: 2, paddingHorizontal: 4, paddingBottom: 4, paddingTop: 2, overflow: 'hidden' },
+    handFolded: { flexGrow: 0, flexShrink: 0, height: 62 },
     handZoneRoomy: {
         flex: 1,
         minWidth: 0,

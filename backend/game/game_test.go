@@ -221,8 +221,14 @@ func TestSlyDealCannotTakeFromCompleteSet(t *testing.T) {
 	if err := g.PlayAction("a", h[0].ID, ActionOptions{TargetPlayerID: "b", TargetCardID: part.Cards[0].ID}); err != nil {
 		t.Fatal(err)
 	}
+	if g.Pending == nil {
+		t.Fatal("steal should be pending, awaiting victim's response")
+	}
+	if err := g.Respond("b", false, nil); err != nil {
+		t.Fatal(err)
+	}
 	if g.Pending != nil {
-		t.Fatal("victim has no Just Say No, steal should resolve immediately")
+		t.Fatal("steal should resolve after victim accepts")
 	}
 	if len(g.Player("a").Sets) != 1 || g.Player("a").Sets[0].Color != ColorGreen {
 		t.Fatalf("stolen card not filed: %+v", g.Player("a").Sets)
@@ -240,6 +246,9 @@ func TestDealBreakerTakesWholeSet(t *testing.T) {
 	h := give(g, "a", Card{Type: CardTypeAction, Action: ActionDealBreaker, Name: "Deal Breaker", Value: 5})
 	g.PlaysLeft = 3
 	if err := g.PlayAction("a", h[0].ID, ActionOptions{TargetPlayerID: "b", Color: ColorBlue}); err != nil {
+		t.Fatal(err)
+	}
+	if err := g.Respond("b", false, nil); err != nil {
 		t.Fatal(err)
 	}
 	if len(b.Sets) != 0 {

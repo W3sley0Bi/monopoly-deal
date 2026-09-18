@@ -327,23 +327,15 @@ func (g *Game) settleAuto() {
 			t.Settled = true
 			continue
 		}
-		// A player with no Just Say No and no assets can do nothing about a debt.
-		if t.Responder == t.PlayerID && !t.Cancelled && !p.hasJustSayNo() {
+		
+		// A player with no assets can do nothing about a debt.
+		if t.Responder == t.PlayerID && !t.Cancelled {
 			if pd.Kind == PendingPayment {
 				if p.AssetTotal() == 0 {
 					t.Settled = true
 					t.Note = "had nothing to pay"
 					g.log("log.nothing_to_pay", "name", p.Name)
 				}
-			} else {
-				// No Just Say No means no way to stop a steal or swap.
-				t.Settled = true
-			}
-		}
-		if t.Responder == pd.ByID {
-			by := g.Player(pd.ByID)
-			if by == nil || !by.hasJustSayNo() {
-				t.Settled = true
 			}
 		}
 	}

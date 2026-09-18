@@ -33,7 +33,7 @@ Priority levels:
   - Investigate root cause in `Table.tsx` / `dragLayer.tsx` (and mobile touch responders) where cards on the left side of the hand become non-draggable at match start (reproducible on offline boards).
   - Resolve race conditions between asset loading, layout bounding-box measurement, and gesture responder mounting.
   - Implement a match initialization loading state / spinner per player until game state, card assets, and gesture listeners are fully hydrated and ready for input.
-- [ ] **P1:** **Fix Just Say No bluffing mechanics and information leakage**
+- [X] **P1:** **Fix Just Say No bluffing mechanics and information leakage**
   - Fix defense window triggering: Display the response dialog and standard countdown timer for any targeted player when a hostile action is played (e.g. Deal Breaker, Sly Deal, Forced Deal, Rent), regardless of whether they hold a Just Say No card.
   - Prevent hand state exposure: If the target does not possess a Just Say No, keep the timer running to maintain bluffing secrecy, but disable the action button.
   - Standardize button placement: Render the "Just Say No" button on the left (enabled if held, disabled if not) and the "Accept / Concede" button on the right.

@@ -297,7 +297,7 @@ func TestPaymentGetsTenSecondsEvenWithNoTurnTimer(t *testing.T) {
 	}
 }
 
-func TestStealsStillAutoResolveWithoutWaiting(t *testing.T) {
+func TestStealsMustBeAccepted(t *testing.T) {
 	now := time.Unix(1_700_000_000, 0)
 	g := NewGame("t")
 	g.SetClock(func() time.Time { return now })
@@ -319,8 +319,11 @@ func TestStealsStillAutoResolveWithoutWaiting(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if g.Pending != nil {
-		t.Fatal("a steal nobody can block should resolve immediately, with no countdown")
+	if g.Pending == nil {
+		t.Fatal("a steal should not resolve immediately, must await a response to protect hand state")
+	}
+	if err := g.Respond("b", false, nil); err != nil {
+		t.Fatal(err)
 	}
 	if g.Player("a").CompleteSets() != 0 || len(g.Player("a").Sets) != 1 {
 		t.Fatal("stolen card should already be filed")
