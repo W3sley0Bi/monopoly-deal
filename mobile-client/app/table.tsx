@@ -527,6 +527,21 @@ function TableBody() {
                     onDrawTwo={
                         passGo ? () => act({ type: 'play_action', card_id: passGo.id }, passGo.id) : undefined
                     }
+                    centreAction={roomyPlayerStation ? (
+                        <View style={styles.centreActionTilt}>
+                            <DropZone
+                                id="action"
+                                targetRef={actionTutorialRef}
+                                active={actionActive}
+                                grow={0}
+                                onDrop={(card) => playAction(card)}
+                                onLayout={() => recordTutorialAnchor('action', actionTutorialRef.current)}
+                                style={styles.centreActionZone}
+                            >
+                                <Text style={styles.centreActionLabel}>{t('table.action_space')}</Text>
+                            </DropZone>
+                        </View>
+                    ) : undefined}
                     turnId={turnPlayer?.id}
                     playsLeft={g.plays_left}
                     onSeats={setSeatHits}
@@ -1480,6 +1495,9 @@ const styles = StyleSheet.create({
         fontSize: 11,
         lineHeight: 14,
     },
+    centreActionTilt: { width: 40, height: 58, transform: [{ rotate: '-7deg' }], transformOrigin: 'center' },
+    centreActionZone: { width: 40, minHeight: 58, height: 58, paddingHorizontal: 3, paddingVertical: 4, borderRadius: 5 },
+    centreActionLabel: { fontFamily: uiFont(800), fontSize: 8, lineHeight: 11, letterSpacing: 0.5, color: ink.muted60, textAlign: 'center' },
     boardProgressRoomy: { flexShrink: 0 },
     boardScroll: { flex: 1 },
     progress: { fontFamily: uiFont(700), fontSize: 11, color: ink.muted60 },

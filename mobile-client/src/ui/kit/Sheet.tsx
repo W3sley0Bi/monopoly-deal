@@ -130,7 +130,12 @@ function SheetImpl({ open, onClose, title, children, tabs, activeTab, onTabChang
                         <View style={[styles.head, roomy && styles.headRoomy]} accessible={!roomy} accessibilityRole={roomy ? undefined : 'adjustable'}
                             accessibilityLabel={roomy ? undefined : 'Drag down to close'}>
                             {!roomy ? <View style={styles.grabber} /> : null}
-                            {title ? <Text style={styles.title}>{title}</Text> : null}
+                            {title ? <Text style={[styles.title, roomy && styles.titleRoomy]}>{title}</Text> : null}
+                            {roomy ? (
+                                <Pressable onPress={onClose} style={styles.close} accessibilityRole="button" accessibilityLabel="Close">
+                                    <Text style={styles.closeLabel}>✕</Text>
+                                </Pressable>
+                            ) : null}
                         </View>
                     </GestureDetector>
 
@@ -212,6 +217,17 @@ const styles = StyleSheet.create({
         letterSpacing: ls(0.02, 17),
         marginBottom: 10,
     },
+    titleRoomy: { paddingRight: 40 },
+    close: {
+        position: 'absolute',
+        top: -2,
+        right: -6,
+        width: 40,
+        height: 40,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    closeLabel: { color: ink.muted60, fontFamily: uiFont(700), fontSize: 16 },
     tabs: { flexDirection: 'row', gap: 6, marginBottom: 10 },
     tab: {
         flex: 1,

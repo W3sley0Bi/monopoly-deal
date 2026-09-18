@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { Easing, runOnJS, useAnimatedStyle, useReducedMotion, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
@@ -256,6 +256,7 @@ export function FeltTable({
     tilted = false,
     chip,
     onChairs,
+    centreAction,
 }: {
     players: PlayerView[];
     you: string;
@@ -291,6 +292,8 @@ export function FeltTable({
     chip?: { w: number; h: number };
     /** Where each remote chair's chip goes, for the table screen to render. */
     onChairs?: (chairs: ChairAnchor[]) => void;
+    /** A roomy-screen drop target placed beside the centre deck and discard. */
+    centreAction?: ReactNode;
 }) {
     const { t } = useI18n();
     const reduced = useReducedMotion();
@@ -368,8 +371,9 @@ export function FeltTable({
     const scaledSeat = SEAT * pileScale;
     // The deck, the discard and the turn lamp grow with the piles, or a
     // big table ends up with a phone's deck lost in the middle of it.
-    const centreScale = tiltedRing ? pileScale / pileScaleForWidth(size.width) : 1;
+    const centreScale = tiltedRing ? pileScale / pileScaleForWidth(size.width) * 1.93 : 1;
     const centre = tiltedRing?.centre ?? { x: size.width / 2, y: field * 0.54 };
+    const centreWidth = centreAction ? DECK_W * 2 + 16 + 40 : DECK_W * 2 + 8;
     const radius = tiltedRing?.radius ?? Math.max(minRadiusFor(pileScale), Math.min(
         (size.width - scaledSeat) / 2 - 6,
         centre.y - scaledSeat / 2 - 4,
@@ -633,7 +637,7 @@ export function FeltTable({
 
         {size.width > 0 ? (
             <View style={[styles.centre, {
-                left: centre.x - DECK_W - 4,
+                left: centre.x - centreWidth / 2,
                 top: centre.y - DECK_H / 2 * centreScale,
                 transform: [{ scale: centreScale }, { scaleY: 0.9 }],
             }]} pointerEvents="box-none">
@@ -693,6 +697,7 @@ export function FeltTable({
                     )}
                     <Text style={styles.pileCount}>{discardCount}</Text>
                 </Pressable>
+                {centreAction}
             </View>
         ) : null}
 
