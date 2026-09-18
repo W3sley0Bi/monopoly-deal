@@ -192,6 +192,30 @@ export function DragProvider({ children }: { children: ReactNode }) {
             if (next === over) return;
             over = next;
             setOverId(next);
+
+            if (ghost && source.hasAttribute('data-dual')) {
+                const dual = ghost.querySelector('.dual-wildcard');
+                if (dual) {
+                    const defaultColor = source.getAttribute('data-active-color');
+                    const targetColor = next?.startsWith('set-') ? next.replace('set-', '') : null;
+                    const previewColor = targetColor || defaultColor;
+
+                    if (previewColor) {
+                        ghost.setAttribute('data-active-color', previewColor);
+                        const colors = dual.getAttribute('data-colors')?.split(',');
+                        if (colors && colors.length > 1) {
+                            if (previewColor === colors[1]) {
+                                dual.classList.add('wildcard-flipped');
+                            } else {
+                                dual.classList.remove('wildcard-flipped');
+                            }
+                        }
+                    } else {
+                        ghost.removeAttribute('data-active-color');
+                        dual.classList.remove('wildcard-flipped');
+                    }
+                }
+            }
         };
 
         const lift = () => {

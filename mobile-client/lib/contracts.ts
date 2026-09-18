@@ -345,6 +345,7 @@ export interface PendingPanelProps {
     /** Scripted lesson copy shown inside the native pending modal, which owns
      *  the whole screen and therefore hides the floating tutorial coach. */
     tutorialCopy?: { title: string; body: string; task: string; onSkip: () => void };
+    youHasJsn?: boolean;
     onClose?: () => void;
     onRespond: (msg: { say_no?: boolean; card_ids?: string[] }) => void;
 }

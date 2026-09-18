@@ -507,14 +507,8 @@ export class OfflineGame {
         for (const target of pending.targets) {
             if (target.settled) continue;
             const player = this.player(target.player_id);
-            if (target.responder === target.player_id && !target.cancelled && !this.hasJSN(player)) {
-                if (pending.kind !== 'payment') target.settled = true;
-                else if (assetTotal(player) === 0) {
-                    target.settled = true;
-                    this.write('log.nothing_to_pay', { name: player.name });
-                }
-            }
-            if (target.responder === pending.by_id && !this.hasJSN(this.player(pending.by_id))) target.settled = true;
+            // We do not auto-settle based on hasJSN anymore so that the response
+            // dialog and timer run for everyone to maintain bluffing secrecy.
         }
         this.resolveIfDone();
     }

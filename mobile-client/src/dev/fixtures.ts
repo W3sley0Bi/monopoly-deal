@@ -433,8 +433,87 @@ function passGoBench(youId: string, youName: string): RoomView {
     };
     return room(youId, game, 'Dev · pass go');
 }
+function justSayNoBench(youId: string, youName: string): RoomView {
+    serial = 0;
+    const you = player(
+        youName || 'You',
+        [set('lightblue', 3), set('pink', 2)],
+        [money(5)],
+        5,
+        {
+            bot: false,
+            playerId: youId,
+            hand: [
+                action('Just Say No', 'just_say_no', 4),
+                action('Deal Breaker', 'deal_breaker', 5),
+            ],
+        },
+    );
+
+    const otto = player(
+        'Otto',
+        [set('orange', 2)],
+        [money(3)],
+        4,
+        {
+            bot: false,
+            playerId: 'otto-id',
+            hand: [action('Just Say No', 'just_say_no', 4)],
+        }
+    );
+
+    const players = [you, otto];
+    
+    const theCard = action('Deal Breaker', 'deal_breaker', 5);
+
+    const game: GameView = {
+        id: 'DEV_JSN',
+        you: youId,
+        players,
+        deck_count: 30,
+        discard_count: 5,
+        discard_top: money(1),
+        current_turn: 1,
+        state: 'playing',
+        plays_left: 2,
+        pending: {
+            kind: 'deal_breaker',
+            action: 'deal_breaker',
+            card: theCard,
+            by_id: 'otto-id',
+            label_key: 'log.played',
+            targets: [{
+                player_id: youId,
+                amount: 0,
+                responder: youId,
+                deadline_ms: Date.now() + 15000,
+                cancelled: false,
+                settled: false,
+            }],
+        },
+        log: [] as GameView['log'],
+        set_sizes: SET_SIZES,
+        colors: ['brown', 'lightblue', 'pink', 'orange', 'red', 'yellow', 'green', 'blue', 'railroad', 'utility'],
+        mode: 'classic',
+        mode_label: 'Classic',
+        turn_seconds: 60,
+        respond_seconds: 15,
+        bot_difficulty: 'normal',
+        deadline_ms: Date.now() + 15000,
+        deadline_seconds: 15,
+        now_ms: Date.now(),
+    };
+    return room(youId, game, 'Dev · Just Say No scenario');
+}
+
 
 export const FIXTURES: Fixture[] = [
+    {
+        id: 'justsayno',
+        label: 'Two players · Just Say No',
+        blurb: 'Pending Deal Breaker with a Just Say No card in hand',
+        build: justSayNoBench,
+    },
     {
         id: 'crowded',
         label: 'Five-player table',

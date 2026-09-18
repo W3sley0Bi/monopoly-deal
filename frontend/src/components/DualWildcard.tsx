@@ -22,6 +22,7 @@ export default function DualWildcard({
         <div
             className={`dual-wildcard ${flipped ? 'wildcard-flipped' : ''}`}
             data-active-color={activeColor}
+            data-colors={card.colors?.join(',')}
         >
             <div className="wildcard-rotator">
                 {card.colors!.map((color, i) => {

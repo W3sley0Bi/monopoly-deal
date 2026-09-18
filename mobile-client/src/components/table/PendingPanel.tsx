@@ -28,6 +28,7 @@ export function PendingPanel({
     deadlineSeconds = 0,
     skewMs,
     tutorialCopy,
+    youHasJsn = false,
     onRespond,
 }: PendingPanelProps) {
     const { t, tCard, tColor } = useI18n();
@@ -167,6 +168,16 @@ export function PendingPanel({
             {/* ---- buttons ---- */}
             {role !== 'bystander' ? (
                 <View style={styles.actions}>
+                    {/* Just Say No does not dismiss anything — it hands the
+                        decision back to the other player, who may have one too. */}
+                    <Btn
+                        label={t('pending.ui.just_say_no')}
+                        variant="red"
+                        disabled={!youHasJsn}
+                        onPress={() => onRespond({ say_no: true })}
+                        style={styles.flex}
+                    />
+
                     {role === 'payer' ? (
                         <Btn
                             label={t('pending.ui.pay', { amount: selectedTotal })}
@@ -186,15 +197,6 @@ export function PendingPanel({
                             style={styles.flex}
                         />
                     )}
-
-                    {/* Just Say No does not dismiss anything — it hands the
-                        decision back to the other player, who may have one too. */}
-                    <Btn
-                        label={t('pending.ui.just_say_no')}
-                        variant="red"
-                        onPress={() => onRespond({ say_no: true })}
-                        style={styles.flex}
-                    />
                 </View>
             ) : null}
         </Modal>
