@@ -85,6 +85,8 @@ function TableBody() {
     const setDevRoom = useStore((s) => s.setDevRoom);
     const livePlay = useStore((s) => s.livePlay);
     const setLivePlay = useStore((s) => s.setLivePlay);
+    const motion = useStore((s) => s.motion);
+    const setMotion = useStore((s) => s.setMotion);
     const setTutorialDone = useStore((s) => s.setTutorialDone);
 
     const [guess, setGuess] = useState<PendingMove | null>(null);
@@ -922,6 +924,14 @@ function TableBody() {
                 </View>
 
                 <GameSoundSettings />
+                <Toggle
+                    label={t('table.motion')}
+                    value={motion}
+                    onChange={(on) => {
+                        void Haptics.selectionAsync();
+                        setMotion(on);
+                    }}
+                />
                 <Toggle
                     label={t('table.live_play')}
                     hint={t('table.live_play_hint')}
