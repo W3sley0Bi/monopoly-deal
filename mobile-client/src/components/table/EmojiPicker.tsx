@@ -60,6 +60,8 @@ export function EmojiPicker({ onSend, disabled, roomy }: EmojiPickerProps) {
         };
     });
 
+    const tooltipProps = (text: string) => Platform.OS === 'web' ? { title: text } as any : {};
+
     return (
         <View style={[styles.positioner, { width: BUTTON_SIZE, height: BUTTON_SIZE }]}>
             <Animated.View style={[styles.pill, containerStyle, { height: BUTTON_SIZE }]}>
@@ -85,15 +87,17 @@ export function EmojiPicker({ onSend, disabled, roomy }: EmojiPickerProps) {
                         onPress={toggle}
                         accessibilityRole="button"
                         accessibilityLabel="Reactions"
-                        style={({ pressed }) => [
+                        style={({ pressed, hovered }: any) => [
                             styles.btn,
                             roomy && styles.btnRoomy,
                             disabled && styles.disabled,
-                            pressed && !open && styles.btnPressed,
+                            (pressed || (Platform.OS === 'web' && hovered)) && !open && styles.btnPressed,
                             styles.toggleInner,
                         ]}
                     >
-                        <Icon name={open ? "xmark" : "face.smiling"} fallback={open ? "✕" : "😀"} size={roomy ? 20 : 18} color={ink.muted60} />
+                        <View {...tooltipProps(open ? "Close" : "Reactions")}>
+                            <Icon name={open ? "xmark" : "face.smiling"} fallback={open ? "✕" : "😀"} size={roomy ? 20 : 18} color={ink.muted60} />
+                        </View>
                     </Pressable>
                 </Animated.View>
             </Animated.View>

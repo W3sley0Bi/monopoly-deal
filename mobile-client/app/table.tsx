@@ -415,23 +415,20 @@ function TableBody() {
         ? assets(me).map((a) => ({ card: a.card, source: (a.fromColor ?? 'bank') as 'bank' | Color }))
         : [];
 
+    const tooltipProps = (text: string) => Platform.OS === 'web' ? { title: text } as any : {};
+
     const renderRoomyHandTools = () => (
         <View style={styles.roomyHandTools}>
-            <Pressable disabled={tutorialActive} onPress={() => setLogOpen(true)} style={({ pressed }) => [styles.talkBtn, styles.talkBtnRoomy, tutorialActive && styles.controlDisabled, pressed && styles.talkBtnPressed]} accessibilityRole="button" accessibilityLabel={t('panel.log')}>
-                <Icon name="list.bullet.rectangle" fallback="≡" size={20} color={ink.muted60} />
-            </Pressable>
-            
-            <View style={styles.crossMiddle}>
-                <Pressable disabled={tutorialActive} onPress={handleLeaveTable} style={({ pressed }) => [styles.talkBtn, styles.talkBtnRoomy, tutorialActive && styles.controlDisabled, pressed && styles.talkBtnPressed]} accessibilityRole="button" accessibilityLabel={t('table.leave')}>
-                    <View style={{ transform: [{ scaleX: Platform.OS !== 'web' ? -1 : 1 }] }}>
-                        <Icon name="rectangle.portrait.and.arrow.right" fallback="←" size={20} color={ink.muted60} />
-                    </View>
-                </Pressable>
-                <Pressable disabled={tutorialActive} onPress={() => setMenu(true)} style={({ pressed }) => [styles.talkBtn, styles.talkBtnRoomy, tutorialActive && styles.controlDisabled, pressed && styles.talkBtnPressed]} accessibilityRole="button" accessibilityLabel={t('table.menu')}>
+            <Pressable disabled={tutorialActive} onPress={() => setMenu(true)} {...tooltipProps(t('table.menu'))} style={({ pressed, hovered }: any) => [styles.talkBtn, styles.talkBtnRoomy, tutorialActive && styles.controlDisabled, (pressed || (Platform.OS === 'web' && hovered)) && styles.talkBtnPressed]} accessibilityRole="button" accessibilityLabel={t('table.menu')}>
+                <View {...tooltipProps(t('table.menu'))}>
                     <Icon name="gearshape.fill" fallback="☰" size={20} color={ink.muted60} />
-                </Pressable>
-            </View>
-
+                </View>
+            </Pressable>
+            <Pressable disabled={tutorialActive} onPress={() => setLogOpen(true)} {...tooltipProps(t('panel.log'))} style={({ pressed, hovered }: any) => [styles.talkBtn, styles.talkBtnRoomy, tutorialActive && styles.controlDisabled, (pressed || (Platform.OS === 'web' && hovered)) && styles.talkBtnPressed]} accessibilityRole="button" accessibilityLabel={t('panel.log')}>
+                <View {...tooltipProps(t('panel.log'))}>
+                    <Icon name="list.bullet.rectangle" fallback="≡" size={20} color={ink.muted60} />
+                </View>
+            </Pressable>
             <EmojiPicker
                 roomy
                 disabled={tutorialActive}
@@ -543,6 +540,16 @@ function TableBody() {
         </GlassPanel>
     );
 
+    const renderTopLeftExit = () => (
+        <View style={[styles.topLeftExit, { top: Math.max(12, insets.top + 8) }]}>
+            <Pressable disabled={tutorialActive} onPress={handleLeaveTable} {...tooltipProps(t('table.leave'))} style={({ pressed, hovered }: any) => [styles.talkBtn, styles.talkBtnRoomy, tutorialActive && styles.controlDisabled, (pressed || (Platform.OS === 'web' && hovered)) && styles.talkBtnPressed]} accessibilityRole="button" accessibilityLabel={t('table.leave')}>
+                <View {...tooltipProps(t('table.leave'))} style={{ transform: [{ scaleX: Platform.OS !== 'web' ? -1 : 1 }] }}>
+                    <Icon name="rectangle.portrait.and.arrow.right" fallback="←" size={20} color={ink.muted60} />
+                </View>
+            </Pressable>
+        </View>
+    );
+
     return (
         <TableGlassProvider target={feltTarget}>
         {/* The bar is a floating pill now, so it sits in the home-indicator
@@ -553,6 +560,7 @@ function TableBody() {
             onLayout={measureTutorialAnchors}
             style={[styles.root, { paddingTop: insets.top + 4, paddingBottom: Math.max(6, insets.bottom - 14) }]}
         >
+            {roomyPlayerStation ? renderTopLeftExit() : null}
             <BlurTargetView ref={feltTarget} pointerEvents="box-none" style={[styles.feltBackground, { top: feltTop, height: feltHeight }]}>
                 <FeltTable
                     players={g.players}
@@ -1568,8 +1576,8 @@ const styles = StyleSheet.create({
         alignItems: 'stretch',
         gap: 8,
     },
-    roomyHandTools: { width: 92, alignSelf: 'center', alignItems: 'center', gap: 6 },
-    crossMiddle: { flexDirection: 'row', width: '100%', justifyContent: 'space-between' },
+    topLeftExit: { position: 'absolute', left: 16, zIndex: 100 },
+    roomyHandTools: { width: 42, alignSelf: 'center', alignItems: 'center', gap: 8 },
     roomyTurnStatus: { width: 86, alignSelf: 'center', alignItems: 'center', gap: 7 },
     grabberRow: { alignItems: 'center', paddingTop: 2 },
     grabber: { width: 34, height: 4, borderRadius: 2, backgroundColor: '#d8fff033' },
