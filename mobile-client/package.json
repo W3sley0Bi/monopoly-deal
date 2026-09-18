@@ -48,11 +48,12 @@
     "typescript": "~6.0.3"
   },
   "scripts": {
-    "start": "expo start",
+    "sync:ip": "node scripts/sync-dev-ip.js",
+    "start": "node scripts/sync-dev-ip.js && expo start",
     "web": "expo start --web",
-    "ios": "expo run:ios",
-    "ios:device": "expo run:ios --device",
-    "ios:release": "expo run:ios --device --configuration Release",
+    "ios": "node scripts/sync-dev-ip.js && expo run:ios",
+    "ios:device": "node scripts/sync-dev-ip.js && expo run:ios --device",
+    "ios:release": "cp -f .env.prod .env && expo run:ios --device --configuration Release",
     "test": "jest --runInBand",
     "typecheck": "tsc --noEmit"
   },

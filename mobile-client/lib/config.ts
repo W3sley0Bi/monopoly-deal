@@ -9,7 +9,7 @@ export const SERVER_URL: string = (() => {
     if (!url) {
         throw new Error(
             'EXPO_PUBLIC_SERVER_URL is not set. Add it to mobile-client/.env, ' +
-                'e.g. EXPO_PUBLIC_SERVER_URL=ws://192.168.1.94:8080/ws',
+                'e.g. EXPO_PUBLIC_SERVER_URL=ws://YOUR_LOCAL_IP:8080/ws',
         );
     }
     return url;

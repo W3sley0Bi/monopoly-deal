@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"mime"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -29,24 +30,51 @@ func main() {
 		mux.Handle("/", spaHandler(staticDir))
 	}
 
-	addr := ":" + envOr("PORT", "8080")
+	port := strings.TrimPrefix(envOr("PORT", "8080"), ":")
+	addr := ":" + port
 
-	// Browsers only grant camera and microphone access on a secure origin, so
-	// voice and video need HTTPS unless everyone is playing on localhost.
+	scheme := "http"
+	wsScheme := "ws"
 	cert, key := os.Getenv("CERT_FILE"), os.Getenv("KEY_FILE")
-	if cert != "" && key != "" {
-		log.Printf("Server listening on https://localhost%s (wss at %s/ws)", addr, addr)
+	isTLS := cert != "" && key != ""
+	if isTLS {
+		scheme = "https"
+		wsScheme = "wss"
+	}
+
+	log.Printf("Server listening on:")
+	log.Printf("  -> Local:   %s://localhost:%s (ws: %s://localhost:%s/ws)", scheme, port, wsScheme, port)
+	for _, ip := range getLocalIPs() {
+		log.Printf("  -> Network: %s://%s:%s (ws: %s://%s:%s/ws)", scheme, ip, port, wsScheme, ip, port)
+	}
+
+	if isTLS {
 		if err := http.ListenAndServeTLS(addr, cert, key, mux); err != nil {
 			log.Fatal("ListenAndServeTLS: ", err)
 		}
 		return
 	}
 
-	log.Printf("Server listening on %s (ws at %s/ws)", addr, addr)
 	log.Println("No CERT_FILE/KEY_FILE set: camera and microphone will only work on localhost. See README.")
 	if err := http.ListenAndServe(addr, mux); err != nil {
 		log.Fatal("ListenAndServe: ", err)
 	}
+}
+
+func getLocalIPs() []string {
+	var ips []string
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return nil
+	}
+	for _, a := range addrs {
+		if ipnet, ok := a.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+			if ip4 := ipnet.IP.To4(); ip4 != nil && !ip4.IsLinkLocalUnicast() {
+				ips = append(ips, ip4.String())
+			}
+		}
+	}
+	return ips
 }
 
 func init() {
