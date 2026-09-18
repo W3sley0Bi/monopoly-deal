@@ -23,10 +23,10 @@ Priority levels:
 ### Backend & Network Stability
 - [x] **P1:** Give every WebSocket connection its own bounded outgoing queue and writer goroutine so one slow client cannot delay everyone else.
 - [x] **P1:** Add WebSocket write deadlines, payload limits, and clean handling for stalled or disconnected clients.
-- [ ] **P1:** Replace the global game-state lock with per-room locking or a sequential room worker, allowing unrelated rooms to process actions independently.
-- [ ] **P1:** Limit the mobile client's offline send queue and avoid automatically replaying stale, time-sensitive game actions after reconnecting.
-- [ ] **P1:** Add backend integration tests for room-isolated broadcasts, ping/pong, slow clients, reconnects, and concurrent rooms.
-- [ ] **P1:** Verify mobile-client compatibility with the table and release version.
+- [x] **P1:** Replace the global game-state lock with per-room locking or a sequential room worker, allowing unrelated rooms to process actions independently.
+- [x] **P1:** Limit the mobile client's offline send queue and avoid automatically replaying stale, time-sensitive game actions after reconnecting.
+- [x] **P1:** Add backend integration tests for room-isolated broadcasts, ping/pong, slow clients, reconnects, and concurrent rooms.
+- [x] **P1:** Verify mobile-client compatibility with the table and release version.
 
 ### Core Gameplay Bugs & Mechanics
 - [ ] **P1:** **Fix card drag unresponsiveness at match initialization**

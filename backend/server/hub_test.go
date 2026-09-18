@@ -511,3 +511,39 @@ func TestAnyoneClosesAbandonedTable(t *testing.T) {
 	c.send(ClientMessage{Type: MsgCloseRoom, RoomID: code})
 	c.home("table gone", func(v HomeView) bool { return len(v.Rooms) == 0 })
 }
+
+func TestConcurrentRooms(t *testing.T) {
+	srv, _ := newTestServer(t)
+
+	// Create 3 players and 3 rooms
+	a := dial(t, srv, "a", "Alice")
+	b := dial(t, srv, "b", "Bob")
+	c := dial(t, srv, "c", "Cara")
+
+	a.send(ClientMessage{Type: MsgCreateRoom, Bots: 2})
+	roomA := a.room("roomA", func(v RoomView) bool { return v.ID != "" }).ID
+	
+	b.send(ClientMessage{Type: MsgCreateRoom, Bots: 2})
+	roomB := b.room("roomB", func(v RoomView) bool { return v.ID != "" }).ID
+	
+	c.send(ClientMessage{Type: MsgCreateRoom, Bots: 2})
+	roomC := c.room("roomC", func(v RoomView) bool { return v.ID != "" }).ID
+	
+	// Flood chat messages concurrently to all rooms
+	done := make(chan bool)
+	flood := func(client *testClient, roomID string) {
+		for i := 0; i < 50; i++ {
+			client.send(ClientMessage{Type: MsgChat, Text: "spam"})
+		}
+		done <- true
+	}
+	
+	go flood(a, roomA)
+	go flood(b, roomB)
+	go flood(c, roomC)
+	
+	for i := 0; i < 3; i++ {
+		<-done
+	}
+	// The race detector implicitly verifies safety. We just wait to ensure it didn't panic.
+}

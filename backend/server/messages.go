@@ -6,6 +6,12 @@ import (
 	"monopoly-deal-backend/game"
 )
 
+// ProtocolVersion is bumped whenever the wire format changes in a way an
+// already-installed app cannot follow. The web client is served by this same
+// binary and so can never drift; the native app can, because it is updated
+// through a store on the player's schedule, not ours.
+const ProtocolVersion = 1
+
 // Client -> server message types.
 const (
 	// Home scope.
@@ -44,6 +50,10 @@ type ClientMessage struct {
 	Type       string `json:"type"`
 	PlayerID   string `json:"player_id"`
 	PlayerName string `json:"player_name,omitempty"`
+	// ProtocolVersion is stamped by the native app on every frame. Zero means
+	// a client that predates the check (or the bundled web client), which is
+	// let through rather than locked out.
+	ProtocolVersion int `json:"protocol_version,omitempty"`
 
 	// Room scope.
 	RoomID   string `json:"room_id,omitempty"`
@@ -265,6 +275,9 @@ type HomeView struct {
 	RespondOptions []int             `json:"respond_options"`
 	Difficulties   []game.Difficulty `json:"difficulties"`
 	MaxPlayers     int               `json:"max_players"`
+	// ProtocolVersion lets the app notice a server older than itself, which
+	// would otherwise silently ignore the version the app sends.
+	ProtocolVersion int `json:"protocol_version"`
 }
 
 // gameView renders the game from one seat. Pass an empty id for spectators.

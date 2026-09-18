@@ -16,6 +16,27 @@ import type { ClientMessage, HomeView, RoomView, ServerMessage } from '../../src
 
 const NOTICE_MS = 3600;
 
+/** Must equal `ProtocolVersion` in `backend/server/messages.go`. Bump both
+ *  together whenever a frame changes shape in a way the other side cannot
+ *  read — an installed app keeps its number until the player updates it. */
+export const PROTOCOL_VERSION = 1;
+
+/** Which side has to update. The app cannot fix either on its own, so this
+ *  outlives the auto-clearing notice banner. */
+export type Incompatible = 'client_outdated' | 'server_outdated';
+
+// Moves decided against a table that has since moved on: replaying them after
+// a reconnect would spend a play or answer a debt the player never saw.
+// `hello` is here too because the open transition sends a fresh one anyway.
+const STALE_ON_RECONNECT = new Set<ClientMessage['type']>([
+    'hello',
+    'play_bank', 'play_property', 'play_action', 'move_wildcard',
+    'end_turn', 'respond', 'tutorial_next',
+    'start_game', 'new_game', 'terminate_game',
+    'kick', 'take_seat', 'request_seat', 'cancel_seat',
+    'add_bot', 'remove_bot', 'set_options',
+]);
+
 export interface Notice {
     /** The translation key — stored, not rendered text, so the banner
      *  re-translates live on a language change. */
@@ -32,6 +53,8 @@ export interface UseGameConnection {
     home: HomeView | null;
     room: RoomView | null;
     notice: Notice | null;
+    /** Set once either side reports a different protocol version. */
+    incompatible: Incompatible | null;
     /** `payload.game.now_ms - Date.now()` from the last `room` frame, for
      *  countdowns that must agree with the server clock. */
     skewMs: number;
@@ -63,6 +86,7 @@ export function useGameConnection(
     const [home, setHome] = useState<HomeView | null>(null);
     const [room, setRoom] = useState<RoomView | null>(null);
     const [notice, setNotice] = useState<Notice | null>(null);
+    const [incompatible, setIncompatible] = useState<Incompatible | null>(null);
     const [skewMs, setSkewMs] = useState(0);
     const [name, setNameState] = useState(playerName);
 
@@ -102,6 +126,15 @@ export function useGameConnection(
     const onMessage = useCallback(
         (msg: ServerMessage) => {
             if (msg.type === 'home') {
+                // An older server ignores the version we stamp rather than
+                // refusing it, so this is the only way to catch that case.
+                if (msg.payload.protocol_version !== PROTOCOL_VERSION) {
+                    setIncompatible(
+                        (msg.payload.protocol_version ?? 0) < PROTOCOL_VERSION ? 'server_outdated' : 'client_outdated',
+                    );
+                } else {
+                    setIncompatible(null);
+                }
                 setHome(msg.payload);
                 // A home frame while a room is held means eviction — the
                 // server ejected us; clear the rejoin. A home frame while
@@ -126,6 +159,9 @@ export function useGameConnection(
             }
 
             if (msg.type === 'error') {
+                if (msg.error_key === 'err.client_outdated' || msg.error_key === 'err.server_outdated') {
+                    setIncompatible(msg.error_key === 'err.client_outdated' ? 'client_outdated' : 'server_outdated');
+                }
                 if (msg.error_key === 'err.no_such_table') {
                     rejoin.current = null;
                     persistRoomId(null);
@@ -143,11 +179,30 @@ export function useGameConnection(
         [persistRoomId, clearNoticeLater],
     );
 
-    const { status, send: sendRaw } = useJsonSocket<ServerMessage, ClientMessage>(SERVER_URL, onMessage);
+    const { status, send: sendRaw } = useJsonSocket<ServerMessage, ClientMessage>(
+        SERVER_URL,
+        onMessage,
+        {
+            queueLimit: 50,
+            dropOnReconnect: (msg) => STALE_ON_RECONNECT.has(msg.type),
+            onDropped: (msgs) => {
+                // A lost `hello` is routine; only a lost move is worth saying.
+                const moves = msgs.filter((m) => m.type !== 'hello').length;
+                if (!moves) return;
+                setNotice({ key: 'notice.offline_moves_dropped', args: { count: moves }, kind: 'notice' });
+                clearNoticeLater();
+            },
+        },
+    );
 
     const send = useCallback(
         (msg: Omit<ClientMessage, 'player_id'>) => {
-            sendRaw({ ...msg, player_id: playerId, player_name: name || undefined } as ClientMessage);
+            sendRaw({
+                ...msg,
+                player_id: playerId,
+                player_name: name || undefined,
+                protocol_version: PROTOCOL_VERSION,
+            } as ClientMessage);
         },
         [sendRaw, playerId, name],
     );
@@ -186,7 +241,7 @@ export function useGameConnection(
         persistRoomId(null);
     }, [send, persistRoomId]);
 
-    return { status, home, room, notice, skewMs, send, myId: playerId, name, setName, leave };
+    return { status, home, room, notice, incompatible, skewMs, send, myId: playerId, name, setName, leave };
 }
 
 // =====================================================================
@@ -271,6 +326,8 @@ export function GameConnectionProvider({ children }: { children: ReactNode }) {
               ...connection,
               room: offlineRoom,
               notice: offlineNotice,
+              // Solo games never touch the server, so its version is moot.
+              incompatible: null,
               skewMs: 0,
               send: (msg) => { void sendOffline(msg); },
               leave: () => {

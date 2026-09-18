@@ -62,6 +62,14 @@ const misc: Catalog = {
 
     'sheet.close': 'Chiudi',
 
+    // Protocol mismatch — the app and the server can no longer understand each other.
+    'update.client.title': 'Aggiornamento necessario',
+    'update.client.body': "Questa versione di Deal non riesce più a comunicare con il server del tavolo. Aggiorna l'app per continuare a giocare online.",
+    'update.server.title': 'Il server va aggiornato',
+    'update.server.body': "Il server del tavolo è più vecchio di quest'app. Chiedi a chi lo gestisce di aggiornarlo, poi riprova.",
+    'update.play_offline': 'Gioca da solo offline',
+    'notice.offline_moves_dropped.one': "Eri offline, quindi l'ultima mossa non è stata inviata.",
+    'notice.offline_moves_dropped.other': 'Eri offline, quindi {count} mosse non sono state inviate.',
 };
 
 export default misc;

@@ -97,6 +97,8 @@ const errors: Catalog = {
     'err.pay_more': 'Pay ${amount}M (you selected ${selected}M of ${available}M available).',
 
     // Transport
+    'err.client_outdated': 'This app is out of date. Update it to keep playing online.',
+    'err.server_outdated': 'The server is older than this app. Ask the host to update it.',
     'err.unknown_message': 'Unknown message type "{type}".',
 };
 

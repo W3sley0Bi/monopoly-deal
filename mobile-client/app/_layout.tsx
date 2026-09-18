@@ -14,6 +14,7 @@ import { useAppFonts } from '../lib/fonts';
 import { useStore } from '../lib/store';
 import { GameConnectionProvider } from '../lib/net/messages';
 import { I18nProvider } from '../src/i18n';
+import { UpdateRequired } from '../src/components/UpdateRequired';
 import { surface } from '../lib/theme';
 
 // Must run at module scope, before the first render — EXPO-57.md §2.
@@ -98,6 +99,7 @@ export default function RootLayout() {
                                     }}
                                 />
                             </Stack>
+                            <UpdateRequired />
                             <StatusBar style="light" />
                         </ThemeProvider>
                     </GameConnectionProvider>

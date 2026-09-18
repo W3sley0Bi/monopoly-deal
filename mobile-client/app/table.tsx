@@ -18,6 +18,8 @@ import { DragLayer, DropZone, useDragLayer } from '../src/game/drag';
 import { ActionDialog } from '../src/components/table/ActionDialog';
 import { ActiveBoard } from '../src/components/board/ActiveBoard';
 import { useChatBubbles } from '../src/game/useChatBubbles';
+
+const AUTO_END_MS = 2500;
 import { PendingPanel } from '../src/components/table/PendingPanel';
 import { ChatPanel } from '../src/components/table/ChatPanel';
 import { TutorialCoach, TutorialDone, type TutorialAnchors } from '../src/components/table/TutorialCoach';
@@ -278,6 +280,29 @@ function TableBody() {
           : 'bystander';
 
     const lastEvent = [...g.log].reverse().find((e) => e.key !== 'log.turn' && e.key !== 'log.tutorial_lesson');
+
+    const startPending = Boolean(g.starts_at_ms && Date.now() + skewMs < g.starts_at_ms);
+    const autoEnd = myTurn && !pending && !spectating && !startPending && g.state === 'playing' && g.plays_left === 0 && hand.length <= 7;
+    
+    const sendRef = useRef(send);
+    sendRef.current = send;
+    const [autoEndLeft, setAutoEndLeft] = useState(0);
+
+    useEffect(() => {
+        if (!autoEnd) {
+            setAutoEndLeft(0);
+            return;
+        }
+        const until = Date.now() + AUTO_END_MS;
+        setAutoEndLeft(Math.ceil(AUTO_END_MS / 1000));
+        const interval = setInterval(
+            () => setAutoEndLeft(Math.max(0, Math.ceil((until - Date.now()) / 1000))), 250);
+        const timer = setTimeout(() => sendRef.current({ type: 'end_turn' }), AUTO_END_MS);
+        return () => {
+            clearInterval(interval);
+            clearTimeout(timer);
+        };
+    }, [autoEnd, g.current_turn]);
 
     function openCard(card: CardT) {
         const playable = canPlay && tutorialAllowsCard(card, tutorial) &&
@@ -728,7 +753,7 @@ function TableBody() {
                         onLayout={() => recordTutorialAnchor('controls', endTurnTutorialRef.current)}
                     >
                         <Btn
-                            label={t('table.end_turn')}
+                            label={autoEndLeft > 0 ? t('table.auto_end', { seconds: autoEndLeft }) : t('table.end_turn')}
                             variant="red"
                             disabled={Boolean(tutorial && (tutorial.id !== 'end_turn' || tutorial.done))}
                             onPress={() => act({ type: 'end_turn' })}

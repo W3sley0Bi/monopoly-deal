@@ -96,6 +96,8 @@ const errors: Catalog = {
     'err.pay_more': 'Paga ${amount}M (hai selezionato ${selected}M dei ${available}M disponibili).',
 
     // Transport
+    'err.client_outdated': "Quest'app non è aggiornata. Aggiornala per continuare a giocare online.",
+    'err.server_outdated': "Il server è più vecchio di quest'app. Chiedi a chi lo ospita di aggiornarlo.",
     'err.unknown_message': 'Tipo di messaggio "{type}" sconosciuto.',
 };
 

@@ -39,3 +39,18 @@ func trimChat(s string) string {
 func normalizeCode(s string) string {
 	return strings.ToUpper(strings.TrimSpace(s))
 }
+
+// checkProtocol refuses a native app built for a different wire format, and
+// says which side is out of date so the app can tell the player what to update.
+func checkProtocol(v int) error {
+	switch {
+	case v == 0 || v == ProtocolVersion:
+		return nil
+	case v < ProtocolVersion:
+		return game.NewFault("err.client_outdated", "this app is out of date — update it to keep playing",
+			"client", v, "server", ProtocolVersion)
+	default:
+		return game.NewFault("err.server_outdated", "the server is older than this app — ask the host to update it",
+			"client", v, "server", ProtocolVersion)
+	}
+}

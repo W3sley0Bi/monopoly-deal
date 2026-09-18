@@ -35,6 +35,12 @@ type Room struct {
 
 	// summaryHash is the last broadcast state of this room for the lobby.
 	summaryHash string
+
+	// Actor state
+	actions chan func()
+	clients map[*Client]struct{}
+	hub     *Hub
+	done    chan struct{}
 }
 
 // nextBot hands out the next robot sequence number for this table.
@@ -65,14 +71,20 @@ func (r *Room) append(m ChatMessage) {
 	}
 }
 
-func newRoom(id, name string) *Room {
-	return &Room{
+func newRoom(h *Hub, id, name string) *Room {
+	r := &Room{
 		ID:         id,
 		Name:       name,
 		Game:       game.NewGame(id),
 		spectators: map[string]string{},
 		chat:       []ChatMessage{},
+		actions:    make(chan func(), 128),
+		clients:    map[*Client]struct{}{},
+		hub:        h,
+		done:       make(chan struct{}),
 	}
+	go r.run()
+	return r
 }
 
 func (r *Room) seatsFree() int {
@@ -256,4 +268,264 @@ func (r *Room) computeSummaryHash(live int) string {
 		r.Game.Bots(),
 		r.playerSeats(),
 	)
+}
+
+func (r *Room) Close() {
+	close(r.done)
+}
+
+func (r *Room) Do(f func()) {
+	select {
+	case r.actions <- f:
+	case <-r.done:
+	}
+}
+
+func (r *Room) broadcast() {
+	for c := range r.clients {
+		_ = c.send(ServerMessage{Type: "room", Payload: r.view(c.playerID)})
+	}
+}
+
+func (r *Room) run() {
+	t := time.NewTicker(500 * time.Millisecond)
+	defer t.Stop()
+	for {
+		select {
+		case <-r.done:
+			return
+		case f := <-r.actions:
+			wasHash := r.summaryHash
+			f()
+			newHash := r.computeSummaryHash(len(r.clients))
+			if newHash != wasHash {
+				r.summaryHash = newHash
+				r.hub.wake()
+			}
+		case now := <-t.C:
+			wasLive := len(r.clients)
+			wasHash := r.summaryHash
+			roomChanged := false
+
+			if r.Game.Tick(now) {
+				r.absorbRequests()
+				roomChanged = true
+			}
+			
+			if r.stepBots(now) {
+				roomChanged = true
+			}
+
+			if wasLive == 0 {
+				if r.emptySince.IsZero() {
+					r.emptySince = now
+				} else if now.Sub(r.emptySince) > emptyRoomTTL {
+					go r.hub.deleteRoom(r.ID) // self-destruct asynchronously to not deadlock
+				}
+			} else {
+				r.emptySince = time.Time{}
+			}
+
+			if roomChanged {
+				r.broadcast()
+			}
+			
+			newHash := r.computeSummaryHash(len(r.clients))
+			if newHash != wasHash {
+				r.summaryHash = newHash
+				r.hub.wake()
+			}
+		}
+	}
+}
+
+func (r *Room) stepBots(now time.Time) bool {
+	if !r.Game.BotWaiting() {
+		r.botAt = time.Time{}
+		return false
+	}
+	if r.botAt.IsZero() {
+		r.botAt = now.Add(botMoveDelay)
+		return false
+	}
+	if now.Before(r.botAt) {
+		return false
+	}
+	moved := r.Game.BotAct()
+	r.botAt = now.Add(botMoveDelay)
+	if moved {
+		r.Game.PostAction()
+		r.absorbRequests()
+	}
+	return moved
+}
+
+func (r *Room) handleMessage(c *Client, msg ClientMessage) error {
+	g := r.Game
+	owner := c.playerID == r.OwnerID
+
+	switch msg.Type {
+	case MsgSetOptions:
+		if !owner {
+			return errNotOwner
+		}
+		mode := msg.Mode
+		if mode == "" {
+			mode = g.Mode
+		}
+		if msg.BotDifficulty != "" {
+			if err := g.SetBotDifficulty(msg.BotDifficulty); err != nil {
+				return err
+			}
+		}
+		if msg.RespondSeconds != nil {
+			if err := g.SetRespondSeconds(*msg.RespondSeconds); err != nil {
+				return err
+			}
+		}
+		return g.Configure(mode, msg.TurnSeconds)
+
+	case MsgStartGame:
+		if !owner {
+			return errNotOwner
+		}
+		return g.StartRandomScheduled()
+
+	case MsgNewGame:
+		if !owner {
+			return errNotOwner
+		}
+		return g.Reset()
+
+	case MsgTutorialNext:
+		return g.TutorialNext(c.playerID)
+
+	case MsgTerminate:
+		if !r.isSeated(c.playerID) && !owner {
+			return game.NewFault("err.end_seated_only", "only players at the table can end the game")
+		}
+		return g.Terminate(c.playerID)
+
+	case MsgKick:
+		if !owner {
+			return errNotOwner
+		}
+		return r.kick(msg.TargetPlayerID)
+
+	case MsgTakeSeat:
+		if g.State != game.StateWaiting {
+			return game.NewFault("err.game_started_ask_seat", "the game has already started — ask for a seat instead")
+		}
+		if r.seatsFree() == 0 {
+			return game.NewFault("err.table_full", "the table is full")
+		}
+		delete(r.spectators, c.playerID)
+		r.dropRequest(c.playerID)
+		return g.AddPlayer(c.playerID, c.name)
+
+	case MsgRequestSeat:
+		if r.isSeated(c.playerID) {
+			return game.NewFault("err.already_seated", "you already have a seat")
+		}
+		r.addRequest(c.playerID, c.name)
+		g.Announce("log.asked_for_seat", "name", c.name)
+		return nil
+
+	case MsgAddBot:
+		if !owner {
+			return errNotOwner
+		}
+		if r.seatsFree() == 0 {
+			return game.NewFault("err.table_full", "the table is full")
+		}
+		return g.AddBot(fmt.Sprintf("bot_%s_%d", r.ID, r.nextBot()), "")
+
+	case MsgRemoveBot:
+		if !owner {
+			return errNotOwner
+		}
+		return g.RemoveBot()
+
+	case MsgCancelSeat:
+		r.dropRequest(c.playerID)
+		return nil
+
+	case MsgChat:
+		text := trimChat(msg.Text)
+		if text == "" {
+			return nil
+		}
+		r.say(c.playerID, c.name, text)
+		return nil
+	}
+
+	// Everything below is a move, so it needs a seat.
+	if !r.isSeated(c.playerID) {
+		return game.NewFault("err.spectator", "spectators cannot play")
+	}
+	id := c.playerID
+
+	switch msg.Type {
+	case MsgPlayBank:
+		return g.PlayToBank(id, msg.CardID)
+	case MsgPlayProperty:
+		return g.PlayProperty(id, msg.CardID, msg.Color)
+	case MsgPlayAction:
+		return g.PlayAction(id, msg.CardID, game.ActionOptions{
+			Color:          msg.Color,
+			TargetPlayerID: msg.TargetPlayerID,
+			TargetCardID:   msg.TargetCardID,
+			GiveCardID:     msg.GiveCardID,
+			DoubleCardIDs:  msg.DoubleCardIDs,
+		})
+	case MsgMoveWildcard:
+		return g.ReassignWildcard(id, msg.CardID, msg.Color)
+	case MsgEndTurn:
+		return g.EndTurn(id)
+	case MsgRespond:
+		return g.Respond(id, msg.SayNo, msg.CardIDs)
+	}
+	return game.NewFault("err.unknown_message", fmt.Sprintf("unknown message type %q", msg.Type), "type", msg.Type)
+}
+
+func (r *Room) kick(targetID string) error {
+	if targetID == "" || targetID == r.OwnerID {
+		return game.NewFault("err.pick_someone_else", "pick someone else to remove")
+	}
+	seated := r.isSeated(targetID)
+	_, watching := r.spectators[targetID]
+	if !seated && !watching {
+		return game.NewFault("err.not_at_this_table", "that person is not at this table")
+	}
+	if seated && r.Game.State != game.StateWaiting {
+		return game.NewFault("err.remove_lobby_only", "players can only be removed before the game starts")
+	}
+	name := targetID
+	if p := r.Game.Player(targetID); p != nil {
+		name = p.Name
+	} else if n, ok := r.spectators[targetID]; ok {
+		name = n
+	}
+
+	r.Game.Remove(targetID)
+	delete(r.spectators, targetID)
+	r.dropRequest(targetID)
+	r.Game.Announce("log.removed", "name", name)
+	r.ensureOwner()
+	
+	// tell hub to evict them
+	go r.hub.evict(r.ID, targetID)
+	return nil
+}
+
+func (r *Room) detach(c *Client, stillHere bool) {
+	delete(r.clients, c)
+	// Only give up the seat when no other connection holds the same identity.
+	if !stillHere {
+		r.Game.Disconnect(c.playerID)
+		delete(r.spectators, c.playerID)
+		r.dropRequest(c.playerID)
+		r.ensureOwner()
+		r.absorbRequests()
+	}
 }

@@ -287,6 +287,8 @@ export interface HomeView {
     difficulties: Difficulty[];
     /** == 5. */
     max_players: number;
+    /** Absent from servers that predate the version check. */
+    protocol_version?: number;
 }
 
 // ---- client -> server -------------------------------------------------------------
@@ -306,6 +308,8 @@ export interface ClientMessage {
     type: ClientMsgType;
     player_id: string;
     player_name?: string;
+    /** Stamped on every frame; the server refuses a mismatch. */
+    protocol_version?: number;
 
     room_id?: string;
     room_name?: string;
