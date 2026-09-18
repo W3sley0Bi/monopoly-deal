@@ -365,6 +365,7 @@ function TableBody() {
                 <FeltTable
                     players={g.players}
                     you={room.you}
+                    layoutKey={`${room.id}:${g.start_id || g.starts_at_ms || 'match'}`}
                     cardAreaHeight={cardAreaHeight}
                     deckCount={g.deck_count}
                     discardCount={g.discard_count}
