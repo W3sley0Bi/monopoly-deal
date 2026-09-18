@@ -35,6 +35,7 @@ func trimChat(s string) string {
 	return s
 }
 
+
 // normalizeCode makes table codes case- and space-insensitive.
 func normalizeCode(s string) string {
 	return strings.ToUpper(strings.TrimSpace(s))

@@ -271,6 +271,31 @@ function TableBody() {
         leave();
     }, [leave, setTutorialDone]);
 
+    const handleLeaveTable = useCallback(() => {
+        const doLeave = () => {
+            setMenu(false);
+            if (room?.is_owner && room.game.state === 'playing') {
+                send({ type: 'terminate_game' });
+            }
+            leave();
+        };
+
+        if (Platform.OS === 'web') {
+            if (window.confirm(t('table.leave_confirm'))) {
+                doLeave();
+            }
+        } else {
+            Alert.alert(t('table.leave'), t('table.leave_confirm'), [
+                { text: t('common.cancel'), style: 'cancel' },
+                {
+                    text: t('table.leave'),
+                    style: 'destructive',
+                    onPress: doLeave,
+                },
+            ]);
+        }
+    }, [room?.is_owner, room?.game?.state, send, leave, t]);
+
     // Leaving clears `room` before the router replaces this screen. Keep this
     // hook above the empty-room return so that transition never changes the
     // number of hooks rendered by TableBody.
@@ -392,12 +417,21 @@ function TableBody() {
 
     const renderRoomyHandTools = () => (
         <View style={styles.roomyHandTools}>
-            <Pressable disabled={tutorialActive} onPress={() => setMenu(true)} style={({ pressed }) => [styles.talkBtn, styles.talkBtnRoomy, tutorialActive && styles.controlDisabled, pressed && styles.talkBtnPressed]} accessibilityRole="button" accessibilityLabel={t('table.menu')}>
-                <Icon name="gearshape.fill" fallback="☰" size={20} color={ink.muted60} />
-            </Pressable>
             <Pressable disabled={tutorialActive} onPress={() => setLogOpen(true)} style={({ pressed }) => [styles.talkBtn, styles.talkBtnRoomy, tutorialActive && styles.controlDisabled, pressed && styles.talkBtnPressed]} accessibilityRole="button" accessibilityLabel={t('panel.log')}>
                 <Icon name="list.bullet.rectangle" fallback="≡" size={20} color={ink.muted60} />
             </Pressable>
+            
+            <View style={styles.crossMiddle}>
+                <Pressable disabled={tutorialActive} onPress={handleLeaveTable} style={({ pressed }) => [styles.talkBtn, styles.talkBtnRoomy, tutorialActive && styles.controlDisabled, pressed && styles.talkBtnPressed]} accessibilityRole="button" accessibilityLabel={t('table.leave')}>
+                    <View style={{ transform: [{ scaleX: Platform.OS !== 'web' ? -1 : 1 }] }}>
+                        <Icon name="rectangle.portrait.and.arrow.right" fallback="←" size={20} color={ink.muted60} />
+                    </View>
+                </Pressable>
+                <Pressable disabled={tutorialActive} onPress={() => setMenu(true)} style={({ pressed }) => [styles.talkBtn, styles.talkBtnRoomy, tutorialActive && styles.controlDisabled, pressed && styles.talkBtnPressed]} accessibilityRole="button" accessibilityLabel={t('table.menu')}>
+                    <Icon name="gearshape.fill" fallback="☰" size={20} color={ink.muted60} />
+                </Pressable>
+            </View>
+
             <EmojiPicker
                 roomy
                 disabled={tutorialActive}
@@ -451,6 +485,11 @@ function TableBody() {
 
     const renderTurnControls = () => (
         <GlassPanel style={styles.controls}>
+            <Pressable disabled={tutorialActive} onPress={handleLeaveTable} style={({ pressed }) => [styles.talkBtn, tutorialActive && styles.controlDisabled, pressed && styles.talkBtnPressed]} accessibilityRole="button" accessibilityLabel={t('table.leave')}>
+                <View style={{ transform: [{ scaleX: Platform.OS !== 'web' ? -1 : 1 }] }}>
+                    <Icon name="rectangle.portrait.and.arrow.right" fallback="←" size={18} color={ink.muted60} />
+                </View>
+            </Pressable>
             <Pressable disabled={tutorialActive} onPress={() => setMenu(true)} style={({ pressed }) => [styles.talkBtn, tutorialActive && styles.controlDisabled, pressed && styles.talkBtnPressed]} accessibilityRole="button" accessibilityLabel={t('table.menu')}>
                 <Icon name="gearshape.fill" fallback="☰" size={18} color={ink.muted60} />
             </Pressable>
@@ -1142,31 +1181,7 @@ function TableBody() {
                         if (!on) setSelected(null);
                     }}
                 />
-                {/* Leaving *is* quitting: a seat that walks away mid-hand ends
-                    the game for everyone anyway, so the two buttons that used
-                    to say that separately are one. */}
-                <Btn
-                    label={t('table.leave')}
-                    variant="red"
-                    onPress={() =>
-                        Alert.alert(t('table.leave'), t('table.leave_confirm'), [
-                            { text: t('common.cancel'), style: 'cancel' },
-                            {
-                                text: t('table.leave'),
-                                style: 'destructive',
-                                onPress: () => {
-                                    setMenu(false);
-                                    // Only the owner may end it; everyone else
-                                    // just stands up and the server decides.
-                                    if (room.is_owner && g.state === 'playing') {
-                                        send({ type: 'terminate_game' });
-                                    }
-                                    leave();
-                                },
-                            },
-                        ])
-                    }
-                />
+
 
                 {/* Dev only: swap this table for a hand-built one. English on
                     purpose — these strings never reach a player. */}
@@ -1553,7 +1568,8 @@ const styles = StyleSheet.create({
         alignItems: 'stretch',
         gap: 8,
     },
-    roomyHandTools: { width: 42, alignSelf: 'center', alignItems: 'center', gap: 8 },
+    roomyHandTools: { width: 92, alignSelf: 'center', alignItems: 'center', gap: 6 },
+    crossMiddle: { flexDirection: 'row', width: '100%', justifyContent: 'space-between' },
     roomyTurnStatus: { width: 86, alignSelf: 'center', alignItems: 'center', gap: 7 },
     grabberRow: { alignItems: 'center', paddingTop: 2 },
     grabber: { width: 34, height: 4, borderRadius: 2, backgroundColor: '#d8fff033' },

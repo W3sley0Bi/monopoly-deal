@@ -48,6 +48,7 @@ func TestRoomActionDoesNotReachOtherRoom(t *testing.T) {
 
 	// Action in Room A
 	a1.send(ClientMessage{Type: MsgChat, Text: "Hello Room A"})
+	a1.send(ClientMessage{Type: MsgChat, Text: "👏"})
 
 	// Room A clients receive it
 	a1.room("A1 gets chat", func(v RoomView) bool { return len(v.Chat) > 0 })
@@ -67,6 +68,7 @@ func TestRoomActionDoesNotReachLobby(t *testing.T) {
 
 	// Room action
 	a.send(ClientMessage{Type: MsgChat, Text: "Hello from inside"})
+	a.send(ClientMessage{Type: MsgChat, Text: "😈"})
 	a.room("gets chat", func(v RoomView) bool { return len(v.Chat) > 0 })
 
 	lobbyUser.syncClient()

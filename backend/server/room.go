@@ -451,9 +451,9 @@ func (r *Room) handleMessage(c *Client, msg ClientMessage) error {
 		return nil
 
 	case MsgChat:
-		text := trimChat(msg.Text)
-		if text == "" {
-			return nil
+		text := msg.Text
+		if text != "👏" && text != "😈" && text != "😂" && text != "🤯" {
+			return nil // Drop text chat, only allow emojis
 		}
 		r.say(c.playerID, c.name, text)
 		return nil

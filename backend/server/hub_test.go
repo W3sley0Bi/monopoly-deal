@@ -404,11 +404,14 @@ func TestChatReachesEveryoneInTheRoom(t *testing.T) {
 	b.room("seated", func(v RoomView) bool { return v.YouSeated })
 
 	a.send(ClientMessage{Type: MsgChat, Text: "  hello table  "})
+	a.send(ClientMessage{Type: MsgChat, Text: "👏"})
 	v := b.room("chat seen", func(v RoomView) bool { return len(v.Chat) > 0 })
 
 	m := v.Chat[len(v.Chat)-1]
 	if m.Text != "hello table" {
 		t.Fatalf("text should be trimmed, got %q", m.Text)
+	if m.Text != "👏" {
+		t.Fatalf("text should be emoji, got %q", m.Text)
 	}
 	if m.Name != "Alice" || m.PlayerID != "a" || m.System {
 		t.Fatalf("unexpected author: %+v", m)
@@ -420,8 +423,10 @@ func TestChatReachesEveryoneInTheRoom(t *testing.T) {
 	// Empty messages are dropped rather than echoed.
 	a.send(ClientMessage{Type: MsgChat, Text: "   "})
 	a.send(ClientMessage{Type: MsgChat, Text: "second"})
+	a.send(ClientMessage{Type: MsgChat, Text: "😈"})
 	v2 := a.room("second message", func(v RoomView) bool {
 		return len(v.Chat) > 0 && v.Chat[len(v.Chat)-1].Text == "second"
+		return len(v.Chat) > 0 && v.Chat[len(v.Chat)-1].Text == "😈"
 	})
 	if len(v2.Chat) != 2 {
 		t.Fatalf("expected 2 chat lines, got %d", len(v2.Chat))
@@ -444,8 +449,10 @@ func TestSpectatorsCanChat(t *testing.T) {
 	c.send(ClientMessage{Type: MsgJoinRoom, RoomID: code})
 	c.room("watching", func(v RoomView) bool { return !v.YouSeated })
 	c.send(ClientMessage{Type: MsgChat, Text: "nice play"})
+	c.send(ClientMessage{Type: MsgChat, Text: "😂"})
 	a.room("spectator chat", func(v RoomView) bool {
 		return len(v.Chat) > 0 && v.Chat[len(v.Chat)-1].Text == "nice play"
+		return len(v.Chat) > 0 && v.Chat[len(v.Chat)-1].Text == "😂"
 	})
 }
 
@@ -534,6 +541,7 @@ func TestConcurrentRooms(t *testing.T) {
 	flood := func(client *testClient, roomID string) {
 		for i := 0; i < 50; i++ {
 			client.send(ClientMessage{Type: MsgChat, Text: "spam"})
+			client.send(ClientMessage{Type: MsgChat, Text: "👏"})
 		}
 		done <- true
 	}

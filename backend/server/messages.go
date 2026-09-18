@@ -85,12 +85,16 @@ type ClientMessage struct {
 	CardIDs        []string   `json:"card_ids,omitempty"`
 
 	// Chat.
+	// Reaction emoji text.
 	Text string `json:"text,omitempty"`
 }
 
 // ChatMessage is one line in a table's group chat. Player messages carry Text;
 // server-generated lines carry a translation Key instead, so every reader sees
 // them in their own language.
+// ChatMessage is one line in a table's log/feed. Player messages (now restricted
+// to a few reaction emojis) carry Text; server-generated lines carry a translation
+// Key instead, so every reader sees them in their own language.
 type ChatMessage struct {
 	ID       string         `json:"id"`
 	PlayerID string         `json:"player_id"`
