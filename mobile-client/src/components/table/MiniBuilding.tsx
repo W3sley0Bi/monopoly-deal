@@ -1,10 +1,12 @@
 import { memo, useEffect, useMemo } from 'react';
-import { StyleSheet, View } from 'react-native';
-import Svg, { G, Polygon } from 'react-native-svg';
+import { Platform, StyleSheet, View } from 'react-native';
+import Svg, { Defs, G, LinearGradient, Polygon, Stop } from 'react-native-svg';
 import Animated, { Easing, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useStore } from '../../../lib/store';
 
 export type BuildingKind = 'none' | 'house' | 'hotel';
+/** Reserved for selectable hotel artwork; the default model remains the hotel. */
+export type HotelVisual = 'hotel' | 'liberty-statue';
 type Point = readonly [number, number, number];
 type Material = 'wall' | 'roof' | 'trim' | 'recess' | 'glass' | 'door' | 'shadow';
 type Face = { vertices: Point[]; material: Material; light: number };
@@ -107,19 +109,27 @@ function model(kind: 'house' | 'hotel') {
 }
 const MODELS = { house: model('house'), hotel: model('hotel') };
 
-export const MiniBuilding = memo(function MiniBuilding({ kind, color, seatRotation = 0, seatSquash = 1 }: {
-    kind: Exclude<BuildingKind, 'none'>; color: string; seatRotation?: number; seatSquash?: number;
+// TODO: Add a generic custom-building asset slot for both `house` and `hotel`.
+// The Statue of Liberty SVG experiment is deliberately disabled until then;
+// avoid hard-coding a particular landmark as a hotel-only visual.
+export const MiniBuilding = memo(function MiniBuilding({ kind, color, seatRotation = 0, seatSquash = 1, renderScale = 1, visualScale = 1, anchor, hotelVisual: _hotelVisual = 'hotel' }: {
+    kind: Exclude<BuildingKind, 'none'>; color: string; seatRotation?: number; seatSquash?: number; renderScale?: number;
+    visualScale?: number;
+    /** Centre position when rendered outside a transformed pile. */
+    anchor?: { x: number; y: number };
+    hotelVisual?: HotelVisual;
 }) {
     const reduced = useReducedMotion();
     const motion = useStore(s => s.motion);
     const animate = motion && !reduced;
+    const drawScale = Platform.OS === 'web' ? visualScale : renderScale;
     const pop = useSharedValue(animate ? 0 : 1);
     useEffect(() => {
         pop.value = withTiming(1, { duration: animate ? 260 : 0, easing: Easing.out(Easing.cubic) });
     }, [animate, kind, pop]);
     const animated = useAnimatedStyle(() => ({
         opacity: pop.value,
-        transform: [{ translateY: -8 * (1-pop.value) }, { scale: 0.85+0.15*pop.value }],
+        transform: [{ translateY: -8 * (1-pop.value) }, { scale: (0.85 + 0.15 * pop.value) * visualScale / drawScale }],
     }));
     // Keep palette entries in hex: shade() operates on hex input once only.
     const palette = useMemo<Record<Material, string>>(() => ({
@@ -127,19 +137,54 @@ export const MiniBuilding = memo(function MiniBuilding({ kind, color, seatRotati
         glass: '#b3dad8', door: color, shadow: '#071b22',
     }), [color]);
     const m = MODELS[kind];
-    return <View pointerEvents="none" style={[styles.root, styles.orientation, {
+    const paintId = `building-${kind}-${color.replace('#', '')}`;
+    // Web redraws SVG paths after CSS transforms, so a large intrinsic canvas
+    // only disturbs layout there. Native keeps the oversized drawing surface
+    // because transformed SVG views can otherwise look soft.
+    return <View pointerEvents="none" collapsable={false} shouldRasterizeIOS={false} style={[styles.root, styles.orientation, {
+        width: m.width * visualScale,
+        height: m.height * visualScale,
+    }, anchor && {
+        position: 'absolute',
+        left: anchor.x - m.width * visualScale / 2,
+        top: anchor.y - m.height * visualScale / 2,
+    }, {
         // Parent is rotation × uniform depth × squash. Invert squash then
         // rotation so upright walls and lighting share one camera at all seats.
         // Rotate around the visual centre so the model remains centred on the
         // card stack it replaces, including at the side seats.
         transform: [{ scaleY: 1 / seatSquash }, { rotate: `${-seatRotation}deg` }],
     }]}>
-        <Animated.View style={[styles.root, animated]}>
-            <Svg width={m.width} height={m.height} viewBox={`0 0 ${m.width} ${m.height}`}>
+        <Animated.View collapsable={false} shouldRasterizeIOS={false} renderToHardwareTextureAndroid={false}
+            style={[styles.root, { width: m.width * drawScale, height: m.height * drawScale }, animated]}>
+            <Svg width={m.width * drawScale} height={m.height * drawScale} viewBox={`0 0 ${m.width} ${m.height}`}>
+                <Defs>
+                    {/* A restrained material finish keeps the model readable at
+                        miniature scale, without turning it into a flat icon. */}
+                    <LinearGradient id={`${paintId}-glass`} x1="0" y1="0" x2="1" y2="1">
+                        <Stop offset="0" stopColor="#effff8" />
+                        <Stop offset="0.32" stopColor="#b9eef0" />
+                        <Stop offset="1" stopColor="#357b8c" />
+                    </LinearGradient>
+                    <LinearGradient id={`${paintId}-roof`} x1="0" y1="0" x2="0" y2="1">
+                        <Stop offset="0" stopColor={shade(color, 0.32)} />
+                        <Stop offset="1" stopColor={shade(color, -0.22)} />
+                    </LinearGradient>
+                </Defs>
                 <G x={m.offset[0]} y={m.offset[1]}>
                     {m.faces.map((f, i) => <Polygon key={i} points={f.points}
-                        fill={shade(palette[f.material], f.material === 'door' ? -0.55 : f.light)}
-                        opacity={f.material === 'shadow' ? 0.28 : 1} />)}
+                        fill={f.material === 'glass'
+                            ? `url(#${paintId}-glass)`
+                            : f.material === 'roof'
+                                ? `url(#${paintId}-roof)`
+                                : shade(palette[f.material], f.material === 'door' ? -0.55 : f.light)}
+                        opacity={f.material === 'shadow' ? 0.28 : 1}
+                        // Fine vector edges keep the individual planes legible
+                        // once a small building is viewed at table distance.
+                        stroke={f.material === 'shadow' ? 'none' : shade(palette[f.material], -0.48)}
+                        strokeOpacity={f.material === 'glass' ? 0.5 : 0.38}
+                        strokeWidth={f.material === 'trim' ? 0.42 : 0.58}
+                        strokeLinejoin="round" />)}
                 </G>
             </Svg>
         </Animated.View>

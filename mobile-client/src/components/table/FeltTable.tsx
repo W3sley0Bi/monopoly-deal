@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { Easing, runOnJS, useAnimatedStyle, useReducedMotion, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
 import type { Card as CardT, Color, PlayerView, SetView } from '../../types';
 import { Card } from '../../ui/card';
-import { MiniBuilding, type BuildingKind } from './MiniBuilding';
+import { MiniBuilding, type BuildingKind, type HotelVisual } from './MiniBuilding';
 import { colorMeta, moneyMeta } from '../../game/meta';
 import { useStore } from '../../../lib/store';
 import { useI18n } from '../../i18n';
@@ -97,6 +97,9 @@ const FAN_OFFSET = 3;
 const FAN = FAN_STEPS * FAN_OFFSET;
 const STACK_W = CARD_W + FAN;
 const STACK_H = CARD_H + FAN;
+/** Buildings occupy a property cell without reaching into a neighbouring set. */
+const BUILDING_FOOTPRINT_SCALE = 0.84;
+const IS_WEB = Platform.OS === 'web';
 const SLOT_GAP = 2;
 const COL = STACK_W + SLOT_GAP;
 const ROW = STACK_H + SLOT_GAP;
@@ -118,6 +121,17 @@ const PILE_H = PROPERTY_GRID_H;
 const SEAT = Math.ceil(Math.hypot(PILE_W, PILE_H));
 /** Clear space between two neighbouring blocks on the ring. */
 const SEAT_GAP = 22;
+/** Pull the ring clear of the screen-edge overlays, such as the activity log. */
+const SEAT_RING_INSET = 0.15;
+
+/**
+ * Give roomy phones a little more table presence without making compact
+ * devices crowded. 390pt is the iPhone 16's logical width; larger screens
+ * cap at a 25% increase rather than growing without limit.
+ */
+function pileScaleForWidth(width: number) {
+    return Math.min(1.25, Math.max(1, 1 + (width - 320) * 0.25 / 70));
+}
 
 // The two piles at the middle of the felt.
 const DECK_W = 30;
@@ -141,7 +155,7 @@ const MAT = ['#4a5893', '#5b6aa6', '#2f3a69'] as const;
 const MARKER_W = 34;
 const MARKER_H = 14;
 /** How far outside the seat ring it rides, clear of everyone's cards. */
-const MARKER_OUT = 42;
+const MARKER_OUT = -60;
 
 /** Timing for the lamp's trip round the ring; instant when motion is off. */
 function animateMarker(target: number, animate: boolean) {
@@ -194,6 +208,7 @@ export function FeltTable({
     onOpenDiscard,
     onDrawTwo,
     debugSeats,
+    hotelVisual = 'hotel',
 }: {
     players: PlayerView[];
     you: string;
@@ -218,6 +233,8 @@ export function FeltTable({
     onDrawTwo?: () => void;
     /** Dev only: outlines each seat box where the felt itself thinks it is. */
     debugSeats?: boolean;
+    /** Optional artwork experiment; gameplay remains a normal hotel. */
+    hotelVisual?: HotelVisual;
 }) {
     const { t } = useI18n();
     const reduced = useReducedMotion();
@@ -258,20 +275,22 @@ export function FeltTable({
      * The centre is the deck and the discard — that is what the table is built
      * around — and every seat block sits on the circumference at the same
      * radius, so no player's cards are nearer the middle than another's. The
-     * ring is an ellipse rather than a circle only because the table is seen
-     * at an angle; the angular spacing is still equal.
+     * ring is a circle, so five equal angles also make five equal sides.
      */
     const field = Math.max(90, cardAreaHeight);
     const centre = { x: size.width / 2, y: field * 0.54 };
+    const pileScale = pileScaleForWidth(size.width);
+    const scaledSeat = SEAT * pileScale;
 
     // The ring is always calculated for five chairs. Empty chairs remain real
-    // positions instead of causing every occupied chair to move.
-    const spread = (SEAT + SEAT_GAP) / (2 * Math.sin(Math.PI / TABLE_SEAT_COUNT));
-    const radiusX = Math.max(spread, (size.width - SEAT) / 2 - 6);
-    // 0.86, not the 0.78 the perspective would suggest: a flatter ring pushed
-    // the two lower-side seats into each other at a full five-player table,
-    // which is the most this game ever seats (`game.MaxPlayers`).
-    const radiusY = Math.min(radiusX * 0.86, centre.y - SEAT / 2 - 4);
+    // positions instead of causing every occupied chair to move. Include the
+    // visual scale here, then pull the ring slightly away from edge overlays.
+    const spread = (scaledSeat + SEAT_GAP) / (2 * Math.sin(Math.PI / TABLE_SEAT_COUNT));
+    const radius = Math.max(spread * (1 - SEAT_RING_INSET), Math.min(
+        (size.width - scaledSeat) / 2 - 6,
+        centre.y - scaledSeat / 2 - 4,
+        field - centre.y - scaledSeat / 2 - 4,
+    ));
 
     /** One fixed chair: permanent anchor, inward turn and transformed bounds. */
     const seatAt = (tableSlot: number) => {
@@ -285,17 +304,27 @@ export function FeltTable({
         const turn = rotation * Math.PI / 180;
         const c = Math.abs(Math.cos(turn));
         const sn = Math.abs(Math.sin(turn));
-        const w = PILE_W * c + PILE_H * sn;
-        const h = PILE_W * sn + PILE_H * c;
+        const w = (PILE_W * c + PILE_H * sn) * pileScale;
+        const h = (PILE_W * sn + PILE_H * c) * pileScale;
 
         return {
-            x: centre.x + Math.cos(angle) * radiusX - w / 2,
-            y: centre.y + Math.sin(angle) * radiusY - h / 2,
+            x: centre.x + Math.cos(angle) * radius - w / 2,
+            y: centre.y + Math.sin(angle) * radius - h / 2,
             w,
             h,
             angle,
             rotation,
         };
+    };
+
+    /** Screen-space centre of a property slot inside a transformed seat pile. */
+    const buildingCentreAt = (slot: number, place: ReturnType<typeof seatAt>, rotation: number, seatScale: number, seatSquash: number) => {
+        const dx = (slot % COLS) * COL + STACK_W / 2 - PILE_W / 2;
+        const dy = Math.floor(slot / COLS) * ROW + STACK_H / 2 - PILE_H / 2;
+        const turn = rotation * Math.PI / 180;
+        const rotatedX = (dx * Math.cos(turn) - dy * Math.sin(turn)) * pileScale * seatScale;
+        const rotatedY = (dx * Math.sin(turn) + dy * Math.cos(turn)) * pileScale * seatScale * seatSquash;
+        return { x: place.w / 2 + rotatedX, y: place.h / 2 + rotatedY };
     };
 
     // The seat rectangles, in felt-local coordinates, for the hit layer the
@@ -400,8 +429,8 @@ export function FeltTable({
         transform: [
             // Outside the seats, not among them: at the seats' own radius the
             // marker sat on top of somebody's cards.
-            { translateX: centre.x + Math.cos(marker.value) * (radiusX + MARKER_OUT) - MARKER_W / 2 },
-            { translateY: centre.y + Math.sin(marker.value) * (radiusY + MARKER_OUT) - MARKER_H / 2 },
+            { translateX: centre.x + Math.cos(marker.value) * (radius + MARKER_OUT) - MARKER_W / 2 },
+            { translateY: centre.y + Math.sin(marker.value) * (radius + MARKER_OUT) - MARKER_H / 2 },
             { scale: 1 + 0.05 * pulse.value },
         ],
     }));
@@ -538,6 +567,7 @@ export function FeltTable({
                     transformOrigin: 'center',
                     transform: [
                         { rotate: `${rotation}deg` },
+                        { scale: pileScale },
                         { scale: seatScale },
                         { scaleY: seatSquash },
                     ],
@@ -570,20 +600,14 @@ export function FeltTable({
                             alignItems: 'center',
                             justifyContent: 'flex-end',
                         }}>
-                            {/* A built set is shown as what was built on it. The
-                                cards are still there in the state; tap the seat
-                                to inspect the complete pile. */}
-                            {built(set) !== 'none' ? (
-                                <View style={styles.buildingScale}>
-                                    <MiniBuilding
-                                        key={built(set)}
-                                        kind={built(set) as 'house' | 'hotel'}
-                                        color={colorMeta(set.color).hex}
-                                        seatRotation={rotation}
-                                        seatSquash={seatSquash}
-                                    />
-                                </View>
-                            ) : set.cards.map((card, i) => <MiniCard key={card.id} color={colorMeta(set.color).hex}
+                            {built(set) !== 'none' ? IS_WEB ? <MiniBuilding
+                                kind={built(set) as 'house' | 'hotel'}
+                                color={colorMeta(set.color).hex}
+                                renderScale={BUILDING_FOOTPRINT_SCALE}
+                                visualScale={BUILDING_FOOTPRINT_SCALE}
+                                seatRotation={rotation}
+                                seatSquash={seatSquash}
+                            /> : null : set.cards.map((card, i) => <MiniCard key={card.id} color={colorMeta(set.color).hex}
                                 left={Math.min(i, FAN_STEPS) * FAN_OFFSET + scatter(card.id, 0, 1)}
                                 top={Math.min(i, FAN_STEPS) * FAN_OFFSET + scatter(card.id, 3, 1)}
                                 rotate={scatter(card.id, 6, 6)}
@@ -597,6 +621,21 @@ export function FeltTable({
                         rotate={scatter(card.id, 6, 6)}
                         fresh={fresh(card.id)} />)}
                 </View>
+                {!IS_WEB && assignedProperties.map((color, slot) => {
+                    const set = color ? setsByColor.get(color) : undefined;
+                    if (!set) return null;
+                    const kind = built(set);
+                    if (kind === 'none') return null;
+                    const displayScale = pileScale * seatScale * BUILDING_FOOTPRINT_SCALE;
+                    return <MiniBuilding
+                        key={`building-${color}`}
+                        kind={kind}
+                        color={colorMeta(set.color).hex}
+                        renderScale={displayScale}
+                        visualScale={displayScale}
+                        anchor={buildingCentreAt(slot, place, rotation, seatScale, seatSquash)}
+                    />;
+                })}
             </View>;
         })}
         </View>
@@ -674,12 +713,6 @@ const styles = StyleSheet.create({
         backgroundColor: '#e6cd7308',
     },
     emptyGuide: { opacity: 0.38 },
-    buildingScale: {
-        alignItems: 'center',
-        justifyContent: 'flex-end',
-        transform: [{ scale: 0.84 }],
-        transformOrigin: 'center bottom',
-    },
     card: { position: 'absolute', width: CARD_W, height: CARD_H, backgroundColor: '#f7f2df', borderWidth: 0.75, borderRadius: 2, overflow: 'hidden', boxShadow: '0px 1px 2px #12173866' },
     value: { fontFamily: uiFont(900), fontSize: 8, lineHeight: 11, color: '#183139', textAlign: 'center' },
     // The two centre piles lie on the table like everything else, so they are

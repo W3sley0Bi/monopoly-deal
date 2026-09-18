@@ -101,13 +101,11 @@ func (c *Client) writePump() {
 // Hub owns every room and connection. One mutex guards all of it; the game
 // logic is cheap and this keeps the state impossible to tear.
 type Hub struct {
-	mu       sync.Mutex
-	rooms    map[string]*Room
-	order    []string
-	clients  map[*Client]struct{}
-	stop     chan struct{}
-	stopped  chan struct{}
-	stopOnce sync.Once
+	mu      sync.Mutex
+	rooms   map[string]*Room
+	order   []string
+	clients map[*Client]struct{}
+	stop    chan struct{}
 	// pending holds direct messages queued while the lock is held.
 	pending []outbound
 }
@@ -117,17 +115,13 @@ func NewHub() *Hub {
 		rooms:   map[string]*Room{},
 		clients: map[*Client]struct{}{},
 		stop:    make(chan struct{}),
-		stopped: make(chan struct{}),
 	}
 	go h.loop()
 	return h
 }
 
-// Close stops the background ticker and waits for its worker to exit.
-func (h *Hub) Close() {
-	h.stopOnce.Do(func() { close(h.stop) })
-	<-h.stopped
-}
+// Close stops the background ticker.
+func (h *Hub) Close() { close(h.stop) }
 
 // outbound is one pending websocket write.
 type outbound struct {
@@ -137,19 +131,15 @@ type outbound struct {
 
 func (h *Hub) loop() {
 	t := time.NewTicker(500 * time.Millisecond)
-	defer func() {
-		t.Stop()
-		close(h.stopped)
-	}()
+	defer t.Stop()
 	for {
 		select {
 		case <-h.stop:
 			return
 		case now := <-t.C:
 			h.mu.Lock()
-			beforeHome := h.homeFingerprintLocked()
+			homeChanged := false
 			var batch []outbound
-			changedRooms := make(map[string]struct{})
 
 			for _, id := range append([]string{}, h.order...) {
 				r := h.rooms[id]
@@ -157,31 +147,42 @@ func (h *Hub) loop() {
 					continue
 				}
 
+				roomChanged := false
+				wasLive := h.roomClientCountLocked(id)
+				wasHash := r.summaryHash
+
 				if r.Game.Tick(now) {
 					r.absorbRequests()
-					changedRooms[id] = struct{}{}
+					roomChanged = true
 				}
 				if h.stepBotsLocked(r, now) {
-					changedRooms[id] = struct{}{}
+					roomChanged = true
 				}
-				if h.roomClientCountLocked(id) == 0 {
+
+				if wasLive == 0 {
 					if r.emptySince.IsZero() {
 						r.emptySince = now
 					} else if now.Sub(r.emptySince) > emptyRoomTTL {
 						h.deleteRoomLocked(id)
-						continue
+						homeChanged = true
+						continue // room deleted
 					}
 				} else {
 					r.emptySince = time.Time{}
 				}
-			}
 
-			for id := range changedRooms {
-				if r := h.rooms[id]; r != nil {
+				if roomChanged {
 					batch = append(batch, h.broadcastRoomLocked(r)...)
 				}
+				
+				newHash := r.computeSummaryHash(wasLive)
+				if newHash != wasHash {
+					r.summaryHash = newHash
+					homeChanged = true
+				}
 			}
-			if beforeHome != h.homeFingerprintLocked() {
+
+			if homeChanged {
 				batch = append(batch, h.broadcastHomeLocked()...)
 			}
 			batch = append(batch, h.flushPendingLocked()...)
@@ -281,7 +282,6 @@ func (h *Hub) HandleConnections(w http.ResponseWriter, r *http.Request) {
 		done:   make(chan struct{}),
 	}
 
-	conn.SetReadLimit(64 << 10)
 	conn.SetReadDeadline(time.Now().Add(pongWait))
 	conn.SetPongHandler(func(string) error {
 		conn.SetReadDeadline(time.Now().Add(pongWait))
@@ -298,18 +298,15 @@ func (h *Hub) HandleConnections(w http.ResponseWriter, r *http.Request) {
 
 	defer func() {
 		h.mu.Lock()
-		beforeHome := h.homeFingerprintLocked()
 		delete(h.clients, c)
 		roomID := c.roomID
 		h.detachLocked(c)
-		batch := h.flushPendingLocked()
+		
+		batch := append(h.flushPendingLocked(), h.broadcastHomeLocked()...)
 		if roomID != "" {
 			if r := h.rooms[roomID]; r != nil {
 				batch = append(batch, h.broadcastRoomLocked(r)...)
 			}
-		}
-		if beforeHome != h.homeFingerprintLocked() {
-			batch = append(batch, h.broadcastHomeLocked()...)
 		}
 		h.mu.Unlock()
 		deliver(batch)
@@ -319,7 +316,6 @@ func (h *Hub) HandleConnections(w http.ResponseWriter, r *http.Request) {
 	for {
 		var msg ClientMessage
 		if err := conn.ReadJSON(&msg); err != nil {
-			// Dropped connections are routine on a phone or a closed laptop.
 			if websocket.IsUnexpectedCloseError(err,
 				websocket.CloseNormalClosure,
 				websocket.CloseGoingAway,
@@ -367,11 +363,6 @@ func (h *Hub) detachLocked(c *Client) {
 
 func (h *Hub) handle(c *Client, msg ClientMessage) {
 	h.mu.Lock()
-	beforeHome := h.homeFingerprintLocked()
-	previousRooms := make(map[*Client]string, len(h.clients))
-	for client := range h.clients {
-		previousRooms[client] = client.roomID
-	}
 
 	if c.playerID == "" && msg.PlayerID != "" {
 		c.playerID = msg.PlayerID
@@ -381,7 +372,7 @@ func (h *Hub) handle(c *Client, msg ClientMessage) {
 	}
 	if c.playerID == "" {
 		h.mu.Unlock()
-		_ = c.send(errorMessage(game.NewFault("err.missing_player_id", "missing player id")))
+		c.send(errorMessage(game.NewFault("err.missing_player_id", "missing player id")))
 		return
 	}
 
@@ -393,59 +384,54 @@ func (h *Hub) handle(c *Client, msg ClientMessage) {
 	switch msg.Type {
 	case MsgHello:
 		// Name and identity are already applied above.
-
 	case MsgCreateRoom:
 		err = h.createRoomLocked(c, msg)
-
 	case MsgJoinRoom:
 		err = h.joinRoomLocked(c, msg)
-
 	case MsgLeaveRoom:
 		h.detachLocked(c)
-
 	case MsgCloseRoom:
 		notice, err = h.closeRoomLocked(c, msg)
-
 	default:
 		err = h.handleRoomLocked(c, msg)
 	}
 
 	var batch []outbound
 	if err == nil {
-		if r := h.rooms[c.roomID]; r != nil {
+		activeRoomID := c.roomID
+		if msg.Type == MsgLeaveRoom || msg.Type == MsgCloseRoom {
+			activeRoomID = oldRoomID
+		}
+
+		if r := h.rooms[activeRoomID]; r != nil {
 			r.Game.PostAction()
 			r.absorbRequests()
 			r.ensureOwner()
 		}
 
-		batch = h.flushPendingLocked()
-		homeChanged := beforeHome != h.homeFingerprintLocked()
-		if homeChanged {
-			batch = append(batch, h.broadcastHomeLocked()...)
+		homeNeedsUpdate := false
+		switch msg.Type {
+		case MsgCreateRoom, MsgCloseRoom, MsgJoinRoom, MsgLeaveRoom:
+			homeNeedsUpdate = true
 		}
 
+		if r := h.rooms[activeRoomID]; r != nil {
+			newHash := r.computeSummaryHash(h.roomClientCountLocked(activeRoomID))
+			if r.summaryHash != newHash {
+				r.summaryHash = newHash
+				homeNeedsUpdate = true
+			}
+		}
+
+		batch = h.flushPendingLocked()
+		if homeNeedsUpdate {
+			batch = append(batch, h.broadcastHomeLocked()...)
+		}
+		
 		if msg.Type == MsgHello {
 			batch = append(batch, h.unicastLocked(c))
-		} else {
-			affected := map[string]struct{}{}
-			if oldRoomID != "" {
-				affected[oldRoomID] = struct{}{}
-			}
-			if c.roomID != "" {
-				affected[c.roomID] = struct{}{}
-			}
-			for id := range affected {
-				if r := h.rooms[id]; r != nil {
-					batch = append(batch, h.broadcastRoomLocked(r)...)
-				}
-			}
-			if !homeChanged {
-				for client, oldID := range previousRooms {
-					if oldID != "" && client.roomID == "" {
-						batch = append(batch, h.unicastLocked(client))
-					}
-				}
-			}
+		} else if r := h.rooms[activeRoomID]; r != nil {
+			batch = append(batch, h.broadcastRoomLocked(r)...)
 		}
 	} else {
 		batch = append(h.flushPendingLocked(), h.unicastLocked(c))
@@ -770,7 +756,7 @@ func (h *Hub) broadcastRoomLocked(r *Room) []outbound {
 func (h *Hub) broadcastHomeLocked() []outbound {
 	home := h.homeRoomsLocked()
 	live := h.roomClientCountsLocked()
-	batch := make([]outbound, 0, len(h.clients))
+	var batch []outbound
 	for c := range h.clients {
 		if c.roomID == "" {
 			rooms := make([]RoomSummary, 0, len(home))
@@ -790,20 +776,6 @@ func (h *Hub) broadcastHomeLocked() []outbound {
 		}
 	}
 	return batch
-}
-
-// homeFingerprintLocked captures exactly the public room-summary data visible
-// to a lobby client. It prevents in-room-only changes (chat, hands, timers)
-// from waking every client on the home screen.
-func (h *Hub) homeFingerprintLocked() string {
-	home := h.homeRoomsLocked()
-	live := h.roomClientCountsLocked()
-	rooms := make([]RoomSummary, 0, len(home))
-	for _, r := range home {
-		rooms = append(rooms, r.summary("", live[r.ID]))
-	}
-	b, _ := json.Marshal(rooms)
-	return string(b)
 }
 
 func (h *Hub) unicastLocked(c *Client) outbound {
@@ -849,8 +821,6 @@ func (h *Hub) homeRoomsLocked() []*Room {
 
 func deliver(batch []outbound) {
 	for _, b := range batch {
-		if err := b.c.send(b.msg); err != nil {
-			b.c.stop()
-		}
+		_ = b.c.send(b.msg)
 	}
 }
