@@ -99,7 +99,7 @@ export default function LobbyScreen() {
 
                 {/* ---- seats ---- */}
                 <Panel style={styles.card}>
-                    <LabelCaps>{t('lobby.players')}</LabelCaps>
+                    <LabelCaps>{t('lobby.players', { seated: g.players.length, total: g.players.length + room.seats_free })}</LabelCaps>
                     {g.players.map((p, i) => (
                         <View key={p.id} style={styles.seat}>
                             <Text style={styles.seatNum}>{i + 1}</Text>

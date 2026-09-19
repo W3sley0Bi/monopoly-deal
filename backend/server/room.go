@@ -29,6 +29,9 @@ type Room struct {
 	// nothing is pending, so the pause starts fresh on the next decision.
 	botAt        time.Time
 	botMoveDelay time.Duration
+	// Copied at creation, like botMoveDelay, so a test changing the default
+	// never races a room that is already running.
+	emptyTTL time.Duration
 
 	// chat is the table's group chat, newest last.
 	chat []ChatMessage
@@ -89,6 +92,7 @@ func newRoom(h *Hub, id, name string) *Room {
 		hub:          h,
 		done:         make(chan struct{}),
 		botMoveDelay: botMoveDelay,
+		emptyTTL:     emptyRoomTTL,
 	}
 	go r.run()
 	return r
@@ -149,8 +153,15 @@ func (r *Room) absorbRequests() {
 
 // ensureOwner keeps ownership with a real participant: a seated player if
 // possible, otherwise a spectator.
+// ensureOwner keeps the host a person who is at the table. Robots never host.
+//
+// A leaver keeps their seat mid-game so they can return, so "seated" is not
+// "here": the host is handed on as soon as they are gone and another person is
+// connected, or the table sat with nobody able to start the next game. With
+// no other person connected the absent host keeps it, and gets it back on
+// return; the table closes on its own if nobody comes.
 func (r *Room) ensureOwner() {
-	if r.OwnerID != "" {
+	if r.OwnerID != "" && r.connected(r.OwnerID) {
 		if r.isSeated(r.OwnerID) {
 			return
 		}
@@ -160,6 +171,22 @@ func (r *Room) ensureOwner() {
 				return
 			}
 		}
+	}
+	for _, p := range r.Game.Players {
+		if !p.Bot && r.connected(p.ID) {
+			r.OwnerID = p.ID
+			return
+		}
+	}
+	for id := range r.spectators {
+		if r.connected(id) {
+			r.OwnerID = id
+			return
+		}
+	}
+	// Nobody else is here: an absent host who still holds a seat keeps it.
+	if r.OwnerID != "" && r.isSeated(r.OwnerID) {
+		return
 	}
 	for _, p := range r.Game.Players {
 		if !p.Bot {
@@ -172,6 +199,15 @@ func (r *Room) ensureOwner() {
 		return
 	}
 	r.OwnerID = ""
+}
+
+func (r *Room) connected(playerID string) bool {
+	for c := range r.clients {
+		if c.playerID == playerID {
+			return true
+		}
+	}
+	return false
 }
 
 func (r *Room) ownerName() string {
@@ -341,7 +377,7 @@ func (r *Room) tick(now time.Time) {
 	if wasLive == 0 {
 		if r.emptySince.IsZero() {
 			r.emptySince = now
-		} else if now.Sub(r.emptySince) > emptyRoomTTL {
+		} else if now.Sub(r.emptySince) > r.emptyTTL {
 			go r.hub.deleteRoom(r.ID) // self-destruct asynchronously to not deadlock
 		}
 	} else {

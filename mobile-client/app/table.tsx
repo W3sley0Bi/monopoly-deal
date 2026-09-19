@@ -1150,7 +1150,7 @@ function TableBody() {
                     return (
                         <>
                             <Text style={styles.sheetStat}>
-                                {t('board.bank')}: ${p.bank_total}M · {t('board.in_hand')}: {p.hand_count}
+                                {t('board.banked', { amount: `$${p.bank_total}M` })} · {t('board.in_hand', { count: p.hand_count })}
                             </Text>
                             <PropertySets sets={p.sets} size="propertyZone" />
                             {p.bank.length ? (

@@ -66,30 +66,6 @@ function interpolate(text: string, params?: Params): string {
 export function makeTranslator(lang: Lang) {
     const catalog = CATALOGS[lang] ?? en;
 
-    /**
-     * Looks a key up in the chosen language, then English, then gives the key
-     * back so a missing string is obvious rather than invisible.
-     *
-     * A `count` parameter picks a plural form: `key.one` / `key.other`.
-     */
-    const t = (key: string, params?: Params): string => {
-        const count = params?.count;
-        if (typeof count === 'number') {
-            const form = `${key}.${count === 1 ? 'one' : 'other'}`;
-            const plural = catalog[form] ?? en[form];
-            if (plural !== undefined) return interpolate(plural, params);
-        }
-        const text = catalog[key] ?? en[key];
-        return text === undefined ? key : interpolate(text, params);
-    };
-
-    const tCard = (card: Pick<Card, 'key' | 'name'>): string => {
-        const text = catalog[card.key] ?? en[card.key];
-        return text ?? card.name;
-    };
-
-    const tColor = (color: Color): string => t(`color.${color}`);
-
     // Log and chat arguments name other keys rather than carrying text, so the
     // whole line resolves in the reader's language.
     const resolve = (key: string, args?: Params): Params | undefined => {
@@ -99,9 +75,15 @@ export function makeTranslator(lang: Lang) {
             if (typeof value === 'string' && (name === 'card' || name === 'gave' || name === 'got')) {
                 out[name] = catalog[value] ?? en[value] ?? value;
             } else if (typeof value === 'string' && name === 'color') {
-                out[name] = t(`color.${value}`);
+                const colorKey = `color.${value}`;
+                out[name] = (catalog[colorKey] !== undefined || en[colorKey] !== undefined)
+                    ? (catalog[colorKey] ?? en[colorKey])
+                    : value;
             } else if (typeof value === 'string' && name === 'mode') {
-                out[name] = t(`mode.${value}`);
+                const modeKey = `mode.${value}`;
+                out[name] = (catalog[modeKey] !== undefined || en[modeKey] !== undefined)
+                    ? (catalog[modeKey] ?? en[modeKey])
+                    : value;
             } else if (name === 'label' && typeof value === 'string') {
                 out[name] = t(value, resolve(value, args.label_args as Params | undefined));
             } else {
@@ -112,6 +94,31 @@ export function makeTranslator(lang: Lang) {
         if (key.endsWith('paid') && typeof args.cards === 'number') out.count = args.cards;
         return out;
     };
+
+    /**
+     * Looks a key up in the chosen language, then English, then gives the key
+     * back so a missing string is obvious rather than invisible.
+     *
+     * A `count` parameter picks a plural form: `key.one` / `key.other`.
+     */
+    const t = (key: string, params?: Params): string => {
+        const resolved = resolve(key, params);
+        const count = resolved?.count;
+        if (typeof count === 'number') {
+            const form = `${key}.${count === 1 ? 'one' : 'other'}`;
+            const plural = catalog[form] ?? en[form];
+            if (plural !== undefined) return interpolate(plural, resolved);
+        }
+        const text = catalog[key] ?? en[key];
+        return text === undefined ? key : interpolate(text, resolved);
+    };
+
+    const tCard = (card: Pick<Card, 'key' | 'name'>): string => {
+        const text = catalog[card.key] ?? en[card.key];
+        return text ?? card.name;
+    };
+
+    const tColor = (color: Color): string => t(`color.${color}`);
 
     const tLog = (entry: LogEntry): string => t(entry.key, resolve(entry.key, entry.args as Params));
 

@@ -18,7 +18,8 @@ var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool { return true }, // local network play
 }
 
-const emptyRoomTTL = 90 * time.Second
+// A var so tests can shorten it.
+var emptyRoomTTL = 60 * time.Second
 
 var botMoveDelay = 1100 * time.Millisecond
 
@@ -619,6 +620,9 @@ func (h *Hub) joinRoomLocked(c *Client, msg ClientMessage) error {
 		if err != nil {
 			_ = c.send(errorMessage(err))
 		}
+		// Someone arriving at a table whose host has gone takes it over now,
+		// not only after the next move.
+		r.ensureOwner()
 		r.broadcast()
 	})
 	return nil

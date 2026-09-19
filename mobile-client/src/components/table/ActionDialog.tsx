@@ -258,7 +258,7 @@ export function ActionDialog({
                         })}
                     </View>
                     <Text style={styles.hint}>
-                        {t('dialog.plays_used', { need: playsNeeded, have: game.plays_left })}
+                        {t('dialog.plays_used', { needed: playsNeeded, left: game.plays_left })}
                     </Text>
                     {notEnoughPlays ? <Text style={styles.warn}>{t('dialog.not_enough_plays')}</Text> : null}
                 </>
@@ -267,7 +267,7 @@ export function ActionDialog({
             {/* ---- their board, for a steal or a swap ---- */}
             {needsTakeCard && victim ? (
                 <>
-                    <LabelCaps>{t('dialog.their_properties')}</LabelCaps>
+                    <LabelCaps>{t('dialog.their_properties', { name: victim.name })}</LabelCaps>
                     {stealableCards(victim).length ? (
                         <PropertySets
                             sets={victim.sets}
