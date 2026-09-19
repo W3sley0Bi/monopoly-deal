@@ -124,6 +124,15 @@ export function useGameConnection(
     // getInitialURL() let a fast socket open before it and skip the rejoin.
     const rejoin = useRef<string | null>(initialRoomId);
     const roomHeld = useRef(false);
+    // True from a fresh socket opening with a table to return to until the
+    // server answers the rejoin. The server greets every new socket with a
+    // `home` frame before our `join_room` lands; read as an eviction, that
+    // greeting dropped the table and cleared the rejoin, so a player who
+    // stepped out for two seconds came back to the home screen.
+    const resuming = useRef(false);
+    // Bumped per socket: the hello/rejoin effect keys on it, so a reconnect
+    // is never missed because React batched `connecting` and `open`.
+    const [openCount, setOpenCount] = useState(0);
 
     const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const clearNoticeLater = useCallback(() => {
@@ -145,6 +154,9 @@ export function useGameConnection(
                     setIncompatible(null);
                 }
                 setHome(msg.payload);
+                // The new socket's greeting, not an eviction: keep showing the
+                // table until the rejoin is answered.
+                if (resuming.current) return;
                 // A home frame while a room is held means eviction — the
                 // server ejected us; clear the rejoin. A home frame while
                 // already homeless is just the lobby list and must NOT
@@ -162,6 +174,7 @@ export function useGameConnection(
             }
 
             if (msg.type === 'room') {
+                resuming.current = false;
                 roomHeld.current = true;
                 setRoom(msg.payload);
                 setSkewMs(msg.payload.game.now_ms - Date.now());
@@ -177,6 +190,12 @@ export function useGameConnection(
                 if (msg.error_key === 'err.no_such_table') {
                     rejoin.current = null;
                     persistRoomId(null);
+                    // The table closed while we were away: now it is gone.
+                    if (resuming.current) {
+                        resuming.current = false;
+                        roomHeld.current = false;
+                        setRoom(null);
+                    }
                 }
                 setNotice({ key: msg.error_key, args: msg.error_args, text: msg.error, kind: 'error' });
                 clearNoticeLater();
@@ -196,6 +215,10 @@ export function useGameConnection(
         onMessage,
         {
             queueLimit: 50,
+            onOpen: () => {
+                resuming.current = rejoin.current !== null;
+                setOpenCount((n) => n + 1);
+            },
             dropOnReconnect: (msg) => STALE_ON_RECONNECT.has(msg.type),
             onDropped: (msgs) => {
                 // A lost `hello` is routine; only a lost move is worth saying.
@@ -225,15 +248,17 @@ export function useGameConnection(
     useEffect(() => {
         if (status !== 'open' || !name) return;
         // Guard against re-sending hello/join on every render while open —
-        // only once per open transition (keyed by name, which is stable
-        // once set for the session).
-        if (lastOpenedFor.current === name) return;
-        lastOpenedFor.current = name;
+        // only once per socket and name.
+        const key = `${openCount}:${name}`;
+        if (lastOpenedFor.current === key) return;
+        lastOpenedFor.current = key;
         send({ type: 'hello', player_name: name });
         if (rejoin.current) {
             send({ type: 'join_room', room_id: rejoin.current });
+        } else {
+            resuming.current = false;
         }
-    }, [status, name, send]);
+    }, [status, name, send, openCount]);
 
     useEffect(() => {
         if (status !== 'open') lastOpenedFor.current = null;
@@ -274,6 +299,7 @@ export function useGameConnection(
     const leave = useCallback(() => {
         send({ type: 'leave_room' });
         rejoin.current = null;
+        resuming.current = false;
         persistRoomId(null);
     }, [send, persistRoomId]);
 

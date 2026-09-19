@@ -29,6 +29,10 @@ export interface UseJsonSocketOptions<Out> {
     /** Told what was discarded — by the cap or on replay — so the player can
      *  be warned that a move they made never reached the table. */
     onDropped?: (msgs: Out[]) => void;
+    /** Called once per socket, on open, before any of its frames are
+     *  dispatched — the one moment a caller can tell a new connection apart
+     *  from more frames on the old one. */
+    onOpen?: () => void;
 }
 
 export function useJsonSocket<In, Out>(
@@ -103,6 +107,7 @@ export function useJsonSocket<In, Out>(
             ws.onopen = () => {
                 clearConnectWatchdog();
                 attempt = 0;
+                opts.current?.onOpen?.();
                 setStatus('open');
                 // Drain the whole queue in FIFO order, swapped to [] first so
                 // anything sent while draining doesn't get dropped or re-sent.

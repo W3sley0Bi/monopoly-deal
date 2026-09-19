@@ -506,6 +506,20 @@ function justSayNoBench(youId: string, youName: string): RoomView {
     return room(youId, game, 'Dev · Just Say No scenario');
 }
 
+/** Two sets down and the third one card short, with that card in hand — so
+ *  the move from a live table to the end-of-game screen can be watched. */
+function oneFromWinBench(youId: string, youName: string): RoomView {
+    const table = passGoBench(youId, youName);
+    const [you, otto] = table.game.players;
+    const nearly = {
+        ...you,
+        sets: [set('pink', 3), set('yellow', 3), set('green', 2)],
+        complete_sets: 2,
+        hand: [property('green', 2), money(1)],
+        hand_count: 2,
+    };
+    return { ...table, name: 'Dev · one from winning', game: { ...table.game, id: 'DEV_WIN', players: [nearly, otto] } };
+}
 
 export const FIXTURES: Fixture[] = [
     {
@@ -537,5 +551,11 @@ export const FIXTURES: Fixture[] = [
         label: 'Two players · pass go',
         blurb: 'Three Pass Go against three plays, for the deck prompt',
         build: passGoBench,
+    },
+    {
+        id: 'onefromwin',
+        label: 'Two players · one play from winning',
+        blurb: 'Play the green in hand to finish the game',
+        build: oneFromWinBench,
     },
 ];

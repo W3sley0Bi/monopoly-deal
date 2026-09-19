@@ -56,14 +56,20 @@ export function applyDevMove(room: RoomView, msg: Omit<ClientMessage, 'player_id
     const you = room.you;
 
     switch (msg.type) {
-        case 'play_property':
-            return retotal(room, you, (p) => {
+        case 'play_property': {
+            const next = retotal(room, you, (p) => {
                 const card = take(p, msg.card_id);
                 if (!card || !msg.color) return;
                 const set = p.sets.find(s => s.color === msg.color);
                 if (set) set.cards.push(card);
                 else p.sets.push({ color: msg.color, cards: [card], buildings: [], size: 3, complete: false, rent: 0 });
             });
+            // The one rule kept: a third set ends the game, so the end-of-game
+            // screen can be reached from a live table rather than only faked.
+            const me = next.game.players.find(p => p.id === you);
+            if (!me || me.complete_sets < 3) return next;
+            return { ...next, game: { ...next.game, state: 'finished', winner_id: you, pending: null, deadline_ms: 0 } };
+        }
 
         case 'play_bank':
             return retotal(room, you, (p) => {
