@@ -374,6 +374,36 @@ function TableBody() {
                 : 'target'
           : 'bystander';
 
+    const stakeGive = useMemo(() => {
+        if (!pending) return null;
+        if (pending.give_card_id) {
+            const instigator = g.players.find((p) => p.id === pending.by_id);
+            if (instigator) {
+                for (const s of instigator.sets) {
+                    const c = s.cards.find((x) => x.id === pending.give_card_id);
+                    if (c) return c;
+                }
+            }
+        }
+        return null;
+    }, [pending, g.players]);
+
+    const stakeTake = useMemo(() => {
+        if (!pending) return null;
+        const targetPlayer = g.players.find((p) => p.id === pending.target_player_id);
+        if (!targetPlayer) return null;
+        if (pending.kind === 'deal_breaker' && pending.target_color) {
+            return targetPlayer.sets.find((s) => s.color === pending.target_color && s.complete) ?? null;
+        }
+        if (pending.target_card_id) {
+            for (const s of targetPlayer.sets) {
+                const c = s.cards.find((x) => x.id === pending.target_card_id);
+                if (c) return c;
+            }
+        }
+        return null;
+    }, [pending, g.players]);
+
     const lastEvent = [...g.log].reverse().find((e) => e.key !== 'log.turn' && e.key !== 'log.tutorial_lesson');
     const eventText = lastEvent ? tLog(lastEvent) : t('table.shared_space');
     // Entries carry no id, and the log is capped, so its length alone can stall.
@@ -1122,6 +1152,8 @@ function TableBody() {
                     role={role}
                     myTarget={target ?? null}
                     payableCards={role === 'payer' ? payable : undefined}
+                    stakeGive={stakeGive}
+                    stakeTake={stakeTake}
                     you={room.you}
                     players={g.players}
                     youHasJsn={room.game.players.find(p => p.id === room.you)?.has_just_say_no ?? false}

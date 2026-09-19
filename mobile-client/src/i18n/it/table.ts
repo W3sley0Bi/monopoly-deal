@@ -193,6 +193,13 @@ const table: Catalog = {
     'dialog.nothing_stealable': 'Niente da prendere — ogni proprietà è in una serie completa.',
     'dialog.your_give': 'La tua proprietà da cedere',
     'dialog.nothing_to_give': 'Non hai nessuna proprietà fuori da una serie completa.',
+    'dialog.trade_preview': 'Anteprima scambio',
+    'dialog.you_give': 'Tu cedi',
+    'dialog.you_get': 'Tu ricevi',
+    'dialog.set_synergy_complete': 'Completa la tua serie!',
+    'dialog.set_synergy_progress': 'La tua serie: {current}/{total} → {next}/{total}',
+    'dialog.set_synergy_new': 'Inizia una nuova serie {color}',
+    'dialog.complete_set_details': '{count} carte · {rent} rendita',
 
     'dialog.no_choices': 'Questa carta non ha altre scelte.',
 
@@ -223,6 +230,9 @@ const table: Catalog = {
     'pending.ui.stake_lose': 'Questa te la portano via',
     'pending.ui.stake_lose_set': 'Si prendono tutta questa serie',
     'pending.ui.stake_gain': 'Questa la ricevi tu',
+    'pending.ui.targeted_property': 'Proprietà presa di mira',
+    'pending.ui.targeted_set': 'Serie completa presa di mira',
+    'pending.ui.swap_preview': 'Anteprima scambio',
     'pending.ui.allow_it': 'Lasciala passare',
 
     'pending.ui.you_owe': 'Devi {amount}',

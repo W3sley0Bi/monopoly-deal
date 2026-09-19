@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { PendingPanelProps } from '../../../lib/contracts';
+import type { Card as CardT, SetView } from '../../types';
 import { brand, ink, line, radius, status } from '../../../lib/theme';
 import { colorMeta } from '../../game/meta';
 import { Btn, LabelCaps, Modal } from '../../ui/kit';
@@ -23,6 +24,8 @@ export function PendingPanel({
     role,
     myTarget,
     payableCards,
+    stakeGive,
+    stakeTake,
     you,
     players = [],
     deadlineMs = 0,
@@ -36,6 +39,9 @@ export function PendingPanel({
 }: PendingPanelProps) {
     const { t, tCard, tColor } = useI18n();
     const [picked, setPicked] = useState<string[]>([]);
+
+    const isSet = (x: unknown): x is SetView => !!x && typeof x === 'object' && 'cards' in x;
+    const isCard = (x: unknown): x is CardT => !!x && typeof x === 'object' && 'type' in x;
 
     const playerName = (id: string) => {
         if (id === you) return t('common.you');
@@ -131,6 +137,127 @@ export function PendingPanel({
                     ) : null}
                 </View>
             </View>
+
+            {/* ---- Stakes / Steal or Swap details ---- */}
+            {stakeTake || stakeGive ? (
+                <View style={styles.stakeSection}>
+                    {pending.kind === 'deal_breaker' && isSet(stakeTake) ? (
+                        <>
+                            <LabelCaps>
+                                {role === 'target'
+                                    ? t('pending.ui.stake_lose_set')
+                                    : t('pending.ui.targeted_set')}
+                            </LabelCaps>
+                            <View style={styles.stakeSetBox}>
+                                <View style={styles.stakeSetHeader}>
+                                    <View
+                                        style={[
+                                            styles.swatchDot,
+                                            { backgroundColor: colorMeta(stakeTake.color).hex },
+                                        ]}
+                                    />
+                                    <Text style={styles.stakeSetTitle}>
+                                        {tColor(stakeTake.color).toUpperCase()}
+                                    </Text>
+                                    <Text style={styles.stakeSetRent}>${stakeTake.rent}M</Text>
+                                    {stakeTake.buildings.length ? (
+                                        <View style={styles.buildingBadgeRow}>
+                                            {stakeTake.buildings.map((b) => (
+                                                <Text key={b.id} style={styles.buildingIcon}>
+                                                    {b.action === 'hotel' ? '▥' : '⌂'}
+                                                </Text>
+                                            ))}
+                                        </View>
+                                    ) : null}
+                                </View>
+                                <View style={styles.stakeSetCardsRow}>
+                                    {stakeTake.cards.map((c, i) => (
+                                        <View key={c.id} style={i > 0 ? styles.setCardOverlap : undefined}>
+                                            <Card card={c} size="dense" activeColor={stakeTake.color} />
+                                        </View>
+                                    ))}
+                                </View>
+                            </View>
+                        </>
+                    ) : pending.kind === 'sly_deal' && isCard(stakeTake) ? (
+                        <>
+                            <LabelCaps>
+                                {role === 'target'
+                                    ? t('pending.ui.stake_lose')
+                                    : t('pending.ui.targeted_property')}
+                            </LabelCaps>
+                            <View style={styles.stakeCardBox}>
+                                <Card card={stakeTake} size="xs" pickTone="take" />
+                                <View style={styles.stakeCardInfo}>
+                                    <Text style={styles.stakeCardName}>{tCard(stakeTake)}</Text>
+                                    <Text style={styles.stakeCardMeta}>
+                                        {stakeTake.colors?.length ? tColor(stakeTake.colors[0]) : ''} · ${stakeTake.value}M
+                                    </Text>
+                                </View>
+                            </View>
+                        </>
+                    ) : pending.kind === 'forced_deal' ? (
+                        <>
+                            <LabelCaps>{t('pending.ui.swap_preview')}</LabelCaps>
+                            <View style={styles.tradeRow}>
+                                <View style={[styles.tradeColumn, styles.tradeColumnGive]}>
+                                    <Text style={styles.tradeRoleGive}>
+                                        {role === 'target'
+                                            ? t('pending.ui.stake_lose').toUpperCase()
+                                            : t('dialog.you_give').toUpperCase()}
+                                    </Text>
+                                    {isCard(role === 'target' ? stakeTake : stakeGive) ? (
+                                        <View style={styles.tradeCardRow}>
+                                            <Card
+                                                card={(role === 'target' ? stakeTake : stakeGive) as CardT}
+                                                size="xs"
+                                                pickTone="give"
+                                            />
+                                            <View style={styles.tradeCardInfo}>
+                                                <Text style={styles.tradeCardName} numberOfLines={1}>
+                                                    {tCard((role === 'target' ? stakeTake : stakeGive) as CardT)}
+                                                </Text>
+                                                <Text style={styles.tradeCardDetail}>
+                                                    ${((role === 'target' ? stakeTake : stakeGive) as CardT).value}M
+                                                </Text>
+                                            </View>
+                                        </View>
+                                    ) : null}
+                                </View>
+
+                                <View style={styles.swapIconContainer}>
+                                    <Text style={styles.swapArrow}>⇄</Text>
+                                </View>
+
+                                <View style={[styles.tradeColumn, styles.tradeColumnTake]}>
+                                    <Text style={styles.tradeRoleTake}>
+                                        {role === 'target'
+                                            ? t('pending.ui.stake_gain').toUpperCase()
+                                            : t('dialog.you_get').toUpperCase()}
+                                    </Text>
+                                    {isCard(role === 'target' ? stakeGive : stakeTake) ? (
+                                        <View style={styles.tradeCardRow}>
+                                            <Card
+                                                card={(role === 'target' ? stakeGive : stakeTake) as CardT}
+                                                size="xs"
+                                                pickTone="take"
+                                            />
+                                            <View style={styles.tradeCardInfo}>
+                                                <Text style={styles.tradeCardName} numberOfLines={1}>
+                                                    {tCard((role === 'target' ? stakeGive : stakeTake) as CardT)}
+                                                </Text>
+                                                <Text style={styles.tradeCardDetail}>
+                                                    ${((role === 'target' ? stakeGive : stakeTake) as CardT).value}M
+                                                </Text>
+                                            </View>
+                                        </View>
+                                    ) : null}
+                                </View>
+                            </View>
+                        </>
+                    ) : null}
+                </View>
+            ) : null}
 
             {/* ---- bystander: who still owes what ---- */}
             {role === 'bystander' ? (
@@ -279,6 +406,122 @@ const styles = StyleSheet.create({
     warn: { fontFamily: uiFont(700), fontSize: 12, color: status.give },
     actions: { flexDirection: 'row', gap: 8, marginTop: 6 },
     flex: { flex: 1 },
+
+    // Stakes display
+    stakeSection: { gap: 6, marginVertical: 4 },
+    stakeCardBox: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        padding: 8,
+        borderRadius: radius.md,
+        borderWidth: 1,
+        borderColor: '#63ea894d',
+        backgroundColor: '#63ea890d',
+    },
+    stakeCardInfo: { flex: 1, gap: 2 },
+    stakeCardName: { fontFamily: uiFont(800), fontSize: 12, color: ink.body },
+    stakeCardMeta: { fontFamily: uiFont(700), fontSize: 11, color: ink.muted60 },
+    stakeSetBox: {
+        padding: 10,
+        borderRadius: radius.md,
+        backgroundColor: '#ffffff0a',
+        borderWidth: 1,
+        borderColor: brand.brass,
+        gap: 8,
+    },
+    stakeSetHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+    },
+    swatchDot: { width: 20, height: 5, borderRadius: radius.xs },
+    stakeSetTitle: { fontFamily: uiFont(800), fontSize: 12, color: brand.brass },
+    stakeSetRent: {
+        fontFamily: uiFont(700),
+        fontSize: 11,
+        color: '#74e8bd',
+        marginLeft: 'auto',
+    },
+    buildingBadgeRow: {
+        flexDirection: 'row',
+        gap: 4,
+        alignItems: 'center',
+    },
+    buildingIcon: {
+        fontFamily: uiFont(700),
+        fontSize: 12,
+        color: brand.brass,
+    },
+    stakeSetCardsRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    setCardOverlap: {
+        marginLeft: -24,
+    },
+    tradeRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+    },
+    tradeColumn: {
+        flex: 1,
+        padding: 8,
+        borderRadius: radius.sm,
+        borderWidth: 1,
+        minHeight: 80,
+        justifyContent: 'center',
+    },
+    tradeColumnGive: {
+        borderColor: '#fad03e4d',
+        backgroundColor: '#fad03e0a',
+    },
+    tradeColumnTake: {
+        borderColor: '#63ea894d',
+        backgroundColor: '#63ea890a',
+    },
+    tradeRoleGive: {
+        fontFamily: uiFont(800),
+        fontSize: 10,
+        color: status.give,
+        marginBottom: 4,
+    },
+    tradeRoleTake: {
+        fontFamily: uiFont(800),
+        fontSize: 10,
+        color: status.take,
+        marginBottom: 4,
+    },
+    tradeCardRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    tradeCardInfo: {
+        flex: 1,
+        gap: 2,
+    },
+    tradeCardName: {
+        fontFamily: uiFont(800),
+        fontSize: 11,
+        color: ink.body,
+    },
+    tradeCardDetail: {
+        fontFamily: uiFont(700),
+        fontSize: 10,
+        color: ink.muted60,
+    },
+    swapIconContainer: {
+        width: 24,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    swapArrow: {
+        fontFamily: uiFont(800),
+        fontSize: 18,
+        color: ink.cream,
+    },
 });
 
 export default PendingPanel;

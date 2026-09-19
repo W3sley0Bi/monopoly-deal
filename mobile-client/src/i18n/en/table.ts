@@ -193,6 +193,13 @@ const table: Catalog = {
     'dialog.nothing_stealable': 'Nothing available — every property is in a complete set.',
     'dialog.your_give': 'Your property to give away',
     'dialog.nothing_to_give': 'You have no property outside a complete set.',
+    'dialog.trade_preview': 'Swap preview',
+    'dialog.you_give': 'You give',
+    'dialog.you_get': 'You receive',
+    'dialog.set_synergy_complete': 'Completes your set!',
+    'dialog.set_synergy_progress': 'Your set: {current}/{total} → {next}/{total}',
+    'dialog.set_synergy_new': 'Starts a new {color} set',
+    'dialog.complete_set_details': '{count} cards · {rent} rent',
 
     'dialog.no_choices': 'This card has no extra choices.',
 
@@ -223,6 +230,9 @@ const table: Catalog = {
     'pending.ui.stake_lose': 'They take this from you',
     'pending.ui.stake_lose_set': 'They take this whole set',
     'pending.ui.stake_gain': 'You get this back',
+    'pending.ui.targeted_property': 'Targeted property',
+    'pending.ui.targeted_set': 'Targeted complete set',
+    'pending.ui.swap_preview': 'Trade preview',
     'pending.ui.allow_it': 'Allow it',
 
     'pending.ui.you_owe': 'You owe {amount}',

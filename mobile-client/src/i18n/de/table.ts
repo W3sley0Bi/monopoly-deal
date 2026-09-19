@@ -193,6 +193,13 @@ const table: Catalog = {
     'dialog.nothing_stealable': 'Nichts verfügbar — jede Immobilie steckt in einem vollständigen Satz.',
     'dialog.your_give': 'Deine Immobilie zum Hergeben',
     'dialog.nothing_to_give': 'Du hast keine Immobilie außerhalb eines vollständigen Satzes.',
+    'dialog.trade_preview': 'Tausch-Vorschau',
+    'dialog.you_give': 'Du gibst',
+    'dialog.you_get': 'Du erhältst',
+    'dialog.set_synergy_complete': 'Vervollständigt deinen Satz!',
+    'dialog.set_synergy_progress': 'Dein Satz: {current}/{total} → {next}/{total}',
+    'dialog.set_synergy_new': 'Startet einen neuen {color}-Satz',
+    'dialog.complete_set_details': '{count} Karten · {rent} Miete',
 
     'dialog.no_choices': 'Diese Karte hat keine weiteren Optionen.',
 
@@ -223,6 +230,9 @@ const table: Catalog = {
     'pending.ui.stake_lose': 'Das nehmen sie dir weg',
     'pending.ui.stake_lose_set': 'Sie nehmen diesen ganzen Satz',
     'pending.ui.stake_gain': 'Das bekommst du dafür',
+    'pending.ui.targeted_property': 'Anvisierte Immobilie',
+    'pending.ui.targeted_set': 'Anvisierter vollständiger Satz',
+    'pending.ui.swap_preview': 'Tausch-Vorschau',
     'pending.ui.allow_it': 'Zulassen',
 
     'pending.ui.you_owe': 'Du schuldest {amount}',

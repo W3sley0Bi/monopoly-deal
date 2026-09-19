@@ -193,6 +193,13 @@ const table: Catalog = {
     'dialog.nothing_stealable': 'Rien de disponible — chaque propriété fait partie d’un groupe complet.',
     'dialog.your_give': 'Votre propriété à donner',
     'dialog.nothing_to_give': 'Vous n’avez aucune propriété hors d’un groupe complet.',
+    'dialog.trade_preview': 'Aperçu de l’échange',
+    'dialog.you_give': 'Vous donnez',
+    'dialog.you_get': 'Vous recevez',
+    'dialog.set_synergy_complete': 'Complète votre groupe !',
+    'dialog.set_synergy_progress': 'Votre groupe : {current}/{total} → {next}/{total}',
+    'dialog.set_synergy_new': 'Commence un nouveau groupe {color}',
+    'dialog.complete_set_details': '{count} cartes · {rent} loyer',
 
     'dialog.no_choices': 'Cette carte ne propose aucun choix supplémentaire.',
 
@@ -223,6 +230,9 @@ const table: Catalog = {
     'pending.ui.stake_lose': 'On vous prend ceci',
     'pending.ui.stake_lose_set': 'On vous prend tout ce groupe',
     'pending.ui.stake_gain': 'Vous recevez ceci en retour',
+    'pending.ui.targeted_property': 'Propriété ciblée',
+    'pending.ui.targeted_set': 'Groupe complet ciblé',
+    'pending.ui.swap_preview': 'Aperçu de l’échange',
     'pending.ui.allow_it': 'Accepter',
 
     'pending.ui.you_owe': 'Vous devez {amount}',

@@ -88,4 +88,59 @@ describe('<PendingPanel />', () => {
         expect(getByText("Alice played It's My Birthday.")).toBeTruthy();
         expect(queryByText('p_instigator_1')).toBeNull();
     });
+
+    it('renders targeted property stake for sly deal', async () => {
+        const slyCard: Card = {
+            id: 'c_sly',
+            key: 'action.sly_deal',
+            type: 'action',
+            action: 'sly_deal',
+            name: 'Sly Deal',
+            value: 3,
+        };
+        const propCard: Card = {
+            id: 'c_prop',
+            key: 'property.boardwalk',
+            type: 'property',
+            name: 'Boardwalk',
+            value: 4,
+            colors: ['blue'],
+        };
+        const slyPending: Pending = {
+            kind: 'sly_deal',
+            action: 'sly_deal',
+            card: slyCard,
+            by_id: 'p_instigator_1',
+            target_player_id: 'p_victim_4324234',
+            target_card_id: 'c_prop',
+            target_color: 'blue',
+            label_key: 'pending.sly_deal',
+            targets: [{
+                player_id: 'p_victim_4324234',
+                amount: 0,
+                responder: 'p_victim_4324234',
+                cancelled: false,
+                settled: false,
+            }],
+        };
+
+        const { getByText, getAllByText } = await render(
+            <I18nProvider>
+                <PendingPanel
+                    pending={slyPending}
+                    role="target"
+                    myTarget={slyPending.targets![0]}
+                    stakeTake={propCard}
+                    you="p_victim_4324234"
+                    players={players}
+                    skewMs={0}
+                    onRespond={() => {}}
+                />
+            </I18nProvider>,
+        );
+
+        expect(getByText('They take this from you')).toBeTruthy();
+        expect(getAllByText('Boardwalk').length).toBeGreaterThanOrEqual(1);
+        expect(getByText(/Blue · \$4M/)).toBeTruthy();
+    });
 });
