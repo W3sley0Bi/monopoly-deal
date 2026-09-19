@@ -4,7 +4,9 @@ import {
     FLAT_CAMERA,
     PROPERTY_SLOT_COUNT,
     TILTED_CAMERA,
+    fitFlatRing,
     fitTiltedRing,
+    flatSeatCorners,
     projectFelt,
     reconcilePropertySlots,
     tableSeatSlots,
@@ -124,5 +126,44 @@ describe('tilted felt', () => {
         const base = { margin: 10, minRadius: (scale: number) => 120 * scale, ...pile, pileScale: 2.6, chip, chipGap: 10, chipSlots: [1, 2, 3, 4] };
         expect(fitTiltedRing({ ...base, width: 1920, height: 560 }).chipLean.y).toBeLessThan(0.5);
         expect(fitTiltedRing({ ...base, width: 800, height: 760 }).chipLean.x).toBeLessThan(0.5);
+    });
+});
+
+describe('flat ring fit', () => {
+    const PILE = { pileW: 104, pileH: 66 };
+    const ringFor = (width: number, height: number) => {
+        const centre = { x: width / 2, y: height * 0.54 };
+        const mat = { left: -width * 0.15, top: 4, width: width * 1.3, height: Math.max(150, height * 1.62), radius: width * 0.65 };
+        const seat = Math.hypot(PILE.pileW, PILE.pileH);
+        const fit = fitFlatRing({
+            width, height, centre, mat, margin: 6, ...PILE,
+            pileScale: 1.2,
+            minPileScale: 0.72,
+            minRadius: (s) => (seat * s + 22) / (2 * Math.sin(Math.PI / 5)) * 0.85,
+            maxRadius: (s) => Math.min((width - seat * s) / 2 - 6, centre.y - seat * s / 2 - 4, height - centre.y - seat * s / 2 - 4),
+        });
+        return { fit, centre, mat };
+    };
+
+    it('keeps every seat corner inside the field on phone-sized felts', () => {
+        for (const [width, height] of [[360, 320], [390, 360], [435, 400], [320, 300]]) {
+            const { fit, centre } = ringFor(width, height);
+            expect(fit.fits).toBe(true);
+            for (let slot = 0; slot < 5; slot++) {
+                for (const p of flatSeatCorners(slot, fit.radius, centre, { ...PILE, pileScale: fit.pileScale })) {
+                    expect(p.x).toBeGreaterThanOrEqual(6);
+                    expect(p.x).toBeLessThanOrEqual(width - 6);
+                    expect(p.y).toBeGreaterThanOrEqual(6);
+                    expect(p.y).toBeLessThanOrEqual(height - 6);
+                }
+            }
+        }
+    });
+
+    it('shrinks the piles on a short field instead of spilling past it', () => {
+        const roomy = ringFor(390, 420).fit;
+        const short = ringFor(390, 280).fit;
+        expect(short.pileScale).toBeLessThan(roomy.pileScale);
+        expect(short.fits).toBe(true);
     });
 });

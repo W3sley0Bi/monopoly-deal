@@ -330,3 +330,86 @@ function fitTiltedRingAt(o: {
         bounds: b,
     };
 }
+
+/**
+ * The phone's flat mat, as drawn: a rounded rectangle wider than the screen
+ * whose corner radius the renderer clamps to half its shorter side — so its
+ * top and bottom are arcs, and its sides run off the screen.
+ */
+export interface FlatMat { left: number; top: number; width: number; height: number; radius: number }
+
+function insideMat(x: number, y: number, mat: FlatMat, inset: number) {
+    const r = Math.min(mat.radius, mat.width / 2, mat.height / 2);
+    const cx = Math.min(Math.max(x, mat.left + r), mat.left + mat.width - r);
+    const cy = Math.min(Math.max(y, mat.top + r), mat.top + mat.height - r);
+    return Math.hypot(x - cx, y - cy) <= r - inset;
+}
+
+/** The four corners of a seat pile on the flat ring, rotated with its chair. */
+export function flatSeatCorners(tableSlot: number, radius: number, centre: { x: number; y: number }, o: {
+    pileW: number; pileH: number; pileScale: number;
+}) {
+    const angle = seatAngle(tableSlot);
+    const turn = angle - Math.PI / 2;
+    const cos = Math.cos(turn);
+    const sin = Math.sin(turn);
+    const cx = centre.x + Math.cos(angle) * radius;
+    const cy = centre.y + Math.sin(angle) * radius;
+    const hw = o.pileW * o.pileScale / 2;
+    const hh = o.pileH * o.pileScale / 2;
+    return [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]].map(([dx, dy]) => ({
+        x: cx + dx * cos - dy * sin,
+        y: cy + dx * sin + dy * cos,
+    }));
+}
+
+/**
+ * The flat ring's size, so every chair sits on the table and inside the felt's
+ * own box — the rail of opponent chips starts right where that box ends, so a
+ * seat that spilled above it slid its cards under the chips.
+ *
+ * Before this the ring only had a floor: the radius at which neighbours stop
+ * overlapping. On a short field that floor won and the ring overflowed. Now
+ * the piles shrink instead, the same trade the tilted ring makes, and only
+ * past `minPileScale` is an overflow accepted.
+ */
+export function fitFlatRing(o: {
+    width: number;
+    height: number;
+    centre: { x: number; y: number };
+    mat: FlatMat;
+    /** Felt kept clear inside the table's edge and the field's box. */
+    margin: number;
+    pileW: number;
+    pileH: number;
+    pileScale: number;
+    minPileScale: number;
+    minRadius: (pileScale: number) => number;
+    maxRadius: (pileScale: number) => number;
+}) {
+    const fits = (pileScale: number, radius: number) => {
+        for (let slot = 0; slot < TABLE_SEAT_COUNT; slot++) {
+            for (const p of flatSeatCorners(slot, radius, o.centre, { pileW: o.pileW, pileH: o.pileH, pileScale })) {
+                if (p.x < o.margin || p.x > o.width - o.margin) return false;
+                if (p.y < o.margin || p.y > o.height - o.margin) return false;
+                if (!insideMat(p.x, p.y, o.mat, o.margin)) return false;
+            }
+        }
+        return true;
+    };
+
+    let pileScale = o.pileScale;
+    while (!fits(pileScale, o.minRadius(pileScale)) && pileScale > o.minPileScale) {
+        pileScale = Math.max(o.minPileScale, pileScale * 0.95);
+    }
+    let lo = o.minRadius(pileScale);
+    if (!fits(pileScale, lo)) return { pileScale, radius: lo, fits: false };
+    // As roomy as the field allows, up to the cap the phone always used.
+    let hi = Math.max(lo, o.maxRadius(pileScale));
+    for (let i = 0; i < 20 && hi - lo > 0.5; i++) {
+        const mid = (lo + hi) / 2;
+        if (fits(pileScale, mid)) lo = mid;
+        else hi = mid;
+    }
+    return { pileScale, radius: lo, fits: true };
+}

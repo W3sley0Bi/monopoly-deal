@@ -16,7 +16,9 @@ import {
     PROPERTY_SLOT_COUNT,
     TABLE_SEAT_COUNT,
     TILTED_CAMERA,
+    fitFlatRing,
     fitTiltedRing,
+    type FlatMat,
     projectFelt,
     reconcilePropertySlots,
     seatAngle,
@@ -154,6 +156,24 @@ const SEAT_RING_INSET = 0.15;
  * devices crowded. 390pt is the iPhone 16's logical width; larger screens
  * cap at a 25% increase rather than growing without limit.
  */
+/**
+ * The phone's mat, shared by the drawing and the ring fit so the two cannot
+ * disagree about where the table's edge is. `top` matches `styles.mat`.
+ */
+function flatMatFor(width: number, cardAreaHeight: number): FlatMat {
+    return {
+        left: -width * 0.15,
+        top: 4,
+        width: width * 1.3,
+        height: Math.max(150, Math.max(90, cardAreaHeight) * 1.62),
+        radius: width * 0.65,
+    };
+}
+/** Felt kept between a seat's corner and the table's rim or the field's edge. */
+const FLAT_MARGIN = 6;
+/** How far a phone's piles may shrink to stay on the table before overflowing. */
+const FLAT_MIN_PILE = 0.6;
+
 function pileScaleForWidth(width: number) {
     return Math.min(1.25, Math.max(1, 1 + (width - 320) * 0.25 / 70));
 }
@@ -367,19 +387,35 @@ export function FeltTable({
               chipSlots,
           })
         : null;
-    // A tilted table may have shrunk its piles to fit a short window.
-    const pileScale = tiltedRing?.pileScale ?? pileScaleForWidth(size.width);
-    const scaledSeat = SEAT * pileScale;
+    const flatMat = flatMatFor(size.width, cardAreaHeight);
+    const flatCentre = { x: size.width / 2, y: field * 0.54 };
+    const flatRing = !tilted && size.width > 0
+        ? fitFlatRing({
+              width: size.width,
+              height: field,
+              centre: flatCentre,
+              mat: flatMat,
+              margin: FLAT_MARGIN,
+              pileW: PILE_W,
+              pileH: PILE_H,
+              pileScale: pileScaleForWidth(size.width),
+              minPileScale: pileScaleForWidth(size.width) * FLAT_MIN_PILE,
+              minRadius: minRadiusFor,
+              maxRadius: (scale) => Math.min(
+                  (size.width - SEAT * scale) / 2 - 6,
+                  flatCentre.y - SEAT * scale / 2 - 4,
+                  field - flatCentre.y - SEAT * scale / 2 - 4,
+              ),
+          })
+        : null;
+    // Either ring may have shrunk its piles to fit a short window.
+    const pileScale = tiltedRing?.pileScale ?? flatRing?.pileScale ?? pileScaleForWidth(size.width);
     // The deck, the discard and the turn lamp grow with the piles, or a
     // big table ends up with a phone's deck lost in the middle of it.
     const centreScale = tiltedRing ? (pileScale / pileScaleForWidth(size.width) * 1.93) * 0.85 : (tilted ? 0.85 : 1);
-    const centre = tiltedRing?.centre ?? { x: size.width / 2, y: field * 0.54 };
+    const centre = tiltedRing?.centre ?? flatCentre;
     const centreWidth = centreAction ? DECK_W * 2 + 16 + 40 : DECK_W * 2 + 8;
-    const radius = tiltedRing?.radius ?? Math.max(minRadiusFor(pileScale), Math.min(
-        (size.width - scaledSeat) / 2 - 6,
-        centre.y - scaledSeat / 2 - 4,
-        field - centre.y - scaledSeat / 2 - 4,
-    ));
+    const radius = tiltedRing?.radius ?? flatRing?.radius ?? minRadiusFor(pileScale);
 
     /** One fixed chair: permanent anchor, inward turn and transformed bounds. */
     const seatAt = (tableSlot: number) => {
@@ -624,16 +660,16 @@ export function FeltTable({
                 colors={MAT}
                 locations={[0, 0.5, 1]}
                 style={[styles.mat, {
-                    width: size.width * 1.3,
-                    left: -size.width * 0.15,
-                    height: Math.max(150, Math.max(90, cardAreaHeight) * 1.62),
-                    borderRadius: size.width * 0.65,
+                    width: flatMat.width,
+                    left: flatMat.left,
+                    height: flatMat.height,
+                    borderRadius: flatMat.radius,
                 }]}
             >
                 {/* The rim line, a hair inside the table edge — `.arena-surface::after`
                     on the web. It is what stops the mat reading as a flat shape:
                     the eye takes the double edge as a moulded lip. */}
-                <View pointerEvents="none" style={[styles.rim, { borderRadius: size.width * 0.65 - RIM }]} />
+                <View pointerEvents="none" style={[styles.rim, { borderRadius: flatMat.radius - RIM }]} />
             </LinearGradient>
         )}
 
