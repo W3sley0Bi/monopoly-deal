@@ -1516,7 +1516,10 @@ const styles = StyleSheet.create({
     // out, so the folded board is sized by its header on both platforms.
     // We set height explicitly to 54 so we don't need display:none on children,
     // which allows the contents to be cleanly clipped during animation.
-    boardFolded: { flexGrow: 0, flexShrink: 0, height: 54, paddingVertical: 3 },
+    // Basis and min-height are pinned to the same 54: the open board's
+    // `flexBasis: 0` beats `height` in Yoga (the fold collapsed to nothing),
+    // and its `minHeight: 96` beats it too (the drop zone peeked out).
+    boardFolded: { flexGrow: 0, flexShrink: 0, flexBasis: 54, height: 54, minHeight: 54, paddingVertical: 3 },
     foldHead: {
         minHeight: 48,
         gap: 8,

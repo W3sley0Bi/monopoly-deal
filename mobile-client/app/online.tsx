@@ -75,9 +75,12 @@ export default function OnlineScreen() {
     const wideMargin = wide ? Math.min(vw * 0.2, 400) : 0;
 
     // The server decides which screen we belong on; the router just follows.
+    // Keyed on the destination, not the room: replacing '/table' on every
+    // state frame remounted the table and folded the player's accordions.
+    const destination = room ? (room.game.state === 'waiting' ? '/lobby' : '/table') : null;
     useEffect(() => {
-        if (room) router.replace(room.game.state === 'waiting' ? '/lobby' : '/table');
-    }, [room, router]);
+        if (destination) router.replace(destination);
+    }, [destination, router]);
 
     const noticeText = useMemo(() => {
         if (!notice) return null;
