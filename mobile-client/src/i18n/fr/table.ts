@@ -42,7 +42,7 @@ const table: Catalog = {
     'table.end_turn': 'Fin du tour',
     'table.end_turn_hint': 'Terminer votre tour',
     'table.end_turn_over_limit': 'Terminer maintenant défausse {count} carte(s) en trop',
-    'table.auto_end': 'Fin automatique dans {seconds} s',
+    'table.auto_end': 'Fin dans {seconds} s',
     'table.auto_end_short': '⏱ {seconds} s',
     'table.deck_hint': 'Cartes restantes dans la pioche',
     'table.discard_hint': 'Défausse',

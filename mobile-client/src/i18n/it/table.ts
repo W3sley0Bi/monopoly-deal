@@ -42,7 +42,7 @@ const table: Catalog = {
     'table.end_turn': 'Fine turno',
     'table.end_turn_hint': 'Concludi il tuo turno',
     'table.end_turn_over_limit': 'Concludendo ora scarti {count} carta/e in più',
-    'table.auto_end': 'Turno chiuso tra {seconds}s',
+    'table.auto_end': 'Termina tra {seconds}s',
     'table.auto_end_short': '⏱ {seconds}s',
     'table.deck_hint': 'Carte rimaste nel mazzo',
     'table.discard_hint': 'Scarti',

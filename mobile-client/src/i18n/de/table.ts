@@ -42,7 +42,7 @@ const table: Catalog = {
     'table.end_turn': 'Runde beenden',
     'table.end_turn_hint': 'Deine Runde beenden',
     'table.end_turn_over_limit': 'Beenden legt jetzt {count} Karte(n) zu viel ab',
-    'table.auto_end': 'Runde endet in {seconds}s',
+    'table.auto_end': 'Endet in {seconds}s',
     'table.auto_end_short': '⏱ {seconds}s',
     'table.deck_hint': 'Karten im Nachziehstapel',
     'table.discard_hint': 'Ablagestapel',

@@ -42,7 +42,7 @@ const table: Catalog = {
     'table.end_turn': 'End turn',
     'table.end_turn_hint': 'End your turn',
     'table.end_turn_over_limit': 'Ending now drops {count} extra card(s)',
-    'table.auto_end': 'Auto-ending in {seconds}s',
+    'table.auto_end': 'Ending in {seconds}s',
     'table.auto_end_short': '⏱ {seconds}s',
     'table.deck_hint': 'Cards left in the deck',
     'table.discard_hint': 'Discard pile',
