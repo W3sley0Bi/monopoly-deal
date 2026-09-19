@@ -12,6 +12,7 @@ import Animated, {
 import * as Haptics from 'expo-haptics';
 
 import { Card } from '../../ui/card';
+import { useTableWindow } from '../../web/tableScale';
 import { DragContext, type DragApi, type DragState, type ZoneEntry, type ZoneRect } from './registry';
 
 const SNAP_BACK_MS = 260;
@@ -29,6 +30,10 @@ const SNAP_BACK_MS = 260;
  * driven by shared values — nothing is cloned.
  */
 export function DragLayer({ children }: { children: React.ReactNode }) {
+    // Positions stay in window points — that is what the pan and every zone's
+    // `measureInWindow` report. Only the ghost converts, because it is drawn
+    // inside the table, which may be scaled (see `TableScaleFrame`).
+    const { scale } = useTableWindow();
     const zones = useRef(new Map<string, ZoneEntry>());
     const rects = useSharedValue<ZoneRect[]>([]);
     const hoveredId = useSharedValue<string | null>(null);
@@ -134,9 +139,9 @@ export function DragLayer({ children }: { children: React.ReactNode }) {
 
     const ghostStyle = useAnimatedStyle(() => ({
         position: 'absolute',
-        left: x.value,
-        top: y.value,
-        width: width.value,
+        left: x.value / scale,
+        top: y.value / scale,
+        width: width.value / scale,
         opacity: opacity.value,
         transform: [{ rotate: '3deg' }, { scale: 1.05 }],
     }));

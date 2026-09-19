@@ -1,6 +1,7 @@
 import * as Haptics from 'expo-haptics';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Platform, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Platform, StyleSheet, Text, View } from 'react-native';
+import { useTableWindow } from '../../web/tableScale';
 import Animated, {
     Easing,
     runOnJS,
@@ -144,7 +145,7 @@ export function StartWheel({
     onSpin?: () => void;
 }) {
     const { t } = useI18n();
-    const { width, height } = useWindowDimensions();
+    const { width, height } = useTableWindow();
     const reducedMotion = useReducedMotion();
     const startsAt = game.starts_at_ms ?? 0;
     const [now, setNow] = useState(() => Date.now() + skewMs);

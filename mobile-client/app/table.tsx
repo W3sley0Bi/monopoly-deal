@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, LayoutAnimation, Platform, Pressable, ScrollView, Share, StyleSheet, Text, View, useWindowDimensions, type LayoutRectangle, type StyleProp, type ViewStyle } from 'react-native';
+import { Alert, LayoutAnimation, Platform, Pressable, ScrollView, Share, StyleSheet, Text, View, type LayoutRectangle, type StyleProp, type ViewStyle } from 'react-native';
 import Animated, { LinearTransition, Easing } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -17,7 +17,9 @@ import { displayFont, ls, uiFont } from '../lib/fonts';
 import { Btn, Icon, LabelCaps, Panel, Sheet, Toggle } from '../src/ui/kit';
 import { PlayerChip, PropertySets } from '../src/components/board';
 import { DragLayer, DropZone, useDragLayer } from '../src/game/drag';
+import { TableScaleFrame, useTableWindow } from '../src/web/tableScale';
 import { ActionDialog } from '../src/components/table/ActionDialog';
+import { TableEvent } from '../src/components/table/TableEvent';
 import { ActiveBoard } from '../src/components/board/ActiveBoard';
 import { useChatBubbles } from '../src/game/useChatBubbles';
 
@@ -64,16 +66,27 @@ const CHAIR_CHIP = { w: 150, h: 78 };
 export default function TableScreen() {
     // The body has to live inside the layer to read what is being carried.
     return (
-        <DragLayer>
-            <TableBody />
-        </DragLayer>
+        <TableScaleFrame>
+            <DragLayer>
+                <TableBody />
+            </DragLayer>
+        </TableScaleFrame>
     );
 }
 
 function TableBody() {
     const { t, tCard, tLog } = useI18n();
     const router = useRouter();
-    const insets = useSafeAreaInsets();
+    const { width: windowWidth, height: windowHeight, scale: tableScale } = useTableWindow();
+    // Insets are real screen points; inside a scaled table they are layout
+    // points, so they shrink by the same factor to cover the same notch.
+    const screenInsets = useSafeAreaInsets();
+    const insets = useMemo(() => tableScale === 1 ? screenInsets : {
+        top: screenInsets.top / tableScale,
+        right: screenInsets.right / tableScale,
+        bottom: screenInsets.bottom / tableScale,
+        left: screenInsets.left / tableScale,
+    }, [screenInsets, tableScale]);
     const feltTarget = useRef<View>(null);
     const tableRootRef = useRef<View>(null);
     const handTutorialRef = useRef<View>(null);
@@ -82,7 +95,6 @@ function TableBody() {
     const actionTutorialRef = useRef<View>(null);
     const endTurnTutorialRef = useRef<View>(null);
     const tutorialCardRef = useRef<View>(null);
-    const { width: windowWidth, height: windowHeight } = useWindowDimensions();
     // A landscape phone can be wider than a portrait tablet. Native devices
     // therefore qualify by their short edge; the web also supports a wide,
     // short desktop window.
@@ -154,13 +166,20 @@ function TableBody() {
         target.measureInWindow((x, y, width, height) => {
             if (!width || !height) return;
             root.measureInWindow((rootX, rootY) => {
-                const next = { x: x - rootX, y: y - rootY, width, height };
+                // Window points are screen points; the coach draws in the
+                // table's own, which differ when the table is scaled.
+                const next = {
+                    x: (x - rootX) / tableScale,
+                    y: (y - rootY) / tableScale,
+                    width: width / tableScale,
+                    height: height / tableScale,
+                };
                 setTutorialAnchors((current) =>
                     sameRect(current[key], next) ? current : { ...current, [key]: next },
                 );
             });
         });
-    }, []);
+    }, [tableScale]);
 
     const measureTutorialAnchors = useCallback(() => {
         recordTutorialAnchor('hand', handTutorialRef.current);
@@ -357,6 +376,9 @@ function TableBody() {
 
     const lastEvent = [...g.log].reverse().find((e) => e.key !== 'log.turn' && e.key !== 'log.tutorial_lesson');
     const eventText = lastEvent ? tLog(lastEvent) : t('table.shared_space');
+    // Entries carry no id, and the log is capped, so its length alone can stall.
+    // The tail plus the length changes with every entry, repeats included.
+    const eventKey = `${g.log.length}:${JSON.stringify(g.log.slice(-3))}`;
 
     function openCard(card: CardT) {
         const playable = canPlay && tutorialAllowsCard(card, tutorial) &&
@@ -689,8 +711,11 @@ function TableBody() {
             {/* ---- what just happened ---- */}
             {/* Not interactive, and it sits directly over the far seats: left
                 tappable it swallowed every tap and long-press aimed at the two
-                piles across the table. */}
-            {!roomyPlayerStation || !me ? (
+                piles across the table. Phones show it above your board and let
+                it fade (see TableEvent); a roomy spectator keeps it on top. */}
+            {!roomyPlayerStation ? (
+                <TableEvent text={eventText} eventKey={eventKey} style={styles.event} />
+            ) : !me ? (
                 <Text pointerEvents="none" style={styles.event} numberOfLines={2} accessibilityLiveRegion="polite">
                     {eventText}
                 </Text>

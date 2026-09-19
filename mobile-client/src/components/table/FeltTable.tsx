@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { Easing, runOnJS, useAnimatedStyle, useReducedMotion, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
 import type { Card as CardT, Color, PlayerView, SetView } from '../../types';
 import { Card } from '../../ui/card';
 import { MiniBuilding, type BuildingKind, type HotelVisual } from './MiniBuilding';
 import { colorMeta, moneyMeta } from '../../game/meta';
+import { useTableWindow } from '../../web/tableScale';
 import { useStore } from '../../../lib/store';
 import { useI18n } from '../../i18n';
 import { brand } from '../../../lib/theme';
@@ -299,7 +300,7 @@ export function FeltTable({
     const reduced = useReducedMotion();
     const motion = useStore(s => s.motion);
     const [size, setSize] = useState({ width: 0, height: 0 });
-    const viewport = useWindowDimensions();
+    const viewport = useTableWindow();
     const previous = useRef<Set<string> | null>(null);
     const ids = new Set(players.flatMap(p => [...p.bank, ...p.sets.flatMap(s => s.cards)].map(c => c.id)));
     const fresh = (id: string) => previous.current !== null && !previous.current.has(id);
