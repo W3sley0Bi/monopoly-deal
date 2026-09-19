@@ -339,6 +339,7 @@ export interface PendingPanelProps {
     stakeGive?: Card | SetView | null;
     stakeTake?: Card | SetView | null;
     you: string;
+    players?: PlayerView[];
     /** For the corner countdown ring, when `deadline_kind === 'respond'`. */
     deadlineMs?: number;
     deadlineSeconds?: number;

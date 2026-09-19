@@ -31,6 +31,10 @@ jest.mock('react-native-reanimated', () => {
         withSequence: jest.fn((...args) => args[0]),
         withRepeat: jest.fn((v) => v),
         LinearTransition: chainObj,
-        Easing: { inOut: jest.fn(), ease: jest.fn(), back: jest.fn(), linear: jest.fn(), out: jest.fn(), in: jest.fn() },
+        Easing: { inOut: jest.fn(), ease: jest.fn(), back: jest.fn(), linear: jest.fn(), out: jest.fn(), in: jest.fn(), bezier: jest.fn() },
     };
 });
+
+jest.mock('./src/game/avatar', () => ({
+    avatarFor: () => '<svg></svg>',
+}));

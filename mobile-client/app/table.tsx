@@ -1123,6 +1123,7 @@ function TableBody() {
                     myTarget={target ?? null}
                     payableCards={role === 'payer' ? payable : undefined}
                     you={room.you}
+                    players={g.players}
                     youHasJsn={room.game.players.find(p => p.id === room.you)?.has_just_say_no ?? false}
                     deadlineMs={g.deadline_kind === 'respond' ? g.deadline_ms : 0}
                     deadlineSeconds={g.deadline_seconds}

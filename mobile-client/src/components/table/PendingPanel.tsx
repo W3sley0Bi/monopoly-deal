@@ -24,6 +24,7 @@ export function PendingPanel({
     myTarget,
     payableCards,
     you,
+    players = [],
     deadlineMs = 0,
     deadlineSeconds = 0,
     skewMs,
@@ -35,6 +36,29 @@ export function PendingPanel({
 }: PendingPanelProps) {
     const { t, tCard, tColor } = useI18n();
     const [picked, setPicked] = useState<string[]>([]);
+
+    const playerName = (id: string) => {
+        if (id === you) return t('common.you');
+        return players.find((p) => p.id === id)?.name ?? id;
+    };
+
+    const actionNote = useMemo(() => {
+        const by = players.find((p) => p.id === pending.by_id)?.name
+            ?? (pending.by_id === you ? t('common.you') : t('pending.ui.someone'));
+        const victim = players.find((p) => p.id === pending.target_player_id)?.name
+            ?? (pending.target_player_id === you ? t('common.you') : t('pending.ui.them'));
+        const color = pending.target_color ? tColor(pending.target_color) : '';
+        switch (pending.kind) {
+            case 'deal_breaker':
+                return t('pending.ui.deal_breaker', { by, victim, color });
+            case 'sly_deal':
+                return t('pending.ui.sly_deal', { by, victim, color });
+            case 'forced_deal':
+                return t('pending.ui.forced_deal', { by, victim, color });
+            default:
+                return t('pending.ui.played', { by, card: tCard(pending.card) });
+        }
+    }, [pending, players, you, t, tCard, tColor]);
 
     // A fresh demand must never inherit the last one's selection.
     useEffect(() => setPicked([]), [pending.card.id, myTarget?.player_id]);
@@ -93,6 +117,7 @@ export function PendingPanel({
                 <Card card={pending.card} size="sm" />
                 <View style={styles.headText}>
                     <Text style={styles.label}>{t(pending.label_key, pending.label_args)}</Text>
+                    {actionNote ? <Text style={styles.note}>{actionNote}</Text> : null}
                     {role === 'payer' ? (
                         <Text style={styles.blurb}>
                             {mustGiveAll
@@ -112,7 +137,7 @@ export function PendingPanel({
                 <View style={styles.roster}>
                     {(pending.targets ?? []).map((tg) => (
                         <View key={tg.player_id} style={styles.rosterRow}>
-                            <Text style={styles.rosterName}>{tg.player_id === you ? t('common.you') : tg.player_id}</Text>
+                            <Text style={styles.rosterName}>{playerName(tg.player_id)}</Text>
                             <Text style={styles.rosterState}>
                                 {tg.settled
                                     ? tg.note
@@ -229,6 +254,7 @@ const styles = StyleSheet.create({
     head: { flexDirection: 'row', gap: 10, alignItems: 'center' },
     headText: { flex: 1, gap: 3 },
     label: { fontFamily: uiFont(800), fontSize: 14, color: ink.body },
+    note: { fontFamily: uiFont(700), fontSize: 12, color: brand.brass, lineHeight: 16 },
     blurb: { fontFamily: uiFont(700), fontSize: 12, color: ink.muted60, lineHeight: 17 },
     roster: { gap: 6, marginTop: 4 },
     rosterRow: {
